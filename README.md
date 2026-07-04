@@ -19,6 +19,14 @@ bun run dev       # 启动 CLI
 bun run version   # 验证版本
 ```
 
+```bash
+npm install -g bun@1.3.5
+```
+或
+```bash
+iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
+```
+
 ---
 
 ## 从源码中发现的 7 大隐藏功能
