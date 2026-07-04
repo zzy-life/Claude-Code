@@ -15,7 +15,7 @@
     "node": ">=24.0.0"
   },
   "bin": {
-    "claude": "./bin/claude.js"
+    "cc": "./bin/claude.js"
   },
   "scripts": {
     "dev": "bun run ./src/dev-entry.ts",
