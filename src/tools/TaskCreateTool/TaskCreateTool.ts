@@ -17,10 +17,12 @@ import { DESCRIPTION, getPrompt } from './prompt.js'
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
-    subject: z.string().describe('A brief title for the task'),
-    description: z.string().describe('What needs to be done'),
+    subject: z.string().trim().min(1).describe('A brief title for the task'),
+    description: z.string().trim().min(1).describe('What needs to be done'),
     activeForm: z
       .string()
+      .trim()
+      .min(1)
       .optional()
       .describe(
         'Present continuous form shown in spinner when in_progress (e.g., "Running tests")',
