@@ -13,19 +13,96 @@
 
 ## 快速开始
 
-```bash
-bun install       # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 24）
-bun run dev       # 启动 CLI
-bun run version   # 验证版本
-```
+### 安装 Bun
+
+项目建议使用 Bun 1.3.5，并需要 Node.js ≥ 24。
 
 ```bash
 npm install -g bun@1.3.5
 ```
-或
-```bash
+
+Windows PowerShell：
+
+```powershell
 iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
 ```
+
+### 安装并运行
+
+```bash
+bun ci            # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 24）
+bun run dev       # 启动 CLI
+bun run version   # 验证版本
+```
+
+> 日常安装请使用 `bun ci`，不要使用普通 `bun install`，避免依赖重新解析后发生版本漂移。
+
+---
+
+### 更新/安装依赖
+
+不要直接执行：
+
+```bash
+bun add xxx
+```
+
+推荐流程如下。
+
+#### 1. 确认要安装的版本
+
+例如要添加：
+
+```text
+turndown@7.2.4
+```
+
+优先使用 tarball URL 形式：
+
+```json
+"turndown": "https://mirrors.cloud.tencent.com/npm/turndown/-/turndown-7.2.4.tgz"
+```
+
+#### 2. 手动写入 package.json
+
+在 `dependencies` 中添加：
+
+```json
+"turndown": "https://mirrors.cloud.tencent.com/npm/turndown/-/turndown-7.2.4.tgz"
+```
+
+不要写成：
+
+```json
+"turndown": "*"
+```
+
+也尽量不要写成：
+
+```json
+"turndown": "^7.2.4"
+```
+
+否则后续可能发生依赖漂移。
+
+#### 3. 同步 bun.lock
+
+```bash
+bun install --lockfile-only
+```
+
+#### 4. 验证安装
+
+```bash
+bun ci
+bun run version
+```
+
+#### 命令说明
+
+* `bun ci`：用于日常安装和验证，会严格按照 `bun.lock` 安装。
+* `bun install --lockfile-only`：用于手动修改 `package.json` 后同步 `bun.lock`，不会安装依赖。
+
 
 ---
 
