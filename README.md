@@ -37,8 +37,6 @@ bun run version   # 验证版本
 
 > 日常安装请使用 `bun ci`，不要使用普通 `bun install`，避免依赖重新解析后发生版本漂移。
 
----
-
 ### 更新/安装依赖
 
 不要直接执行：
@@ -100,9 +98,8 @@ bun run version
 
 #### 命令说明
 
-* `bun ci`：用于日常安装和验证，会严格按照 `bun.lock` 安装。
-* `bun install --lockfile-only`：用于手动修改 `package.json` 后同步 `bun.lock`，不会安装依赖。
-
+- `bun ci`：用于日常安装和验证，会严格按照 `bun.lock` 安装。
+- `bun install --lockfile-only`：用于手动修改 `package.json` 后同步 `bun.lock`，不会安装依赖。
 
 ---
 
