@@ -37,6 +37,23 @@ bun run version   # 验证版本
 
 > 日常安装请使用 `bun ci`，不要使用普通 `bun install`，避免依赖重新解析后发生版本漂移。
 
+### npm 全局安装
+
+如果要直接通过 Git 仓库全局安装，请带上 `--allow-scripts`，否则 npm 11+ 会提示依赖安装脚本尚未审核：
+
+```powershell
+npm install -g --allow-scripts="@alcalzone/ansi-tokenize,@anthropic-ai/sandbox-runtime,axios,code-excerpt,fuse.js,google-auth-library,ink,lru-cache,signal-exit,turndown,undici" git+ssh://git@github.com/zzy-life/Claude-Code.git
+```
+
+也可以把白名单持久写入当前用户的 npm 配置，之后再执行普通全局安装：
+
+```powershell
+npm config set allow-scripts "@alcalzone/ansi-tokenize,@anthropic-ai/sandbox-runtime,axios,code-excerpt,fuse.js,google-auth-library,ink,lru-cache,signal-exit,turndown,undici" --location=user
+npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
+```
+
+> 说明：仓库的 `package.json` 已包含 `allowScripts` 字段，适用于 clone 到本地后的项目级安装；但 `npm install -g` 是全局安装，没有当前项目 `package.json` 可写入或读取审批结果，因此需要通过安装参数或用户级 npm 配置显式允许。
+
 ### 更新/安装依赖
 
 不要直接执行：
@@ -218,171 +235,4 @@ bun run version
 --proactive             主动模式
 --assistant             助手模式
 --brief                 简报模式
---remote-control        远程控制
---hard-fail             硬失败模式
---agent-teams           多代理团队
 ```
-
----
-
-### 6. [Bridge — 远程遥控终端](docs/06-bridge.md)
-
-> 源码位置：`src/bridge/`（33 个文件） · [查看完整分析 →](docs/06-bridge.md)
-
-从 claude.ai 或手机直接操控本地 CLI。
-
-- **WebSocket 实时连接**：本地 CLI 通过 WebSocket 与 claude.ai 建立双向通道
-- **完整远程控制**：远程端可以发送消息、批准权限、查看输出
-- **进程间通信**：跨 Claude 会话的消息传递机制
-- **状态同步**：`bridgeStatusUtil.ts` 实时同步运行状态
-- **权限回调**：`bridgePermissionCallbacks.ts` 远程权限审批
-- **编译开关**：`feature('BRIDGE_MODE')`、`feature('DAEMON')`
-
----
-
-### 7. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
-
-外部发布版是**阉割版**。Anthropic 通过三层门控控制功能。[查看完整分析 →](docs/07-feature-gates.md)
-
-#### 第一层：编译时开关（`feature()`，约 50 个）
-
-构建时决定代码包含/排除，以下是完整列表：
-
-<details>
-<summary>点击展开全部 50 个编译开关</summary>
-
-| 开关 | 说明 |
-|------|------|
-| `BUDDY` | 宠物伴侣系统 |
-| `KAIROS` | 持久助手模式 |
-| `KAIROS_BRIEF` | 简报模式 |
-| `KAIROS_CHANNELS` | 通道通知 |
-| `KAIROS_GITHUB_WEBHOOKS` | GitHub Webhook |
-| `ULTRAPLAN` | 云端深度规划 |
-| `COORDINATOR_MODE` | 多 Agent 编排 |
-| `BRIDGE_MODE` | 远程控制桥接 |
-| `VOICE_MODE` | 语音交互 |
-| `PROACTIVE` | 主动自主模式 |
-| `FORK_SUBAGENT` | 子代理分叉 |
-| `DAEMON` | 守护进程模式 |
-| `UDS_INBOX` | Unix Socket 收件箱 |
-| `WORKFLOW_SCRIPTS` | 工作流脚本 |
-| `TORCH` | Torch 功能 |
-| `MONITOR_TOOL` | 监控工具 |
-| `HISTORY_SNIP` | 历史截断 |
-| `ANTI_DISTILLATION_CC` | 反蒸馏保护 |
-| `BASH_CLASSIFIER` | Bash 命令分类器 |
-| `BG_SESSIONS` | 后台会话 |
-| `CACHED_MICROCOMPACT` | 缓存微压缩 |
-| `CCR_REMOTE_SETUP` | Web 远程设置 |
-| `CHICAGO_MCP` | MCP 扩展（Computer Use） |
-| `COMMIT_ATTRIBUTION` | 提交归属标注 |
-| `CONNECTOR_TEXT` | 连接器文本 |
-| `CONTEXT_COLLAPSE` | 上下文折叠 |
-| `COWORKER_TYPE_TELEMETRY` | 协作者遥测 |
-| `DOWNLOAD_USER_SETTINGS` | 下载用户设置 |
-| `EXPERIMENTAL_SKILL_SEARCH` | 实验性技能搜索 |
-| `EXTRACT_MEMORIES` | 自动提取记忆 |
-| `FILE_PERSISTENCE` | 文件持久化 |
-| `HARD_FAIL` | 硬失败模式 |
-| `LODESTONE` | Lodestone 功能 |
-| `MCP_SKILLS` | MCP 技能系统 |
-| `MEMORY_SHAPE_TELEMETRY` | 记忆形状遥测 |
-| `MESSAGE_ACTIONS` | 消息操作 |
-| `NATIVE_CLIENT_ATTESTATION` | 客户端证明 |
-| `PROMPT_CACHE_BREAK_DETECTION` | 缓存中断检测 |
-| `QUICK_SEARCH` | 快速搜索 |
-| `REACTIVE_COMPACT` | 响应式压缩 |
-| `SLOW_OPERATION_LOGGING` | 慢操作日志 |
-| `STREAMLINED_OUTPUT` | 精简输出 |
-| `TEAMMEM` | 团队记忆同步 |
-| `TEMPLATES` | 模板/分类器 |
-| `TERMINAL_PANEL` | 终端面板 |
-| `TOKEN_BUDGET` | Token 预算 |
-| `TRANSCRIPT_CLASSIFIER` | 转录分类器 |
-| `UNATTENDED_RETRY` | 无人值守重试 |
-| `UPLOAD_USER_SETTINGS` | 上传用户设置 |
-| `BREAK_CACHE_COMMAND` | 缓存清除注入 |
-
-</details>
-
-#### 第二层：用户类型（`USER_TYPE`）
-
-- **`ant`**（Anthropic 内部）— 解锁全部功能、20 分钟 GrowthBook 刷新、调试工具、200+ 处专属检查
-- **`external`**（外部用户）— 裁剪版，6 小时 GrowthBook 刷新
-
-#### 第三层：GrowthBook 远程 A/B 测试
-
-| 开关 | 控制内容 |
-|------|---------|
-| `tengu_kairos` | KAIROS 助手模式开关 |
-| `tengu_onyx_plover` | 自动做梦阈值（间隔/会话数） |
-| `tengu_cobalt_frost` | 语音识别（Nova 3）开关 |
-| `tengu_ultraplan_model` | Ultraplan 使用的模型 |
-| `tengu_ant_model_override` | 内部用户模型覆盖 |
-| `tengu_session_memory` | 会话记忆功能 |
-| `tengu_max_version_config` | 自动更新 Kill Switch |
-| `tengu_frond_boric` | 数据接收器 Kill Switch |
-| `tengu_herring_clock` | 团队记忆路径 |
-| `tengu_sm_config` | 会话记忆配置 |
-
----
-
-## 隐藏环境变量速查
-
-<details>
-<summary>点击展开完整环境变量列表</summary>
-
-| 环境变量 | 说明 |
-|----------|------|
-| `ANTHROPIC_MODEL` | 模型覆盖 |
-| `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | 最大输出 token |
-| `CLAUDE_CODE_DISABLE_THINKING` | 禁用思考 |
-| `CLAUDE_CODE_PROACTIVE` | 主动模式 |
-| `CLAUDE_CODE_COORDINATOR_MODE` | 协调器模式 |
-| `CLAUDE_CODE_BRIEF` | 简报模式 |
-| `CLAUDE_CODE_USE_BEDROCK` | 使用 AWS Bedrock |
-| `CLAUDE_CODE_USE_VERTEX` | 使用 Google Vertex |
-| `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | 禁用自动记忆 |
-| `CLAUDE_CODE_EXTRA_BODY` | API 附加 JSON |
-| `CLAUDE_CODE_SYNTAX_HIGHLIGHT` | 语法高亮主题 |
-| `CLAUDE_CODE_IDLE_THRESHOLD_MINUTES` | 空闲阈值（默认 75 分钟） |
-| `CLAUDE_INTERNAL_FC_OVERRIDES` | GrowthBook 覆盖（仅 ant） |
-
-</details>
-
----
-
-## 项目结构
-
-```
-src/                    # 核心源码（1,987 个 TS/TSX）
-├── tools/              # 53 个工具（Bash/FileEdit/Agent/MCP...）
-├── commands/           # 87 个斜杠命令
-├── services/           # API / MCP / analytics / autoDream
-├── components/         # 148 个终端 UI 组件（React + Ink）
-├── hooks/              # 87 个自定义 Hooks
-├── buddy/              # 宠物伴侣系统
-├── assistant/          # KAIROS 助手模式
-├── coordinator/        # 多 Agent 协调器
-├── bridge/             # 远程控制桥接（31 文件）
-├── proactive/          # 主动模式
-├── vim/                # Vim 模式引擎
-├── voice/              # 语音交互
-└── ...
-shims/                  # 原生模块兼容替代
-vendor/                 # 原生绑定源码
-```
-
----
-
-## 数据来源
-
-- npm 包：[@anthropic-ai/claude-code](https://www.npmjs.com/package/@anthropic-ai/claude-code)
-- 还原方式：提取 `cli.js.map` 中的 `sourcesContent`
-
-## 声明
-
-- 源码版权归 [Anthropic](https://www.anthropic.com) 所有
-- 仅用于技术研究与学习，请勿用于商业用途
-- 如有侵权，请联系删除
