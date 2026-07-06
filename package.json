@@ -22,6 +22,19 @@
     "start": "bun run ./src/dev-entry.ts",
     "version": "bun run ./src/dev-entry.ts --version"
   },
+  "allowScripts": {
+    "@alcalzone/ansi-tokenize": true,
+    "@anthropic-ai/sandbox-runtime": true,
+    "axios": true,
+    "code-excerpt": true,
+    "fuse.js": true,
+    "google-auth-library": true,
+    "ink": true,
+    "lru-cache": true,
+    "signal-exit": true,
+    "turndown": true,
+    "undici": true
+  },
   "dependencies": {
     "@alcalzone/ansi-tokenize": "https://repo.huaweicloud.com/repository/npm/@alcalzone/ansi-tokenize/-/ansi-tokenize-0.3.0.tgz",
     "@ant/claude-for-chrome-mcp": "file:./shims/ant-claude-for-chrome-mcp",
