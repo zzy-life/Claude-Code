@@ -1,5 +1,5 @@
 {
-  "name": "@webarcx/claude-code",
+  "name": "@anthropic-ai/claude-code",
   "version": "999.0.0",
   "private": true,
   "description": "Restored Claude Code source tree reconstructed from source maps.",
@@ -83,7 +83,6 @@
     "strip-ansi": "*",
     "supports-hyperlinks": "*",
     "tree-kill": "*",
-    "turndown": "*",
     "type-fest": "*",
     "undici": "*",
     "usehooks-ts": "*",
