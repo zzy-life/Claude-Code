@@ -249,13 +249,16 @@ export function usePasteHandler({
       return
     }
 
-    // Check if we should handle as paste (from bracketed paste, large input, or continuation)
+    const looksLikeMultilinePaste = input.length > 1 && /[\r\n]/.test(input)
+
+    // Check if we should handle as paste (from bracketed paste, large input, multiline input, or continuation)
     const shouldHandleAsPaste =
       onPaste &&
       (input.length > PASTE_THRESHOLD ||
         pastePendingRef.current ||
         hasImageFilePath ||
-        isFromPaste)
+        isFromPaste ||
+        looksLikeMultilinePaste)
 
     if (shouldHandleAsPaste) {
       pastePendingRef.current = true
