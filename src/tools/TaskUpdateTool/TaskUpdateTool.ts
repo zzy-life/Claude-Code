@@ -174,7 +174,7 @@ export const TaskUpdateTool = buildTool({
       updates.description = description
       updatedFields.push('description')
     }
-    if (activeForm !== undefined && activeForm !== existingTask.activeForm) {
+    if (activeForm !== undefined && activeForm.trim().length > 0 && activeForm !== existingTask.activeForm) {
       updates.activeForm = activeForm
       updatedFields.push('activeForm')
     }
