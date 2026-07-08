@@ -166,7 +166,7 @@ export const TaskUpdateTool = buildTool({
       owner?: string
       metadata?: Record<string, unknown>
     } = {}
-    if (subject !== undefined && subject !== existingTask.subject) {
+    if (subject !== undefined && subject.trim().length > 0 && subject !== existingTask.subject) {
       updates.subject = subject
       updatedFields.push('subject')
     }
