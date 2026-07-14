@@ -31,7 +31,7 @@ import { KeyboardShortcutHint } from '../design-system/KeyboardShortcutHint.js';
 import { Byline } from '../design-system/Byline.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { useTasksV2 } from '../../hooks/useTasksV2.js';
-import { formatDuration } from '../../utils/format.js';
+import { formatDuration, formatTokens } from '../../utils/format.js';
 import { VoiceWarmupHint } from './VoiceIndicator.js';
 import { useVoiceEnabled } from '../../hooks/useVoiceEnabled.js';
 import { useVoiceState } from '../../context/voice.js';
@@ -251,7 +251,8 @@ function ModeIndicator({
   const modeCycleShortcut = useShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab');
   const tasks = useAppState(s => s.tasks);
   const proxyQuotaRemainingPercentage = useAppState(s_0 => s_0.proxyQuotaRemainingPercentage);
-  const teamContext = useAppState(s_1 => s_1.teamContext);
+  const contextWindowUsage = useAppState(s_1 => s_1.contextWindowUsage);
+  const teamContext = useAppState(s_2 => s_2.teamContext);
   // Set once in initialState (main.tsx --remote mode) and never mutated — lazy
   // init captures the immutable value without a subscription.
   const store = useAppStateStore();
@@ -416,6 +417,11 @@ function ModeIndicator({
     const quotaColor = proxyQuotaRemainingPercentage >= 60 ? 'success' : proxyQuotaRemainingPercentage >= 30 ? 'warning' : 'error';
     parts.push(<Text color={quotaColor} key="proxy-quota">
         quota {proxyQuotaRemainingPercentage}%
+      </Text>);
+  }
+  if (contextWindowUsage !== undefined) {
+    parts.push(<Text dimColor key="context-window">
+        ctx {formatTokens(contextWindowUsage.tokens)}/{formatTokens(contextWindowUsage.window)}
       </Text>);
   }
 

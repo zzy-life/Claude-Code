@@ -35,6 +35,8 @@ import { logForDebugging } from '../utils/debug.js';
 import { QueryGuard } from '../utils/QueryGuard.js';
 import { isEnvTruthy } from '../utils/envUtils.js';
 import { formatTokens, truncateToWidth } from '../utils/format.js';
+import { tokenCountWithEstimation } from '../utils/tokens.js';
+import { getEffectiveContextWindowSize } from '../services/compact/autoCompact.js';
 import { consumeEarlyInput } from '../utils/earlyInput.js';
 import { setMemberActive } from '../utils/swarm/teamHelpers.js';
 import { isSwarmWorker, generateSandboxRequestId, sendSandboxPermissionRequestViaMailbox, sendSandboxPermissionResponseViaMailbox } from '../utils/swarm/permissionSync.js';
@@ -1225,6 +1227,16 @@ export function REPL({
   }, [setToolUseConfirmQueue]);
   const [messages, rawSetMessages] = useState<MessageType[]>(initialMessages ?? []);
   const messagesRef = useRef(messages);
+  const refreshContextWindowUsage = useCallback(() => {
+    const usage = {
+      tokens: tokenCountWithEstimation(messagesRef.current),
+      window: getEffectiveContextWindowSize(mainLoopModel),
+    };
+    setAppState(prev => prev.contextWindowUsage?.tokens === usage.tokens && prev.contextWindowUsage.window === usage.window ? prev : {
+      ...prev,
+      contextWindowUsage: usage,
+    });
+  }, [mainLoopModel, setAppState]);
   // Stores the willowMode variant that was shown (or false if no hint shown).
   // Captured at hint_shown time so hint_converted telemetry reports the same
   // variant — the GrowthBook value shouldn't change mid-session, but reading
@@ -2205,6 +2217,7 @@ export function REPL({
     // forceEnd() skips the finally path — fire directly (aborted=true).
     void mrOnTurnComplete(messagesRef.current, true);
     refreshProxyQuota();
+    refreshContextWindowUsage();
   }
 
   // Function to handle queued command when canceling a permission request
@@ -2974,6 +2987,7 @@ export function REPL({
         resetLoadingState();
         await mrOnTurnComplete(messagesRef.current, abortController.signal.aborted);
         refreshProxyQuota();
+        refreshContextWindowUsage();
 
         // Notify bridge clients that the turn is complete so mobile apps
         // can stop the spark animation and show post-turn UI.

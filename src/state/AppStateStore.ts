@@ -93,6 +93,7 @@ export type AppState = DeepImmutable<{
   mainLoopModelForSession: ModelSetting
   statusLineText: string | undefined
   proxyQuotaRemainingPercentage: number | undefined
+  contextWindowUsage: { tokens: number; window: number } | undefined
   expandedView: 'none' | 'tasks' | 'teammates'
   isBriefOnly: boolean
   // Optional - only present when ENABLE_AGENT_SWARMS is true (for dead code elimination)
@@ -475,6 +476,7 @@ export function getDefaultAppState(): AppState {
     mainLoopModelForSession: null,
     statusLineText: undefined,
     proxyQuotaRemainingPercentage: undefined,
+    contextWindowUsage: undefined,
     expandedView: 'none',
     isBriefOnly: false,
     showTeammateMessagePreview: false,

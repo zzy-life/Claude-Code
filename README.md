@@ -42,7 +42,7 @@ bun run version   # 验证版本
 当通过 Codex Claude Proxy 调用模型时，CLI 会在每轮对话结束后请求代理的 `GET /v1/usage`，并在输入框左下角显示：
 
 ```text
-? for shortcuts · quota 85%
+? for shortcuts · quota 85% · ctx 123k/160k
 ```
 
 `85%` 是当前 Client API Key 的本周剩余额度百分比。CLI 使用现有环境变量连接和鉴权：
@@ -68,7 +68,7 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 }
 ```
 
-`seven_day.utilization` 表示本周已使用百分比；CLI 将其换算为剩余百分比显示。未配置上述环境变量、代理不支持该接口或请求失败时，CLI 不显示额度提示，不影响正常对话。
+`seven_day.utilization` 表示本周已使用百分比；CLI 将其换算为剩余百分比显示。每轮对话结束后，额度右侧还会显示当前会话的上下文占用和可用窗口，例如 `ctx 123k/160k`；分母复用自动压缩的有效窗口计算，会应用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 并扣除摘要预留 token。未配置上述环境变量、代理不支持该接口或请求失败时，CLI 不显示额度提示，不影响正常对话。
 
 
 
