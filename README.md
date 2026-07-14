@@ -31,6 +31,10 @@ iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
 
 ```bash
 npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
+```
+或者
+
+```bash
 npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
 ```
 
