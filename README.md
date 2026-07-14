@@ -27,7 +27,20 @@ Windows PowerShell：
 iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
 ```
 
-### 安装并运行
+### 终端用户使用
+
+```bash
+npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
+npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
+```
+
+
+```bash
+cc
+```
+
+
+### 本地安装并运行
 
 ```bash
 bun ci            # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 24）
