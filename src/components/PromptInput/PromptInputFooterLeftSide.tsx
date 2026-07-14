@@ -250,7 +250,8 @@ function ModeIndicator({
   } = useTerminalSize();
   const modeCycleShortcut = useShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab');
   const tasks = useAppState(s => s.tasks);
-  const teamContext = useAppState(s_0 => s_0.teamContext);
+  const proxyQuotaRemainingPercentage = useAppState(s_0 => s_0.proxyQuotaRemainingPercentage);
+  const teamContext = useAppState(s_1 => s_1.teamContext);
   // Set once in initialState (main.tsx --remote mode) and never mutated — lazy
   // init captures the immutable value without a subscription.
   const store = useAppStateStore();
@@ -409,6 +410,12 @@ function ModeIndicator({
   if (parts.length === 0 && !tasksPart && !modePart && showHint) {
     parts.push(<Text dimColor key="shortcuts-hint">
         ? for shortcuts
+      </Text>);
+  }
+  if (proxyQuotaRemainingPercentage !== undefined) {
+    const quotaColor = proxyQuotaRemainingPercentage >= 60 ? 'success' : proxyQuotaRemainingPercentage >= 30 ? 'warning' : 'error';
+    parts.push(<Text color={quotaColor} key="proxy-quota">
+        quota {proxyQuotaRemainingPercentage}%
       </Text>);
   }
 

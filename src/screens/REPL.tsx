@@ -258,6 +258,7 @@ import { performStartupChecks } from 'src/utils/plugins/performStartupChecks.js'
 import { UserTextMessage } from 'src/components/messages/UserTextMessage.js';
 import { AwsAuthStatusBox } from '../components/AwsAuthStatusBox.js';
 import { useRateLimitWarningNotification } from 'src/hooks/notifs/useRateLimitWarningNotification.js';
+import { fetchProxyQuotaUsage } from '../services/api/proxyQuota.js';
 import { useDeprecationWarningNotification } from 'src/hooks/notifs/useDeprecationWarningNotification.js';
 import { useNpmDeprecationNotification } from 'src/hooks/notifs/useNpmDeprecationNotification.js';
 import { useIDEStatusIndicator } from 'src/hooks/notifs/useIDEStatusIndicator.js';
@@ -670,6 +671,17 @@ export function REPL({
   const ultraplanLaunchPending = useAppState(s => s.ultraplanLaunchPending);
   const viewingAgentTaskId = useAppState(s => s.viewingAgentTaskId);
   const setAppState = useSetAppState();
+  const refreshProxyQuota = useCallback(() => {
+    void fetchProxyQuotaUsage().then(percentage => {
+      if (percentage === undefined) return;
+      setAppState(prev => prev.proxyQuotaRemainingPercentage === percentage ? prev : {
+        ...prev,
+        proxyQuotaRemainingPercentage: percentage,
+      });
+    }).catch(error => {
+      logForDebugging(`[Proxy quota] Refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, [setAppState]);
 
   // Bootstrap: retained local_agent that hasn't loaded disk yet → read
   // sidechain JSONL and UUID-merge with whatever stream has appended so far.
@@ -2192,6 +2204,7 @@ export function REPL({
 
     // forceEnd() skips the finally path — fire directly (aborted=true).
     void mrOnTurnComplete(messagesRef.current, true);
+    refreshProxyQuota();
   }
 
   // Function to handle queued command when canceling a permission request
@@ -2960,6 +2973,7 @@ export function REPL({
         // onQueryImpl only on successful completion.
         resetLoadingState();
         await mrOnTurnComplete(messagesRef.current, abortController.signal.aborted);
+        refreshProxyQuota();
 
         // Notify bridge clients that the turn is complete so mobile apps
         // can stop the spark animation and show post-turn UI.

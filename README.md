@@ -37,6 +37,40 @@ bun run version   # 验证版本
 
 > 日常安装请使用 `bun ci`，不要使用普通 `bun install`，避免依赖重新解析后发生版本漂移。
 
+### Codex Claude Proxy 剩余额度提示
+
+当通过 Codex Claude Proxy 调用模型时，CLI 会在每轮对话结束后请求代理的 `GET /v1/usage`，并在输入框左下角显示：
+
+```text
+? for shortcuts · quota 85%
+```
+
+`85%` 是当前 Client API Key 的本周剩余额度百分比。CLI 使用现有环境变量连接和鉴权：
+
+```powershell
+$env:ANTHROPIC_BASE_URL = "http://127.0.0.1:8081"
+$env:ANTHROPIC_API_KEY = "你的 Client API Key"
+```
+
+代理接口返回与 Claude Code 用量接口一致的 `Utilization` 结构，额度数据位于 `seven_day.utilization` 和 `seven_day.resets_at`。示例响应：
+
+```json
+{
+  "five_hour": null,
+  "seven_day": {
+    "utilization": 15,
+    "resets_at": "2026-07-20T00:00:00.000Z"
+  },
+  "seven_day_oauth_apps": null,
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "extra_usage": null
+}
+```
+
+`seven_day.utilization` 表示本周已使用百分比；CLI 将其换算为剩余百分比显示。未配置上述环境变量、代理不支持该接口或请求失败时，CLI 不显示额度提示，不影响正常对话。
+
+
 
 
 ### npm 全局安装
