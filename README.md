@@ -35,7 +35,7 @@ npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
 或者
 
 ```bash
-npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
+npm install -g git+https://gitee.com/time-doesnt-wait-for-me/Claude-Code.git
 ```
 
 
