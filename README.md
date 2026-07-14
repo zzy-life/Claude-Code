@@ -86,8 +86,7 @@ npm install -g --allow-scripts="@alcalzone/ansi-tokenize,@anthropic-ai/sandbox-r
 ```powershell
 npm config set allow-scripts "@alcalzone/ansi-tokenize,@anthropic-ai/sandbox-runtime,axios,code-excerpt,fuse.js,google-auth-library,ink,lru-cache,signal-exit,turndown,undici" --location=user
 npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
-```
-
+npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
 > 说明：仓库的 `package.json` 已包含 `allowScripts` 字段，适用于 clone 到本地后的项目级安装；但 `npm install -g` 是全局安装，没有当前项目 `package.json` 可写入或读取审批结果，因此需要通过安装参数或用户级 npm 配置显式允许。
 
 

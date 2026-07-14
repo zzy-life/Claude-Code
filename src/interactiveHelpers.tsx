@@ -108,8 +108,7 @@ export async function showSetupScreens(root: Root, permissionMode: PermissionMod
   }
   const config = getGlobalConfig();
   let onboardingShown = false;
-  if (!config.theme || !config.hasCompletedOnboarding // always show onboarding at least once
-  ) {
+  if (!config.theme) {
     onboardingShown = true;
     const {
       Onboarding
