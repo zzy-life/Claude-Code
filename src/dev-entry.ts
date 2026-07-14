@@ -64,10 +64,12 @@ function hasResolvableTarget(basePath: string): boolean {
   return candidates.some(candidate => existsSync(candidate))
 }
 
+const packageRoot = resolve(import.meta.dirname, '..')
+
 function collectMissingRelativeImports(): MissingImport[] {
   const files: string[] = []
-  scanFiles(resolve('src'), files)
-  scanFiles(resolve('vendor'), files)
+  scanFiles(join(packageRoot, 'src'), files)
+  scanFiles(join(packageRoot, 'vendor'), files)
   const missing: MissingImport[] = []
   const seen = new Set<string>()
   const pattern =
