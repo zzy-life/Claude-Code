@@ -2554,6 +2554,37 @@ async function* executeHooks({
           durationMs,
         })
 
+        // Exit code 2 blocks regardless of whether stdout is structured JSON.
+        // JSON output is still parsed above so a hook-provided reason takes
+        // precedence over stderr in the feedback shown to the model.
+        if (result.status === 2) {
+          emitHookResponse({
+            hookId,
+            hookName,
+            hookEvent,
+            output: result.output,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exitCode: result.status,
+            outcome: 'error',
+          })
+          yield {
+            ...processed,
+            // Match the non-JSON exit-code-2 path: emit only the blocking
+            // result, not the successful JSON hook attachment.
+            message: undefined,
+            blockingError: {
+              blockingError:
+                json.reason ||
+                `[${hook.command}]: ${result.stderr || 'No stderr output'}`,
+              command: hook.command,
+            },
+            outcome: 'blocking' as const,
+            hook,
+          }
+          return
+        }
+
         // Handle suppressOutput (skip for async responses)
         if (
           isSyncHookJSONOutput(json) &&

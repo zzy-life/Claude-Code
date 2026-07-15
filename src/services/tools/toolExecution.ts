@@ -60,15 +60,19 @@ import type {
 import { count } from '../../utils/array.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
 import { logForDebugging } from '../../utils/debug.js'
+import { getFileModificationTime } from '../../utils/file.js'
+import { readFileSyncWithMetadata } from '../../utils/fileRead.js'
 import {
   AbortError,
   errorMessage,
   getErrnoCode,
+  isENOENT,
   ShellError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from '../../utils/errors.js'
 import { executePermissionDeniedHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
+import { expandPath } from '../../utils/path.js'
 import {
   CANCEL_MESSAGE,
   createProgressMessage,
@@ -129,6 +133,39 @@ import {
   runPostToolUseHooks,
   runPreToolUseHooks,
 } from './toolHooks.js'
+
+function refreshEditedFileStateAfterPostToolUseHook(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  toolUseContext: ToolUseContext,
+): void {
+  if (
+    toolName !== FILE_EDIT_TOOL_NAME &&
+    toolName !== FILE_WRITE_TOOL_NAME
+  ) {
+    return
+  }
+
+  const filePath = toolInput.file_path
+  if (typeof filePath !== 'string') return
+
+  const absoluteFilePath = expandPath(filePath)
+  try {
+    const { content } = readFileSyncWithMetadata(absoluteFilePath)
+    toolUseContext.readFileState.set(absoluteFilePath, {
+      content,
+      timestamp: getFileModificationTime(absoluteFilePath),
+      offset: undefined,
+      limit: undefined,
+    })
+  } catch (error) {
+    if (isENOENT(error)) {
+      toolUseContext.readFileState.delete(absoluteFilePath)
+      return
+    }
+    logError(error)
+  }
+}
 
 /** Minimum total hook duration (ms) to show inline timing summary */
 export const HOOK_TIMING_DISPLAY_THRESHOLD_MS = 500
@@ -1529,6 +1566,12 @@ async function checkPermissionsAndCallTool(
         }
       }
     }
+    refreshEditedFileStateAfterPostToolUseHook(
+      tool.name,
+      processedInput,
+      toolUseContext,
+    )
+
     const postToolHookDurationMs = Date.now() - postToolHookStart
     if (postToolHookDurationMs >= SLOW_PHASE_LOG_THRESHOLD_MS) {
       logForDebugging(
