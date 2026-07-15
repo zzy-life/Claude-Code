@@ -151,10 +151,21 @@ function refreshEditedFileStateAfterPostToolUseHook(
 
   const absoluteFilePath = expandPath(filePath)
   try {
+    const timestampBeforeRead = getFileModificationTime(absoluteFilePath)
+    if (
+      toolUseContext.readFileState.get(absoluteFilePath)?.timestamp ===
+      timestampBeforeRead
+    ) {
+      return
+    }
+
     const { content } = readFileSyncWithMetadata(absoluteFilePath)
+    const timestampAfterRead = getFileModificationTime(absoluteFilePath)
+    if (timestampBeforeRead !== timestampAfterRead) return
+
     toolUseContext.readFileState.set(absoluteFilePath, {
       content,
-      timestamp: getFileModificationTime(absoluteFilePath),
+      timestamp: timestampAfterRead,
       offset: undefined,
       limit: undefined,
     })
