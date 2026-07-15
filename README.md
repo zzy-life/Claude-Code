@@ -111,7 +111,7 @@ npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
 
 不要直接执行：
 
-```bash
+​```bash
 bun add xxx
 ```
 
@@ -445,6 +445,34 @@ vendor/                 # 原生绑定源码
 ```
 
 ---
+
+## REPL 模块说明
+
+`src/screens/REPL.tsx` 是 CLI 的主交互界面，负责会话状态、用户输入、模型查询、工具权限、消息显示及各类终端弹窗。导入较多，按职责可归纳如下：
+
+| 模块类别 | 主要引入 | 用途 |
+| --- | --- | --- |
+| 运行时与 Node API | `react/compiler-runtime`、`bun:bundle`、`child_process`、`path`、`os`、`fs/promises`、`crypto` | React 编译产物支持、功能开关、子进程、文件路径/临时文件、文件写入及 UUID。 |
+| React 与 Ink | `react`、`../ink.js`、`figures` | 管理组件状态/副作用，渲染终端 UI，处理键盘输入、终端尺寸、主题、焦点和终端标题。 |
+| 会话与上下文 | `bootstrap/state`、`sessionStorage`、`sessionRestore`、`conversationRecovery`、`claudemd`、`plans` | 保存/恢复会话、消息、成本、工作树、计划、内存文件与上下文。 |
+| 模型查询与消息 | `query`、`handlePromptSubmit`、`utils/messages`、`messageQueueManager`、`QueryGuard`、`queryProfiler` | 提交用户输入、调用模型、处理流式响应、维护消息队列、避免并发查询并记录性能。 |
+| 输入与快捷键 | `PromptInput`、`useSearchInput`、`inputModes`、`GlobalKeybindingHandlers`、`CommandKeybindingHandlers`、`KeybindingSetup` | 输入框、搜索、Vim/输入模式、全局和命令快捷键及快捷键上下文。 |
+| 消息与全屏显示 | `Messages`、`FullscreenLayout`、`VirtualMessageList`、`ScrollKeybindingHandler`、`messageActions`、`MessageSelector` | 显示会话消息、虚拟滚动、全屏模式、消息选择/复制/编辑等操作。 |
+| 命令、技能和插件 | `commands`、`useMergedCommands`、`useSkillsChange`、`useManagePlugins`、`performStartupChecks` | 聚合斜杠命令，监听技能变化，管理插件并执行启动检查。 |
+| 工具与权限 | `tools`、`useMergedTools`、`useCanUseTool`、`PermissionRequest`、`PermissionUpdate`、`SandboxPermissionRequest` | 组装工具池，判断工具可用性，展示权限请求并持久化权限更新；处理沙箱权限。 |
+| MCP 与 IDE | `MCPConnectionManager`、`useMergedClients`、`ElicitationDialog`、`useIDEIntegration`、`useIdeSelection` | 连接和合并 MCP 服务，处理 MCP 信息征询，以及 IDE 集成、选区和状态。 |
+| Agent 与协作 | `AgentTool/*`、`InProcessTeammateTask`、`LocalAgentTask`、`useSwarmInitialization`、`useInboxPoller` | 加载/恢复 Agent，管理本地与进程内队友任务、权限同步、收件箱和协作状态。 |
+| 压缩、令牌与成本 | `compact/*`、`tokenBudget`、`tokens`、`cost-tracker`、`CostThresholdDialog` | 计算令牌预算与上下文窗口，执行压缩，记录会话成本并展示成本提醒。 |
+| 文件与编辑器 | `fileHistory`、`fileStateCache`、`attachments`、`editor`、`exportRenderer` | 保存文件快照/回退，缓存读取状态，创建附件，导出消息文本并调用外部编辑器。 |
+| 通知与提示 | `notifications`、`notifier`、`hooks/notifs/*`、`tips/*`、`IssueFlagBanner` | 展示终端/系统通知、设置和网络状态、限流、升级、插件、IDE 等提示。 |
+| 会话生命周期 | `sessionStart`、`hooks`、`ExitFlow`、`gracefulShutdown`、`preventSleep`、`backgroundHousekeeping` | 执行会话开始/结束钩子，处理退出、后台清理和防止系统休眠。 |
+| 远程与后台会话 | `useRemoteSession`、`useSSHSession`、`useDirectConnect`、`LocalMainSessionTask`、`useSessionBackgrounding` | 提供远程/SSH/直连会话能力，并支持将主会话转入后台。 |
+| 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置和动态实验配置，采集诊断/会话追踪并维护活动状态。 |
+| 条件加载模块 | `useVoiceIntegration`、`useFrustrationDetection`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
+| 其他界面能力 | `Spinner`、`TaskListV2`、`CompanionSprite`、`DevBar`、`TungstenLiveMonitor` | 显示加载状态、任务列表、助手形象、开发栏及工具实时监视器。 |
+
+
+
 
 ## 数据来源
 
