@@ -37,6 +37,7 @@ import {
 } from '../attachments.js'
 import type { PastedContent } from '../config.js'
 import type { EffortValue } from '../effort.js'
+import { getDefaultFileReadingLimits } from '../../tools/FileReadTool/limits.js'
 import { toArray } from '../generators.js'
 import {
   executeUserPromptSubmitHooks,
@@ -318,7 +319,10 @@ async function processUserInputBase(
     const processedBlocks: ContentBlockParam[] = []
     for (const block of input) {
       if (block.type === 'image') {
-        const resized = await maybeResizeAndDownsampleImageBlock(block)
+        const resized = await maybeResizeAndDownsampleImageBlock(
+          block,
+          getDefaultFileReadingLimits().maxTokens,
+        )
         // Collect image metadata for isMeta message
         if (resized.dimensions) {
           const metadataText = createImageMetadataText(resized.dimensions)
@@ -377,7 +381,10 @@ async function processUserInputBase(
       logEvent('tengu_pasted_image_resize_attempt', {
         original_size_bytes: pastedImage.content.length,
       })
-      const resized = await maybeResizeAndDownsampleImageBlock(imageBlock)
+      const resized = await maybeResizeAndDownsampleImageBlock(
+        imageBlock,
+        getDefaultFileReadingLimits().maxTokens,
+      )
       return {
         resized,
         originalDimensions: pastedImage.dimensions,

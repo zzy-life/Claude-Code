@@ -41,7 +41,7 @@ import { logFileOperation } from '../../utils/fileOperationAnalytics.js'
 import { formatFileSize } from '../../utils/format.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
 import {
-  compressImageBufferWithTokenLimit,
+  compressImageBufferToTokenBudget,
   createImageMetadataText,
   detectImageFormatFromBuffer,
   type ImageDimensions,
@@ -1136,47 +1136,18 @@ export async function readImageWithTokenBudget(
   // Check if it fits in token budget
   const estimatedTokens = Math.ceil(result.file.base64.length * 0.125)
   if (estimatedTokens > maxTokens) {
-    // Aggressive compression from the SAME buffer (no re-read)
-    try {
-      const compressed = await compressImageBufferWithTokenLimit(
-        imageBuffer,
-        maxTokens,
-        detectedMediaType,
-      )
-      return {
-        type: 'image',
-        file: {
-          base64: compressed.base64,
-          type: compressed.mediaType,
-          originalSize,
-        },
-      }
-    } catch (e) {
-      logError(e)
-      // Fallback: heavily compressed version from the SAME buffer
-      try {
-        const sharpModule = await import('sharp')
-        const sharp =
-          (
-            sharpModule as {
-              default?: typeof sharpModule
-            } & typeof sharpModule
-          ).default || sharpModule
-
-        const fallbackBuffer = await sharp(imageBuffer)
-          .resize(400, 400, {
-            fit: 'inside',
-            withoutEnlargement: true,
-          })
-          .jpeg({ quality: 20 })
-          .toBuffer()
-
-        return createImageResponse(fallbackBuffer, 'jpeg', originalSize)
-      } catch (error) {
-        logError(error)
-        return createImageResponse(imageBuffer, detectedFormat, originalSize)
-      }
-    }
+    const compressed = await compressImageBufferToTokenBudget(
+      imageBuffer,
+      maxTokens,
+      detectedMediaType,
+      result.file.dimensions,
+    )
+    return createImageResponse(
+      compressed.buffer,
+      compressed.mediaType,
+      originalSize,
+      compressed.dimensions,
+    )
   }
 
   return result

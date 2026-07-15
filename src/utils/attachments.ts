@@ -1121,7 +1121,10 @@ async function buildImageContentBlocks(
           data: img.content,
         },
       }
-      const resized = await maybeResizeAndDownsampleImageBlock(imageBlock)
+      const resized = await maybeResizeAndDownsampleImageBlock(
+        imageBlock,
+        getDefaultFileReadingLimits().maxTokens,
+      )
       return resized.block
     }),
   )

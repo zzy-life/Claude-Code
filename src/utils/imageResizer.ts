@@ -162,6 +162,27 @@ interface CompressedImageResult {
   originalSize: number
 }
 
+async function getFinalImageDimensions(
+  buffer: Buffer,
+  originalDimensions?: ImageDimensions,
+): Promise<ImageDimensions | undefined> {
+  try {
+    const sharp = await getImageProcessor()
+    const metadata = await sharp(buffer).metadata()
+    if (!metadata.width || !metadata.height) return originalDimensions
+
+    return {
+      originalWidth: originalDimensions?.originalWidth ?? metadata.width,
+      originalHeight: originalDimensions?.originalHeight ?? metadata.height,
+      displayWidth: metadata.width,
+      displayHeight: metadata.height,
+    }
+  } catch (error) {
+    logError(error)
+    return originalDimensions
+  }
+}
+
 /**
  * Extracted from FileReadTool's readImage function
  * Resizes image buffer to meet size and dimension constraints
@@ -444,6 +465,7 @@ export interface ImageBlockWithDimensions {
  */
 export async function maybeResizeAndDownsampleImageBlock(
   imageBlock: ImageBlockParam,
+  maxTokens?: number,
 ): Promise<ImageBlockWithDimensions> {
   // Only process base64 images
   if (imageBlock.source.type !== 'base64') {
@@ -465,18 +487,43 @@ export async function maybeResizeAndDownsampleImageBlock(
     ext,
   )
 
-  // Return resized image block with dimension info
+  const base64 = resized.buffer.toString('base64')
+  if (
+    maxTokens === undefined ||
+    Math.ceil(base64.length * 0.125) <= maxTokens
+  ) {
+    return {
+      block: {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type:
+            `image/${resized.mediaType}` as Base64ImageSource['media_type'],
+          data: base64,
+        },
+      },
+      dimensions: resized.dimensions,
+    }
+  }
+
+  const compressed = await compressImageBufferToTokenBudget(
+    resized.buffer,
+    maxTokens,
+    `image/${resized.mediaType}`,
+    resized.dimensions,
+  )
+
   return {
     block: {
       type: 'image',
       source: {
         type: 'base64',
         media_type:
-          `image/${resized.mediaType}` as Base64ImageSource['media_type'],
-        data: resized.buffer.toString('base64'),
+          `image/${compressed.mediaType}` as Base64ImageSource['media_type'],
+        data: compressed.buffer.toString('base64'),
       },
     },
-    dimensions: resized.dimensions,
+    dimensions: compressed.dimensions,
   }
 }
 
@@ -591,6 +638,51 @@ export async function compressImageBufferWithTokenLimit(
   const maxBytes = Math.floor(maxBase64Chars * 0.75)
 
   return compressImageBuffer(imageBuffer, maxBytes, originalMediaType)
+}
+
+export async function compressImageBufferToTokenBudget(
+  imageBuffer: Buffer,
+  maxTokens: number,
+  originalMediaType: string,
+  originalDimensions?: ImageDimensions,
+): Promise<ResizeResult> {
+  try {
+    const compressed = await compressImageBufferWithTokenLimit(
+      imageBuffer,
+      maxTokens,
+      originalMediaType,
+    )
+    const buffer = Buffer.from(compressed.base64, 'base64')
+    return {
+      buffer,
+      mediaType: compressed.mediaType.split('/')[1] || 'jpeg',
+      dimensions: await getFinalImageDimensions(buffer, originalDimensions),
+    }
+  } catch (error) {
+    logError(error)
+    try {
+      const sharp = await getImageProcessor()
+      const buffer = await sharp(imageBuffer)
+        .resize(400, 400, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 20 })
+        .toBuffer()
+      return {
+        buffer,
+        mediaType: 'jpeg',
+        dimensions: await getFinalImageDimensions(buffer, originalDimensions),
+      }
+    } catch (fallbackError) {
+      logError(fallbackError)
+      return {
+        buffer: imageBuffer,
+        mediaType: originalMediaType.split('/')[1] || 'png',
+        dimensions: originalDimensions,
+      }
+    }
+  }
 }
 
 /**
