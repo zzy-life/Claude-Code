@@ -282,10 +282,14 @@ export async function* withRetry<T>(
         }
 
         const retryAfterMs = getRetryAfterMs(error)
-        if (retryAfterMs !== null && retryAfterMs < SHORT_RETRY_THRESHOLD_MS) {
-          // Short retry-after: wait and retry with fast mode still active
-          // to preserve prompt cache (same model name on retry).
-          await sleep(retryAfterMs, options.signal, { abortError })
+        const retryDelayMs = getRetryDelay(attempt, getRetryAfter(error))
+        if (
+          retryAfterMs !== null &&
+          retryDelayMs < SHORT_RETRY_THRESHOLD_MS
+        ) {
+          // Short retry-after: keep fast mode active to preserve prompt cache,
+          // but do not let a small server value bypass exponential backoff.
+          await sleep(retryDelayMs, options.signal, { abortError })
           continue
         }
         // Long or unknown retry-after: enter cooldown (switches to standard
@@ -532,19 +536,21 @@ export function getRetryDelay(
   retryAfterHeader?: string | null,
   maxDelayMs = 32000,
 ): number {
-  if (retryAfterHeader) {
-    const seconds = parseInt(retryAfterHeader, 10)
-    if (!isNaN(seconds)) {
-      return seconds * 1000
-    }
-  }
-
   const baseDelay = Math.min(
     BASE_DELAY_MS * Math.pow(2, attempt - 1),
     maxDelayMs,
   )
   const jitter = Math.random() * 0.25 * baseDelay
-  return baseDelay + jitter
+  const exponentialDelay = baseDelay + jitter
+
+  if (retryAfterHeader) {
+    const seconds = parseInt(retryAfterHeader, 10)
+    if (!isNaN(seconds)) {
+      return Math.max(seconds * 1000, exponentialDelay)
+    }
+  }
+
+  return exponentialDelay
 }
 
 export function parseMaxTokensContextOverflowError(error: APIError):

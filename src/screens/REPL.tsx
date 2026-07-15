@@ -262,7 +262,6 @@ import { AwsAuthStatusBox } from '../components/AwsAuthStatusBox.js';
 import { useRateLimitWarningNotification } from 'src/hooks/notifs/useRateLimitWarningNotification.js';
 import { fetchProxyQuotaUsage } from '../services/api/proxyQuota.js';
 import { useDeprecationWarningNotification } from 'src/hooks/notifs/useDeprecationWarningNotification.js';
-import { useNpmDeprecationNotification } from 'src/hooks/notifs/useNpmDeprecationNotification.js';
 import { useIDEStatusIndicator } from 'src/hooks/notifs/useIDEStatusIndicator.js';
 import { useModelMigrationNotifications } from 'src/hooks/notifs/useModelMigrationNotifications.js';
 import { useCanSwitchToExistingSubscription } from 'src/hooks/notifs/useCanSwitchToExistingSubscription.js';
@@ -805,7 +804,6 @@ export function REPL({
   useRateLimitWarningNotification(mainLoopModel);
   useFastModeNotification();
   useDeprecationWarningNotification(mainLoopModel);
-  useNpmDeprecationNotification();
   useAntOrgWarningNotification();
   useInstallMessages();
   useChromeExtensionNotification();
@@ -1259,6 +1257,14 @@ export function REPL({
       // Shrank (compact/rewind/clear) — clamp so placeholderText's length
       // check can't go stale.
       userInputBaselineRef.current = 0;
+    }
+    if (next.length < prev.length) {
+      // The displayed value describes the old context until the next turn
+      // recalculates it. Hide it instead of showing stale usage after a shrink.
+      setAppState(state => state.contextWindowUsage === undefined ? state : {
+        ...state,
+        contextWindowUsage: undefined,
+      });
     } else if (next.length > prev.length && userMessagePendingRef.current) {
       // Grew while the submitted user message hasn't landed yet. If the
       // added messages don't include it (bridge status, hook results,
@@ -1275,7 +1281,7 @@ export function REPL({
       }
     }
     rawSetMessages(next);
-  }, []);
+  }, [setAppState]);
   // Capture the baseline message count alongside the placeholder text so
   // the render can hide it once displayedMessages grows past the baseline.
   const setUserInputOnProcessing = useCallback((input: string | undefined) => {
@@ -1790,6 +1796,10 @@ export function REPL({
   })));
   const resume = useCallback(async (sessionId: UUID, log: LogOption, entrypoint: ResumeEntrypoint) => {
     const resumeStart = performance.now();
+    setAppState(prev => prev.contextWindowUsage === undefined ? prev : {
+      ...prev,
+      contextWindowUsage: undefined
+    });
     try {
       // Deserialize messages to properly clean up the conversation
       // This filters unresolved tool uses and adds a synthetic assistant message if needed
@@ -2987,7 +2997,12 @@ export function REPL({
         resetLoadingState();
         await mrOnTurnComplete(messagesRef.current, abortController.signal.aborted);
         refreshProxyQuota();
-        refreshContextWindowUsage();
+        // Context-changing local commands (/clear, /compact, /rewind) run
+        // through onQuery with shouldQuery=false after clearing the old value.
+        // Only an actual model turn has authoritative usage to display.
+        if (shouldQuery) {
+          refreshContextWindowUsage();
+        }
 
         // Notify bridge clients that the turn is complete so mobile apps
         // can stop the spark animation and show post-turn UI.
