@@ -92,19 +92,12 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 
 ### npm 全局安装
 
-如果要直接通过 Git 仓库全局安装，请带上 `--allow-scripts`，否则 npm 11+ 会提示依赖安装脚本尚未审核：
+如果要直接通过 Git 仓库全局安装：
 
 ```powershell
-npm install -g --allow-scripts="@alcalzone/ansi-tokenize,@anthropic-ai/sandbox-runtime,axios,code-excerpt,fuse.js,google-auth-library,ink,lru-cache,signal-exit,turndown,undici" git+ssh://git@github.com/zzy-life/Claude-Code.git
-```
-
-也可以把白名单持久写入当前用户的 npm 配置，之后再执行普通全局安装：
-
-```powershell
-npm config set allow-scripts "@alcalzone/ansi-tokenize,@anthropic-ai/sandbox-runtime,axios,code-excerpt,fuse.js,google-auth-library,ink,lru-cache,signal-exit,turndown,undici" --location=user
 npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
 npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
-> 说明：仓库的 `package.json` 已包含 `allowScripts` 字段，适用于 clone 到本地后的项目级安装；但 `npm install -g` 是全局安装，没有当前项目 `package.json` 可写入或读取审批结果，因此需要通过安装参数或用户级 npm 配置显式允许。
+```
 
 
 ### 更新/安装依赖
