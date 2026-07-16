@@ -556,13 +556,22 @@ export default class Ink {
     // cells at sibling boundaries that per-node damage tracking misses.
     // Selection/highlight overlays write via setCellStyleId which doesn't
     // track damage. prevFrameContaminated covers the cleanup frame.
-    if (didLayoutShift() || selActive || hlActive || this.prevFrameContaminated) {
+    const layoutShifted = didLayoutShift();
+    if (layoutShifted || selActive || hlActive || this.prevFrameContaminated) {
       frame.screen.damage = {
         x: 0,
         y: 0,
         width: frame.screen.width,
         height: frame.screen.height
       };
+
+      // Conservative correctness fallback: a layout shift can desynchronize
+      // the physical alt-screen from otherwise-equal cells in the frame
+      // buffers. Erase before painting so stale rows and text tails cannot
+      // survive the incremental diff. Main-screen scrollback must not be erased.
+      if (layoutShifted && this.altScreenActive) {
+        this.needsEraseBeforePaint = true;
+      }
     }
 
     // Alt-screen: anchor the physical cursor to (0,0) before every diff.
