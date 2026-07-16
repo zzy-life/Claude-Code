@@ -243,55 +243,16 @@ bun run version
 
 ---
 
-### 5. [26+ 隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
+### 5. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
 
-> 源码位置：`src/commands.ts`、`src/commands/` · [查看完整分析 →](docs/05-hidden-commands.md)
+> 源码位置：`src/commands.ts`、`src/main.tsx` · [查看完整分析 →](docs/05-hidden-commands.md)
 
-#### Feature-gated 命令（编译开关控制）
+隐藏命令、内部命令、编译开关、隐藏 CLI 参数及环境变量统一维护在该文档中。README 的[斜杠命令清单](#斜杠命令清单)仅提供按使用场景分类的速查说明，避免维护两份重复表格。
 
-| 命令 | 功能 | 开关 |
-|------|------|------|
-| `/buddy` | 宠物系统 | `BUDDY` |
-| `/proactive` | 主动自主模式 | `PROACTIVE` / `KAIROS` |
-| `/assistant` | 助手模式 | `KAIROS` |
-| `/brief` | 简报模式 | `KAIROS` / `KAIROS_BRIEF` |
-| `/bridge` | 远程控制桥接 | `BRIDGE_MODE` |
-| `/voice` | 语音模式 | `VOICE_MODE` |
-| `/ultraplan` | 云端深度规划 | `ULTRAPLAN` |
-| `/fork` | 子代理分叉 | `FORK_SUBAGENT` |
-| `/peers` | 对等通信 | `UDS_INBOX` |
-| `/workflows` | 工作流脚本 | `WORKFLOW_SCRIPTS` |
-| `/torch` | Torch 功能 | `TORCH` |
-| `/force-snip` | 强制历史截断 | `HISTORY_SNIP` |
+常见受限能力包括远程控制、持久助手、语音、工作流、宠物和云端深度规划；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
 
-#### 仅内部用户（`USER_TYPE === 'ant'`）命令
+---
 
-| 命令 | 功能 |
-|------|------|
-| `/teleport` | 传送会话到远程/本地 |
-| `/bughunter` | 内部 Bug 猎人 |
-| `/mock-limits` | 模拟速率限制 |
-| `/ctx_viz` | 上下文可视化 |
-| `/break-cache` | 强制缓存清除 |
-| `/ant-trace` | 内部追踪工具 |
-| `/good-claude` | 内部反馈 |
-| `/agents-platform` | 智能体平台 |
-| `/autofix-pr` | 自动修复 PR |
-| `/debug-tool-call` | 调试工具调用 |
-| `/reset-limits` | 重置速率限制 |
-
-#### 隐藏 CLI 参数
-
-```
---teleport [session]    恢复传送会话
---remote [description]  创建远程会话
---proactive             主动模式
---assistant             助手模式
---brief                 简报模式
---remote-control        远程控制
---hard-fail             硬失败模式
---agent-teams           多代理团队
-```
 
 ---
 
@@ -445,6 +406,105 @@ vendor/                 # 原生绑定源码
 ```
 
 ---
+
+## 斜杠命令清单
+
+命令注册以 `src/commands.ts` 为准；`src/commands/` 的文件数量不等于当前构建中可输入的命令数量。下面按**常用**、**高级与集成**、**受限/实验/内部**三组列出，并保留实际命令名及别名。部分命令会受登录状态、套餐、平台、环境变量或编译开关限制。
+
+### 一、用户常用
+
+| 命令（含别名） | 用途 |
+|---|---|
+| `/help` | 显示帮助与可用命令。 |
+| `/clear`、`/reset`、`/new` | 清除对话历史并释放上下文。 |
+| `/compact [指令]` | 压缩历史对话，并保留摘要。 |
+| `/context` | 查看当前上下文占用；交互模式显示彩色网格。 |
+| `/model` | 切换当前会话模型。 |
+| `/effort` | 设置模型的 effort 等级。 |
+| `/plan` | 进入计划模式或查看当前会话计划。 |
+| `/status` | 查看 Claude Code 状态。 |
+| `/cost` | 显示当前会话的成本与时长。 |
+| `/diff` | 查看未提交改动及本轮差异。 |
+| `/copy` | 复制最近一条消息内容。 |
+| `/rename` | 重命名当前会话。 |
+| `/resume`、`/continue` | 恢复之前的会话。 |
+| `/rewind`、`/checkpoint` | 将代码和/或对话回退到先前状态。 |
+| `/branch` | 从当前节点创建会话分支；未启用 `FORK_SUBAGENT` 时，`/fork` 是其别名。 |
+| `/exit`、`/quit` | 退出 REPL。 |
+| `/feedback`、`/bug` | 提交 Claude Code 反馈。 |
+| `/theme` | 切换终端主题。 |
+| `/vim` | 切换 Vim 或普通编辑模式。 |
+| `/color` | 设置当前会话提示栏颜色。 |
+| `/btw` | 在不打断主任务的情况下发起简短的旁路提问。 |
+| `/stats` | 查看 Claude Code 用量统计与活动情况。 |
+| `/release-notes` | 查看发行说明。 |
+| `/stickers` | 查看贴纸订购信息。 |
+
+### 二、高级与集成
+
+| 命令（含别名） | 用途 |
+|---|---|
+| `/add-dir <path>` | 将目录添加到工作区。 |
+| `/agents` | 管理 Agent 配置。 |
+| `/mcp` | 管理 MCP 服务器。 |
+| `/plugin`、`/plugins`、`/marketplace` | 管理插件与插件市场。 |
+| `/reload-plugins` | 使本会话加载待应用的插件改动。 |
+| `/skills` | 列出可用的 Skills。 |
+| `/hooks` | 查看工具事件 Hook 配置。 |
+| `/permissions`、`/allowed-tools` | 管理工具允许/拒绝规则。 |
+| `/config`、`/settings` | 打开配置面板。 |
+| `/keybindings` | 管理快捷键配置。 |
+| `/ide` | 管理 IDE 集成并查看其状态。 |
+| `/init` | 初始化项目级配置和指导文件。 |
+| `/doctor` | 诊断安装与配置问题。 |
+| `/memory` | 编辑 Claude 记忆文件。 |
+| `/export` | 将当前会话导出至文件或剪贴板。 |
+| `/pr-comments` | 获取 GitHub Pull Request 评论。 |
+| `/review` | 审查 Pull Request。 |
+| `/security-review` | 对当前分支的待处理改动执行安全审查。 |
+| `/tasks`、`/bashes` | 查看和管理后台任务。 |
+| `/mobile`、`/ios`、`/android` | 显示 Claude 移动端下载二维码。 |
+| `/install-github-app` | 为仓库配置 Claude GitHub Actions。 |
+| `/install-slack-app` | 安装 Claude Slack App。 |
+| `/login`、`/logout` | 登录或登出 Anthropic 账户。 |
+| `/usage` | 显示 Claude.ai 套餐用量限制；仅 Claude.ai OAuth 订阅者可见。通过自定义 `ANTHROPIC_BASE_URL` 的代理、Bedrock、Vertex、Foundry 或普通 API Key 使用时会被隐藏。 |
+| `/upgrade` | 升级至 Max；受账户资格限制。 |
+| `/output-style` | 已弃用；请改用 `/config` 调整输出样式。 |
+| `/statusline` | 配置状态栏显示。 |
+| `/terminal-setup` | 执行终端设置/安装引导。 |
+
+### 三、受限、实验或内部命令
+
+| 命令 | 用途与限制 |
+|---|---|
+| `/advisor` | 选择辅助顾问模型：它可在主模型之外协助回答或分析；仅账户具备该实验资格时显示。 |
+| `/files` | 列出本次会话已加入上下文、可供模型参考的文件；仅内部构建可用。 |
+| `/remote-control`、`/rc` | 让 Claude 网页端或移动端连接并操作当前本地终端；当前构建需启用远程控制功能。 |
+| `/session`、`/remote` | 生成远程会话链接和二维码，用其他设备继续或查看当前会话；仅远程会话模式可用。 |
+| `/desktop`、`/app` | 把当前会话转交到 Claude Desktop 应用继续处理；仅部分平台和订阅账户可用。 |
+| `/chrome` | 连接、设置或管理 Claude in Chrome 浏览器扩展（Beta）；需满足登录和会话条件。 |
+| `/extra-usage` | 在套餐额度耗尽后，设置是否允许按额外用量继续使用；仅符合资格的账户可用。 |
+| `/privacy-settings` | 查看或修改数据使用、隐私相关偏好；仅消费者订阅账户可用。 |
+| `/remote-env` | 为可传送到远程端的会话选择默认运行环境，例如远程开发环境。 |
+| `/sandbox` | 启用或关闭命令执行沙箱，以限制工具可访问的系统资源。 |
+| `/passes` | 向他人赠送或分享限时免费使用资格；仅活动符合条件的账户可见。 |
+| `/ultrareview` | 将当前分支交给 Web 端进行更深入、耗时更长的缺陷审查；实验性功能。 |
+| `/think-back`、`/thinkback-play` | 查看或播放 Claude Code 的年度使用回顾；仅在活动开启期间可用。 |
+| `/web-setup` | 在 Claude 网页端连接 GitHub 并完成 Claude Code 的 Web 使用设置；仅部分 Claude.ai 账户和策略允许时可用。 |
+| `/fork` | 将当前任务分叉为独立的子 Agent 会话，用于并行处理；未启用该功能时它只是 `/branch` 的别名。 |
+| `/buddy` | 在终端中启用可互动的 AI 宠物功能；属于实验功能，默认构建通常不提供。 |
+| `/proactive` | 让助手在空闲期间自主检查待办、继续合适的工作；需启用持久助手/主动模式实验。 |
+| `/brief` | 切换为更精简的回答风格；需启用 KAIROS 助手实验且账户具备资格。 |
+| `/assistant` | 开启可跨会话持续工作的持久助手模式；属于 KAIROS 实验功能。 |
+| `/remote-control-server` | 在本机启动远程控制服务端，供其他 Claude 客户端连接；仅内部/实验构建可用。 |
+| `/voice` | 用语音输入与 Claude 交互；需语音实验、订阅资格和服务端开关均已启用。 |
+| `/peers` | 管理本地 Claude 进程之间的消息收件箱和协作通信；仅实验构建可用。 |
+| `/workflows` | 管理可复用的工作流脚本：把一组预定义步骤保存为命令，以便重复执行开发流程；仅启用工作流实验时可用。 |
+| `/torch` | Anthropic 内部代号功能；源码未提供面向外部用户的稳定用途说明，默认不可用。 |
+| `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
+| `/ultraplan` | 将复杂问题交给云端进行较长时间的独立研究和方案规划；当前外部构建已强制禁用。 |
+
+内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/break-cache`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
 
 ## REPL 模块说明
 

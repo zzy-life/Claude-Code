@@ -8,56 +8,59 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 
 ## Feature-gated 命令
 
-通过编译开关控制，外部版本中不可见：
+以下命令会受编译开关控制，未启用时不会注册到命令列表。命令名以 `src/commands.ts` 的注册表为准；部分命令还会受到订阅资格、服务端策略或内部构建限制。
 
-| 命令 | 编译开关 | 功能 |
+| 命令 | 编译开关 | 功能与额外限制 |
 |------|---------|------|
-| `/buddy` | `BUDDY` | 宠物伴侣系统 |
-| `/proactive` | `PROACTIVE` / `KAIROS` | 主动自主模式 |
-| `/assistant` | `KAIROS` | 持久助手模式 |
-| `/brief` | `KAIROS` / `KAIROS_BRIEF` | 简报模式 |
-| `/bridge` | `BRIDGE_MODE` | 远程控制桥接 |
-| `/voice` | `VOICE_MODE` | 语音交互 |
-| `/ultraplan` | `ULTRAPLAN` | 云端深度规划 |
-| `/fork` | `FORK_SUBAGENT` | 子代理分叉 |
-| `/peers` | `UDS_INBOX` | 对等通信（Unix Domain Socket） |
-| `/workflows` | `WORKFLOW_SCRIPTS` | 工作流脚本 |
-| `/torch` | `TORCH` | Torch 功能 |
-| `/force-snip` | `HISTORY_SNIP` | 强制历史截断 |
-| `/remoteControlServer` | `DAEMON` + `BRIDGE_MODE` | 远程控制服务器 |
-| `/web` / `/remote-setup` | `CCR_REMOTE_SETUP` | Claude Code on the Web 设置 |
+| `/buddy` | `BUDDY` | 终端 AI 宠物功能。 |
+| `/proactive` | `PROACTIVE` / `KAIROS` | 空闲时主动检查并继续合适的工作。 |
+| `/assistant` | `KAIROS` | 跨会话持续运行的持久助手模式。 |
+| `/brief` | `KAIROS` / `KAIROS_BRIEF` | 精简输出模式；还需服务端允许且账户具备资格。 |
+| `/remote-control`、`/rc` | `BRIDGE_MODE` | 允许网页端或移动端连接并操作当前本地终端；不是 `/bridge`。 |
+| `/remote-control-server` | `DAEMON` + `BRIDGE_MODE` | 在本机启动远程控制服务端。 |
+| `/voice` | `VOICE_MODE` | 语音交互；还需 Claude.ai 订阅和语音服务端开关。 |
+| `/fork` | `FORK_SUBAGENT` | 创建独立的子 Agent 分叉会话；未启用时 `/fork` 是 `/branch` 的别名。 |
+| `/peers` | `UDS_INBOX` | 本地 Claude 进程之间的收件箱与协作通信。 |
+| `/workflows` | `WORKFLOW_SCRIPTS` | 将预定义的多步骤开发流程保存、管理并重复执行。 |
+| `/torch` | `TORCH` | 内部代号功能；源码未提供面向外部的稳定用途。 |
+| `/web-setup` | `CCR_REMOTE_SETUP` | 在 Claude 网页端连接 GitHub 并设置 Claude Code；还需 Claude.ai 登录、服务端开关及远程会话策略许可。 |
+| `/ultraplan` | `ULTRAPLAN` | 云端长时间独立研究与规划；当前外部构建的 `isEnabled` 固定为 `false`。 |
+| `/force-snip` | `HISTORY_SNIP` | 强制截断历史；即使开关启用，仍仅限内部构建。 |
 
 ---
 
 ## 仅内部用户命令
 
-仅 `USER_TYPE === 'ant'`（Anthropic 内部员工）可见，定义在 `src/commands.ts` 第 225-254 行：
+以下命令只有 `USER_TYPE === 'ant'` 且非 Demo 构建时才会注册。它们定义在 `src/commands.ts` 的 `INTERNAL_ONLY_COMMANDS`；不应视为外部用户可用功能。
 
 | 命令 | 功能 |
 |------|------|
-| `/teleport` | 传送会话到远程/本地 |
-| `/bughunter` | 内部 Bug 猎人 |
-| `/mock-limits` | 模拟速率限制 |
-| `/ctx_viz` | 上下文可视化 |
-| `/break-cache` | 强制缓存清除 |
-| `/ant-trace` | 内部追踪工具 |
-| `/good-claude` | 内部正向反馈 |
-| `/agents-platform` | 智能体平台管理 |
-| `/autofix-pr` | 自动修复 PR |
-| `/debug-tool-call` | 调试工具调用 |
-| `/reset-limits` | 重置速率限制 |
-| `/backfill-sessions` | 回填历史会话 |
-| `/commit-push-pr` | 内部提交/推送/PR 工作流 |
-| `/perf-issue` | 性能问题诊断 |
-| `/share` / `/summary` | 会话分享和总结 |
-| `/bridge-kick` | 踢出桥接连接 |
-| `/subscribe-pr` | PR 订阅（需 `KAIROS_GITHUB_WEBHOOKS`） |
-| `/tags` | 标签管理 |
-| `/files` | 文件列表 |
-| `/env` | 环境变量管理 |
-| `/oauth-refresh` | OAuth 刷新 |
-| `/onboarding` | 引导流程 |
-| `/init-verifiers` | 初始化验证器 |
+| `/backfill-sessions` | 回填历史会话数据。 |
+| `/break-cache` | 强制打破提示缓存。 |
+| `/bughunter` | 内部 Bug 诊断工具。 |
+| `/commit` | 创建 Git 提交。 |
+| `/commit-push-pr` | 执行内部提交、推送和创建 Pull Request 工作流。 |
+| `/ctx_viz` | 上下文占用可视化。 |
+| `/good-claude` | 提交内部正向反馈。 |
+| `/issue` | 内部 issue 工作流。 |
+| `/init-verifiers` | 初始化验证器。 |
+| `/mock-limits` | 模拟速率限制。 |
+| `/bridge-kick` | 断开桥接连接。 |
+| `/version` | 查看或诊断内部版本信息。 |
+| `/reset-limits` | 重置速率限制。 |
+| `/onboarding` | 内部引导流程。 |
+| `/share` | 分享会话。 |
+| `/summary` | 生成会话摘要。 |
+| `/teleport` | 在本地与远程环境之间传送会话。 |
+| `/ant-trace` | 内部追踪工具。 |
+| `/perf-issue` | 性能问题诊断。 |
+| `/env` | 环境变量管理。 |
+| `/oauth-refresh` | 刷新 OAuth 凭据。 |
+| `/debug-tool-call` | 调试工具调用。 |
+| `/agents-platform` | 智能体平台入口；当前还原开发构建标注为不可用。 |
+| `/autofix-pr` | 自动修复 Pull Request。 |
+
+`/force-snip`、`/ultraplan`、`/subscribe-pr` 还分别受 `HISTORY_SNIP`、`ULTRAPLAN`、`KAIROS_GITHUB_WEBHOOKS` 等开关约束；即使进入内部构建也未必可用。`/files` 与 `/tag` 属于常规注册表中的受限命令，不属于 `INTERNAL_ONLY_COMMANDS`。
 
 ---
 
@@ -67,14 +70,14 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 
 | 命令 | 功能 |
 |------|------|
-| `/stickers` | 贴纸 |
-| `/thinkback` / `/thinkback-play` | 思维回放 |
-| `/rewind` | 历史倒退 |
-| `/heapdump` | 堆转储 |
-| `/sandbox-toggle` | 沙箱开关 |
-| `/chrome` | Chrome 浏览器集成 |
-| `/advisor` | 服务端顾问工具 |
-| `/btw` | 快速备注（"by the way"） |
+| `/stickers` | 查看贴纸订购信息。 |
+| `/think-back` / `/thinkback-play` | 年度使用回顾及其播放界面；受远程功能开关限制。 |
+| `/rewind` | 将代码和/或对话回退到先前状态。 |
+| `/heapdump` | 将 JavaScript 堆内存快照写入桌面目录，供内存问题诊断。 |
+| `/sandbox` | 切换命令执行沙箱。 |
+| `/chrome` | Claude in Chrome 浏览器扩展设置（Beta）。 |
+| `/advisor` | 配置辅助顾问模型；仅具备资格的账户可见。 |
+| `/btw` | 在不打断主任务的情况下发起简短旁路提问。 |
 
 ---
 
