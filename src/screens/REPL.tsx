@@ -3978,8 +3978,9 @@ export function REPL({
     const remaining = idleThresholdMs - elapsed;
     const timer = setTimeout((lqct, addNotif, msgsRef, mode, hintRef) => {
       if (msgsRef.current.length === 0) return;
-      const totalTokens = getTotalInputTokens();
-      const formattedTokens = formatTokens(totalTokens);
+      const totalInputTokens = getTotalInputTokens();
+      const contextTokens = tokenCountWithEstimation(msgsRef.current);
+      const formattedTokens = formatTokens(contextTokens);
       const idleMinutes = (Date.now() - lqct) / 60_000;
       addNotif({
         key: 'idle-return-hint',
@@ -4003,7 +4004,7 @@ export function REPL({
         variant: mode as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         idleMinutes: Math.round(idleMinutes),
         messageCount: msgsRef.current.length,
-        totalInputTokens: totalTokens
+        totalInputTokens
       });
     }, Math.max(0, remaining), lastQueryCompletionTime, addNotification, messagesRef, willowMode, idleHintShownRef);
     return () => {
