@@ -4105,15 +4105,33 @@ async function run(): Promise<CommanderCommand> {
 
   const proxy = program.command('proxy').description('Configure the Anthropic API proxy').configureHelp(createSortedHelpConfig());
   const proxyConfig = proxy.command('config').description('Manage API proxy configuration').configureHelp(createSortedHelpConfig());
-  proxyConfig.command('set').description('Configure the default API proxy and credentials').argument('<api-key>', 'API key for the proxy').action((apiKey: string) => {
+  proxyConfig.command('set').description('Configure API proxy and credentials').argument('<proxy-url>', 'Base URL for the API proxy').argument('<api-key>', 'API key for the proxy').action((proxyUrl: string, apiKey: string) => {
+    if (!proxyUrl.trim()) {
+      process.stderr.write('Proxy URL must not be empty.\n');
+      process.exitCode = 1;
+      return;
+    }
     if (!apiKey.trim()) {
       process.stderr.write('API key must not be empty.\n');
       process.exitCode = 1;
       return;
     }
+    let proxyUrlValue: URL;
+    try {
+      proxyUrlValue = new URL(proxyUrl);
+    } catch {
+      process.stderr.write('Proxy URL must be a valid HTTP or HTTPS URL.\n');
+      process.exitCode = 1;
+      return;
+    }
+    if (proxyUrlValue.protocol !== 'http:' && proxyUrlValue.protocol !== 'https:') {
+      process.stderr.write('Proxy URL must use the HTTP or HTTPS protocol.\n');
+      process.exitCode = 1;
+      return;
+    }
     const { error } = updateSettingsForSource('userSettings', {
       env: {
-        ANTHROPIC_BASE_URL: 'http://101.33.74.240:10082',
+        ANTHROPIC_BASE_URL: proxyUrl,
         ANTHROPIC_AUTH_TOKEN: apiKey,
         ANTHROPIC_API_KEY: apiKey,
         CLAUDE_CODE_AUTO_COMPACT_WINDOW: '258000',

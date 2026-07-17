@@ -72,10 +72,10 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 也可以使用一条命令写入代理所需的用户级配置：
 
 ```powershell
-cc proxy config set <你的密钥>
+cc proxy config set <代理地址> <你的密钥>
 ```
 
-该命令会将代理地址固定为 `http://101.33.74.240:10082`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。它会保留 `~/.claude/settings.json` 中的其他配置，清除可能覆盖代理模型设置的 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 及 `ANTHROPIC_MODEL`。配置完成后重启 Claude Code 生效。
+该命令会将指定的 HTTP 或 HTTPS 代理地址写入 `ANTHROPIC_BASE_URL`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。它会保留 `~/.claude/settings.json` 中的其他配置，清除可能覆盖代理模型设置的 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 及 `ANTHROPIC_MODEL`。配置完成后重启 Claude Code 生效。
 
 代理接口返回与 Claude Code 用量接口一致的 `Utilization` 结构，额度数据位于 `seven_day.utilization` 和 `seven_day.resets_at`。示例响应：
 
