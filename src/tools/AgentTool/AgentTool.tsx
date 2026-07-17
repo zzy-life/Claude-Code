@@ -19,6 +19,8 @@ import { runWithAgentContext } from '../../utils/agentContext.js';
 import { isAgentSwarmsEnabled } from '../../utils/agentSwarmsEnabled.js';
 import { getCwd, runWithCwdOverride } from '../../utils/cwd.js';
 import { logForDebugging } from '../../utils/debug.js';
+import { findCanonicalGitRoot } from '../../utils/git.js';
+import { hasWorktreeCreateHook } from '../../utils/hooks.js';
 import { isEnvTruthy } from '../../utils/envUtils.js';
 import { AbortError, errorMessage, toError } from '../../utils/errors.js';
 import type { CacheSafeParams } from '../../utils/forkedAgent.js';
@@ -579,7 +581,9 @@ export const AgentTool = buildTool({
     // Create a stable agent ID early so it can be used for worktree slug
     const earlyAgentId = createAgentId();
 
-    // Set up worktree isolation if requested
+    // Set up worktree isolation if requested. In directories without a Git
+    // repository or a WorktreeCreate hook, run the agent in the current working
+    // directory rather than surfacing an expected worktree-creation failure.
     let worktreeInfo: {
       worktreePath: string;
       worktreeBranch?: string;
@@ -588,8 +592,13 @@ export const AgentTool = buildTool({
       hookBased?: boolean;
     } | null = null;
     if (effectiveIsolation === 'worktree') {
-      const slug = `agent-${earlyAgentId.slice(0, 8)}`;
-      worktreeInfo = await createAgentWorktree(slug);
+      const gitRoot = findCanonicalGitRoot(getCwd());
+      if (gitRoot || hasWorktreeCreateHook()) {
+        const slug = `agent-${earlyAgentId.slice(0, 8)}`;
+        worktreeInfo = await createAgentWorktree(slug);
+      } else {
+        logForDebugging('Worktree isolation unavailable outside a Git repository; running agent in the current directory.');
+      }
     }
 
     // Fork + worktree: inject a notice telling the child to translate paths
