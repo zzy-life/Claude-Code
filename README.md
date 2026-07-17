@@ -15,7 +15,7 @@
 
 ### 安装 Bun
 
-项目建议使用 Bun 1.3.5，并需要 Node.js ≥ 24。
+项目建议使用 Bun 1.3.5，并需要 Node.js ≥ 20.19。
 
 ```bash
 npm install -g bun@1.3.5
@@ -47,7 +47,7 @@ cc
 ### 本地安装并运行
 
 ```bash
-bun ci            # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 24）
+bun ci            # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 20.19）
 bun run dev       # 启动 CLI
 bun run version   # 验证版本
 ```

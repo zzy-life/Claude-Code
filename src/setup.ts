@@ -66,13 +66,19 @@ export async function setup(
 ): Promise<void> {
   logForDiagnosticsNoPII('info', 'setup_started')
 
-  // Check for Node.js version < 18
-  const nodeVersion = process.version.match(/^v(\d+)\./)?.[1]
-  if (!nodeVersion || parseInt(nodeVersion) < 18) {
+  // Check for Node.js version < 20.19
+  const nodeVersion = process.version.match(/^v(\d+)\.(\d+)\./)
+  const nodeMajor = Number(nodeVersion?.[1])
+  const nodeMinor = Number(nodeVersion?.[2])
+  if (
+    !nodeVersion ||
+    nodeMajor < 20 ||
+    (nodeMajor === 20 && nodeMinor < 19)
+  ) {
     // biome-ignore lint/suspicious/noConsole:: intentional console output
     console.error(
       chalk.bold.red(
-        'Error: Claude Code requires Node.js version 18 or higher.',
+        'Error: Claude Code requires Node.js version 20.19 or higher.',
       ),
     )
     process.exit(1)
