@@ -30,16 +30,7 @@ iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
 ### 终端用户使用
 
 ```bash
-npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
-```
-或者
-
-```bash
-npm install -g git+https://gitee.com/time-doesnt-wait-for-me/Claude-Code.git
-```
-
-
-```bash
+npm install -g @zzy1998/claude-code
 cc
 ```
 
@@ -100,11 +91,9 @@ cc proxy config set <代理地址> <你的密钥>
 
 ### npm 全局安装
 
-如果要直接通过 Git 仓库全局安装：
-
 ```powershell
-npm install -g git+ssh://git@github.com/zzy-life/Claude-Code.git
-npm install -g git+ssh://git@gitee.com:time-doesnt-wait-for-me/Claude-Code.git
+npm install -g @zzy1998/claude-code
+cc
 ```
 
 
