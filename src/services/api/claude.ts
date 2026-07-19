@@ -2818,7 +2818,7 @@ async function* queryModel(
     // message_delta handler before any yield. Fallback pushes to newMessages
     // then yields, so tracking must be here to survive .return() at the yield.
     if (fallbackMessage) {
-      const fallbackUsage = fallbackMessage.message.usage
+      const fallbackUsage = fallbackMessage.message.usage ?? EMPTY_USAGE
       usage = updateUsage(EMPTY_USAGE, fallbackUsage)
       stopReason = fallbackMessage.message.stop_reason
       const fallbackCost = calculateUSDCost(resolvedModel, fallbackUsage)
