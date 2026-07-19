@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { mkdir, readdir, readFile } from 'fs/promises'
-import { join } from 'path'
+import * as path from 'path'
+import { fileURLToPath } from 'url'
 import {
   PDF_MAX_EXTRACT_SIZE,
   PDF_TARGET_RAW_SIZE,
@@ -10,6 +11,19 @@ import { execFileNoThrow } from './execFileNoThrow.js'
 import { formatFileSize } from './format.js'
 import { getFsImplementation } from './fsOperations.js'
 import { getToolResultsDir } from './toolResultStorage.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.join(
+  __filename,
+  process.env.NODE_ENV === 'test' ? '../../../' : '../',
+)
+
+function getPopplerCommand(tool: 'pdfinfo' | 'pdftoppm'): string {
+  if (process.platform !== 'win32' || process.arch !== 'x64') return tool
+
+  const popplerRoot = path.resolve(__dirname, 'vendor', 'poppler')
+  return path.resolve(popplerRoot, 'x64-win32', `${tool}.exe`)
+}
 
 export type PDFError = {
   reason:
@@ -119,10 +133,14 @@ export async function readPDF(filePath: string): Promise<
 export async function getPDFPageCount(
   filePath: string,
 ): Promise<number | null> {
-  const { code, stdout } = await execFileNoThrow('pdfinfo', [filePath], {
-    timeout: 10_000,
-    useCwd: false,
-  })
+  const { code, stdout } = await execFileNoThrow(
+    getPopplerCommand('pdfinfo'),
+    [filePath],
+    {
+      timeout: 10_000,
+      useCwd: false,
+    },
+  )
   if (code !== 0) {
     return null
   }
@@ -159,13 +177,19 @@ export function resetPdftoppmCache(): void {
  */
 export async function isPdftoppmAvailable(): Promise<boolean> {
   if (pdftoppmAvailable !== undefined) return pdftoppmAvailable
-  const { code, stderr } = await execFileNoThrow('pdftoppm', ['-v'], {
-    timeout: 5000,
-    useCwd: false,
-  })
-  // pdftoppm prints version info to stderr and exits 0 (or sometimes 99 on older versions)
-  pdftoppmAvailable = code === 0 || stderr.length > 0
-  return pdftoppmAvailable
+  const { code, stdout, stderr } = await execFileNoThrow(
+    getPopplerCommand('pdftoppm'),
+    ['-v'],
+    {
+      timeout: 5000,
+      useCwd: false,
+    },
+  )
+  // Older versions may exit non-zero after printing version information to stderr.
+  const available =
+    code === 0 || /pdftoppm version\s+\S+/i.test(`${stdout}\n${stderr}`)
+  if (available) pdftoppmAvailable = true
+  return available
 }
 
 /**
@@ -209,17 +233,19 @@ export async function extractPDFPages(
         error: {
           reason: 'unavailable',
           message:
-            'pdftoppm is not installed. Install poppler-utils (e.g. `brew install poppler` or `apt-get install poppler-utils`) to enable PDF page rendering.',
+            process.platform === 'win32' && process.arch === 'x64'
+              ? 'The built-in pdftoppm executable is unavailable or failed to start.'
+              : 'pdftoppm is not installed. Install poppler-utils (e.g. `brew install poppler` or `apt-get install poppler-utils`) to enable PDF page rendering.',
         },
       }
     }
 
     const uuid = randomUUID()
-    const outputDir = join(getToolResultsDir(), `pdf-${uuid}`)
+    const outputDir = path.join(getToolResultsDir(), `pdf-${uuid}`)
     await mkdir(outputDir, { recursive: true })
 
     // pdftoppm produces files like <prefix>-01.jpg, <prefix>-02.jpg, etc.
-    const prefix = join(outputDir, 'page')
+    const prefix = path.join(outputDir, 'page')
     const args = ['-jpeg', '-r', '100']
     if (options?.firstPage) {
       args.push('-f', String(options.firstPage))
@@ -228,10 +254,14 @@ export async function extractPDFPages(
       args.push('-l', String(options.lastPage))
     }
     args.push(filePath, prefix)
-    const { code, stderr } = await execFileNoThrow('pdftoppm', args, {
-      timeout: 120_000,
-      useCwd: false,
-    })
+    const { code, stderr } = await execFileNoThrow(
+      getPopplerCommand('pdftoppm'),
+      args,
+      {
+        timeout: 120_000,
+        useCwd: false,
+      },
+    )
 
     if (code !== 0) {
       if (/password/i.test(stderr)) {
