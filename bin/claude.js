@@ -9,7 +9,7 @@ const entry = join(__dirname, "../src/dev-entry.ts");
 
 const result = spawnSync("bun", ["run", entry, ...process.argv.slice(2)], {
   stdio: "inherit",
-  shell: process.platform === "win32"
+  shell: false
 });
 
 process.exit(result.status ?? 1);
