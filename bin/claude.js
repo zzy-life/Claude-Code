@@ -1,15 +1,3 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const entry = join(__dirname, "../src/dev-entry.ts");
-
-const result = spawnSync("bun", ["run", entry, ...process.argv.slice(2)], {
-  stdio: "inherit",
-  shell: false
-});
-
-process.exit(result.status ?? 1);
+await import("../src/dev-entry.ts");
