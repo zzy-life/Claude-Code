@@ -258,11 +258,15 @@ export class LogUpdate {
     // Handle shrinking: clear lines from the bottom
     if (shrinking) {
       const linesToClear = prev.screen.height - next.screen.height
+      // The cursor sits one row below non-empty content. Include that row so
+      // eraseLines reaches the first line removed by the shrink.
+      const clearCount =
+        linesToClear + (next.screen.height > 0 ? 1 : 0)
 
-      // eraseLines only works within the viewport - it can't clear scrollback.
-      // If we need to clear more lines than fit in the viewport, some are in
-      // scrollback, so we need a full reset.
-      if (linesToClear > prev.viewport.height) {
+      // The clear is followed by one final cursor-up. If clearCount reaches the
+      // viewport height, that move would cross into scrollback and desynchronize
+      // the physical and virtual cursor positions, so fall back to a full reset.
+      if (clearCount >= prev.viewport.height) {
         return fullResetSequence_CAUSES_FLICKER(
           next,
           'offscreen',
@@ -270,15 +274,15 @@ export class LogUpdate {
         )
       }
 
-      // clear(N) moves cursor UP by N-1 lines and to column 0
-      // This puts us at line prev.screen.height - N = next.screen.height
-      // But we want to be at next.screen.height - 1 (bottom of new screen)
+      // clear(N) moves cursor up by N-1 lines. Clearing one extra row for a
+      // non-empty next frame reaches its bottom line; the final move goes to
+      // that line so the following cell diff starts at the correct position.
       screen.txn(prev => [
         [
-          { type: 'clear', count: linesToClear },
+          { type: 'clear', count: clearCount },
           { type: 'cursorMove', x: 0, y: -1 },
         ],
-        { dx: -prev.x, dy: -linesToClear },
+        { dx: -prev.x, dy: -clearCount },
       ])
     }
 
