@@ -31,7 +31,7 @@ iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
 
 ```bash
 npm install -g @zzy1998/claude-code
-cc
+ccli
 ```
 
 
@@ -63,7 +63,7 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 也可以使用一条命令写入代理所需的用户级配置：
 
 ```powershell
-cc proxy config set <代理地址> <你的密钥>
+ccli proxy config set <代理地址> <你的密钥>
 ```
 
 该命令会将指定的 HTTP 或 HTTPS 代理地址写入 `ANTHROPIC_BASE_URL`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。它会保留 `~/.claude/settings.json` 中的其他配置，清除可能覆盖代理模型设置的 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 及 `ANTHROPIC_MODEL`。配置完成后重启 Claude Code 生效。
@@ -93,7 +93,7 @@ cc proxy config set <代理地址> <你的密钥>
 
 ```powershell
 npm install -g @zzy1998/claude-code
-cc
+ccli
 ```
 
 
