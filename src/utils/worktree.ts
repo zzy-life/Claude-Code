@@ -8,7 +8,9 @@ import {
   readFile,
   stat,
   symlink,
+  unlink,
   utimes,
+  writeFile,
 } from 'fs/promises'
 import ignore from 'ignore'
 import { basename, dirname, join } from 'path'
@@ -20,6 +22,7 @@ import { execFileNoThrow, execFileNoThrowWithCwd } from './execFileNoThrow.js'
 import { parseGitConfigValue } from './git/gitConfigParser.js'
 import {
   getCommonDir,
+  isSafeRefName,
   readWorktreeHeadSha,
   resolveGitDir,
   resolveRef,
@@ -192,6 +195,49 @@ type WorktreeCreateResult =
       existed: false
     }
 
+type AgentWorktreeMetadata = {
+  parentBranch: string
+  baseCommit: string
+  agentBranch: string
+}
+
+function agentWorktreeMetadataPath(repoRoot: string, slug: string): string {
+  return join(worktreesDir(repoRoot), '.metadata', `${flattenSlug(slug)}.json`)
+}
+
+async function readAgentWorktreeMetadata(
+  repoRoot: string,
+  slug: string,
+): Promise<AgentWorktreeMetadata | null> {
+  try {
+    const raw = await readFile(agentWorktreeMetadataPath(repoRoot, slug), 'utf-8')
+    const metadata = JSON.parse(raw) as Partial<AgentWorktreeMetadata>
+    if (
+      typeof metadata.parentBranch === 'string' &&
+      isSafeRefName(metadata.parentBranch) &&
+      typeof metadata.baseCommit === 'string' &&
+      /^[0-9a-f]{40,64}$/.test(metadata.baseCommit) &&
+      typeof metadata.agentBranch === 'string' &&
+      isSafeRefName(metadata.agentBranch)
+    ) {
+      return metadata as AgentWorktreeMetadata
+    }
+  } catch {
+    // Missing, unreadable, or malformed metadata cannot prove cleanup is safe.
+  }
+  return null
+}
+
+async function writeAgentWorktreeMetadata(
+  repoRoot: string,
+  slug: string,
+  metadata: AgentWorktreeMetadata,
+): Promise<void> {
+  const path = agentWorktreeMetadataPath(repoRoot, slug)
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, JSON.stringify(metadata), 'utf-8')
+}
+
 // Env vars to prevent git/SSH from prompting for credentials (which hangs the CLI).
 // GIT_TERMINAL_PROMPT=0 prevents git from opening /dev/tty for credential prompts.
 // GIT_ASKPASS='' disables askpass GUI programs.
@@ -235,7 +281,7 @@ function worktreePathFor(repoRoot: string, slug: string): string {
 async function getOrCreateWorktree(
   repoRoot: string,
   slug: string,
-  options?: { prNumber?: number },
+  options?: { prNumber?: number; baseRef?: string; baseSha?: string },
 ): Promise<WorktreeCreateResult> {
   const worktreePath = worktreePathFor(repoRoot, slug)
   const worktreeBranch = worktreeBranchName(slug)
@@ -254,14 +300,18 @@ async function getOrCreateWorktree(
     }
   }
 
-  // New worktree: fetch base branch then add
+  // New worktree: resolve the requested base, or use the remote default branch
+  // for user-created worktrees. Agent worktrees always pass their parent HEAD.
   await mkdir(worktreesDir(repoRoot), { recursive: true })
 
   const fetchEnv = { ...process.env, ...GIT_NO_PROMPT_ENV }
 
   let baseBranch: string
   let baseSha: string | null = null
-  if (options?.prNumber) {
+  if (options?.baseRef) {
+    baseBranch = options.baseRef
+    baseSha = options.baseSha ?? null
+  } else if (options?.prNumber) {
     const { code: prFetchCode, stderr: prFetchStderr } =
       await execFileNoThrowWithCwd(
         gitExe(),
@@ -903,6 +953,7 @@ export async function createAgentWorktree(slug: string): Promise<{
   worktreePath: string
   worktreeBranch?: string
   headCommit?: string
+  parentBranch?: string
   gitRoot?: string
   hookBased?: boolean
 }> {
@@ -931,24 +982,78 @@ export async function createAgentWorktree(slug: string): Promise<{
     )
   }
 
-  const { worktreePath, worktreeBranch, headCommit, existed } =
-    await getOrCreateWorktree(gitRoot, slug)
+  const parentCwd = getCwd()
+  const [parentBranchResult, parentHeadResult] = await Promise.all([
+    execFileNoThrowWithCwd(
+      gitExe(),
+      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      { cwd: parentCwd },
+    ),
+    execFileNoThrowWithCwd(gitExe(), ['rev-parse', 'HEAD'], { cwd: parentCwd }),
+  ])
+  if (parentBranchResult.code !== 0 || parentHeadResult.code !== 0) {
+    throw new Error(
+      'Cannot create agent worktree: failed to resolve the parent branch and HEAD',
+    )
+  }
+  const parentBranch = parentBranchResult.stdout.trim()
+  const baseCommit = parentHeadResult.stdout.trim()
+  if (!parentBranch || !baseCommit) {
+    throw new Error(
+      'Cannot create agent worktree: parent session must be on a named branch',
+    )
+  }
+
+  const result = await getOrCreateWorktree(gitRoot, slug, {
+    baseRef: baseCommit,
+    baseSha: baseCommit,
+  })
+  const { worktreePath, worktreeBranch, headCommit, existed } = result
 
   if (!existed) {
+    try {
+      await writeAgentWorktreeMetadata(gitRoot, slug, {
+        parentBranch,
+        baseCommit,
+        agentBranch: worktreeBranch,
+      })
+    } catch (error) {
+      await execFileNoThrowWithCwd(
+        gitExe(),
+        ['worktree', 'remove', worktreePath],
+        { cwd: gitRoot },
+      )
+      throw new Error(
+        `Failed to persist agent worktree metadata: ${errorMessage(error)}`,
+      )
+    }
     logForDebugging(
       `Created agent worktree at: ${worktreePath} on branch: ${worktreeBranch}`,
     )
     await performPostCreationSetup(gitRoot, worktreePath)
   } else {
+    const metadata = await readAgentWorktreeMetadata(gitRoot, slug)
+    if (!metadata || metadata.agentBranch !== worktreeBranch) {
+      throw new Error(
+        `Cannot safely resume agent worktree without matching creation metadata: ${worktreePath}`,
+      )
+    }
     // Bump mtime so the periodic stale-worktree cleanup doesn't consider this
     // worktree stale — the fast-resume path is read-only and leaves the original
     // creation-time mtime intact, which can be past the 30-day cutoff.
     const now = new Date()
     await utimes(worktreePath, now, now)
     logForDebugging(`Resuming existing agent worktree at: ${worktreePath}`)
+    return {
+      worktreePath,
+      worktreeBranch,
+      headCommit: metadata.baseCommit,
+      parentBranch: metadata.parentBranch,
+      gitRoot,
+    }
   }
 
-  return { worktreePath, worktreeBranch, headCommit, gitRoot }
+  return { worktreePath, worktreeBranch, headCommit, parentBranch, gitRoot }
 }
 
 /**
@@ -963,6 +1068,8 @@ export async function removeAgentWorktree(
   worktreeBranch?: string,
   gitRoot?: string,
   hookBased?: boolean,
+  baseCommit?: string,
+  parentBranch?: string,
 ): Promise<boolean> {
   if (hookBased) {
     const hookRan = await executeWorktreeRemoveHook(worktreePath)
@@ -984,11 +1091,47 @@ export async function removeAgentWorktree(
     return false
   }
 
+  if (!worktreeBranch || !baseCommit || !parentBranch) {
+    logForDebugging(
+      `Cannot safely remove agent worktree without branch lineage metadata: ${worktreePath}`,
+      { level: 'warn' },
+    )
+    return false
+  }
+
+  const slug = basename(worktreePath)
+  const metadata = await readAgentWorktreeMetadata(gitRoot, slug)
+  if (
+    !metadata ||
+    metadata.agentBranch !== worktreeBranch ||
+    metadata.baseCommit !== baseCommit ||
+    metadata.parentBranch !== parentBranch
+  ) {
+    logForDebugging(
+      `Agent worktree cleanup skipped due to missing or mismatched metadata: ${worktreePath}`,
+      { level: 'warn' },
+    )
+    return false
+  }
+
+  const expectedAgentTip = await getSafeAgentWorktreeTip(
+    worktreePath,
+    worktreeBranch,
+    baseCommit,
+    parentBranch,
+  )
+  if (!expectedAgentTip) {
+    logForDebugging(`Agent worktree cleanup skipped: ${worktreePath}`, {
+      level: 'warn',
+    })
+    return false
+  }
+
   // Run from the main repo root, not the worktree (which we're about to delete)
   const { code: removeCode, stderr: removeError } =
     await execFileNoThrowWithCwd(
       gitExe(),
-      ['worktree', 'remove', '--force', worktreePath],
+      ['worktree', 'remove', worktreePath],
       { cwd: gitRoot },
     )
 
@@ -1000,23 +1143,176 @@ export async function removeAgentWorktree(
   }
   logForDebugging(`Removed agent worktree at: ${worktreePath}`)
 
-  if (!worktreeBranch) {
+  const tipBeforeDelete = await execFileNoThrowWithCwd(
+    gitExe(),
+    ['rev-parse', `refs/heads/${worktreeBranch}`],
+    { cwd: gitRoot },
+  )
+  if (
+    tipBeforeDelete.code !== 0 ||
+    tipBeforeDelete.stdout.trim() !== expectedAgentTip
+  ) {
+    logForDebugging(
+      `Agent branch changed during cleanup, preserving it: ${worktreeBranch}`,
+      { level: 'warn' },
+    )
     return true
   }
 
-  // Delete the temporary worktree branch from the main repo
+  // Delete only the exact tip that passed the safety checks. If another process
+  // advances the branch after validation, update-ref fails instead of discarding it.
   const { code: deleteBranchCode, stderr: deleteBranchError } =
-    await execFileNoThrowWithCwd(gitExe(), ['branch', '-D', worktreeBranch], {
-      cwd: gitRoot,
-    })
+    await execFileNoThrowWithCwd(
+      gitExe(),
+      [
+        'update-ref',
+        '-d',
+        `refs/heads/${worktreeBranch}`,
+        expectedAgentTip,
+      ],
+      { cwd: gitRoot },
+    )
 
   if (deleteBranchCode !== 0) {
     logForDebugging(
       `Could not delete agent worktree branch: ${deleteBranchError}`,
       { level: 'error' },
     )
+    // The worktree is gone, while the branch and metadata remain recoverable.
+    return true
+  }
+
+  try {
+    await unlink(agentWorktreeMetadataPath(gitRoot, slug))
+  } catch {
+    // Cleanup already succeeded; stale metadata is harmless.
   }
   return true
+}
+
+async function getSafeAgentWorktreeTip(
+  worktreePath: string,
+  agentBranch: string,
+  baseCommit: string,
+  parentBranch: string,
+): Promise<string | null> {
+  if (!isSafeRefName(agentBranch) || !isSafeRefName(parentBranch)) {
+    return null
+  }
+  const agentRef = `refs/heads/${agentBranch}`
+  const parentRef = `refs/heads/${parentBranch}`
+  const [currentBranch, status, worktreeHead, agentTip] = await Promise.all([
+    execFileNoThrowWithCwd(
+      gitExe(),
+      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      { cwd: worktreePath },
+    ),
+    execFileNoThrowWithCwd(
+      gitExe(),
+      [
+        '--no-optional-locks',
+        'status',
+        '--porcelain',
+        '--untracked-files=all',
+      ],
+      { cwd: worktreePath },
+    ),
+    execFileNoThrowWithCwd(gitExe(), ['rev-parse', 'HEAD'], {
+      cwd: worktreePath,
+    }),
+    execFileNoThrowWithCwd(gitExe(), ['rev-parse', agentRef], {
+      cwd: worktreePath,
+    }),
+  ])
+  if (
+    currentBranch.code !== 0 ||
+    currentBranch.stdout.trim() !== agentBranch ||
+    status.code !== 0 ||
+    status.stdout.trim().length > 0 ||
+    worktreeHead.code !== 0 ||
+    agentTip.code !== 0 ||
+    !/^[0-9a-f]{40,64}$/.test(worktreeHead.stdout.trim()) ||
+    worktreeHead.stdout.trim() !== agentTip.stdout.trim()
+  ) {
+    return null
+  }
+
+  const expectedAgentTip = worktreeHead.stdout.trim()
+  const baseIsAncestor = await execFileNoThrowWithCwd(
+    gitExe(),
+    ['merge-base', '--is-ancestor', baseCommit, expectedAgentTip],
+    { cwd: worktreePath },
+  )
+  if (baseIsAncestor.code !== 0) {
+    return null
+  }
+  if (expectedAgentTip === baseCommit) {
+    return expectedAgentTip
+  }
+
+  const merged = await execFileNoThrowWithCwd(
+    gitExe(),
+    ['merge-base', '--is-ancestor', expectedAgentTip, parentRef],
+    { cwd: worktreePath },
+  )
+  if (merged.code === 0) {
+    return expectedAgentTip
+  }
+  if (merged.code !== 1) {
+    return null
+  }
+
+  // git cherry is defined for patch-equivalent non-merge commits. A merge in
+  // the Agent-only range cannot be proven safe this way, so skip cherry entirely.
+  const mergeCommit = await execFileNoThrowWithCwd(
+    gitExe(),
+    [
+      'rev-list',
+      '--merges',
+      '--max-count=1',
+      `${baseCommit}..${expectedAgentTip}`,
+    ],
+    { cwd: worktreePath },
+  )
+  if (mergeCommit.code !== 0) {
+    return null
+  }
+  if (mergeCommit.stdout.trim().length === 0) {
+    const cherry = await execFileNoThrowWithCwd(
+      gitExe(),
+      ['cherry', parentRef, expectedAgentTip, baseCommit],
+      { cwd: worktreePath },
+    )
+    if (cherry.code !== 0) {
+      return null
+    }
+    const cherryLines = cherry.stdout
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+    if (
+      cherryLines.length > 0 &&
+      cherryLines.every(line => line.startsWith('- '))
+    ) {
+      return expectedAgentTip
+    }
+  }
+
+  const remoteReachability = await execFileNoThrowWithCwd(
+    gitExe(),
+    [
+      'rev-list',
+      '--max-count=1',
+      `${baseCommit}..${expectedAgentTip}`,
+      '--not',
+      '--remotes',
+    ],
+    { cwd: worktreePath },
+  )
+  return remoteReachability.code === 0 &&
+    remoteReachability.stdout.trim().length === 0
+    ? expectedAgentTip
+    : null
 }
 
 /**
@@ -1046,14 +1342,14 @@ const EPHEMERAL_WORKTREE_PATTERNS = [
  * Safety:
  * - Only touches slugs matching ephemeral patterns (never user-named worktrees)
  * - Skips the current session's worktree
- * - Fail-closed: skips if git status fails or shows tracked changes
- *   (-uno: untracked files in a 30-day-old crashed agent worktree are build
- *   artifacts; skipping the untracked scan is 5-10× faster on large repos)
- * - Fail-closed: skips if any commits aren't reachable from a remote
+ * - Fail-closed: skips if git status fails or shows tracked/untracked changes
+ * - Requires persisted parentBranch/baseCommit/agentBranch lineage metadata
+ * - Removes only when Agent commits are absent, absorbed by the parent branch
+ *   (merge/cherry-pick), or retained by a remote ref
  *
- * `git worktree remove --force` handles both the directory and git's internal
- * worktree tracking. If git doesn't recognize the path as a worktree (orphaned
- * dir), it's left in place — a later readdir finding it stale again is harmless.
+ * `git worktree remove` handles both the directory and git's internal worktree
+ * tracking, and rechecks cleanliness before deletion. If git doesn't recognize
+ * the path (or it changed after our checks), it is conservatively left in place.
  */
 export async function cleanupStaleAgentWorktrees(
   cutoffDate: Date,
@@ -1095,30 +1391,20 @@ export async function cleanupStaleAgentWorktrees(
       continue
     }
 
-    // Both checks must succeed with empty output. Non-zero exit (corrupted
-    // worktree, git not recognizing it, etc.) means skip — we don't know
-    // what's in there.
-    const [status, unpushed] = await Promise.all([
-      execFileNoThrowWithCwd(
-        gitExe(),
-        ['--no-optional-locks', 'status', '--porcelain', '-uno'],
-        { cwd: worktreePath },
-      ),
-      execFileNoThrowWithCwd(
-        gitExe(),
-        ['rev-list', '--max-count=1', 'HEAD', '--not', '--remotes'],
-        { cwd: worktreePath },
-      ),
-    ])
-    if (status.code !== 0 || status.stdout.trim().length > 0) {
-      continue
-    }
-    if (unpushed.code !== 0 || unpushed.stdout.trim().length > 0) {
+    const metadata = await readAgentWorktreeMetadata(gitRoot, slug)
+    if (!metadata || metadata.agentBranch !== worktreeBranchName(slug)) {
       continue
     }
 
     if (
-      await removeAgentWorktree(worktreePath, worktreeBranchName(slug), gitRoot)
+      await removeAgentWorktree(
+        worktreePath,
+        metadata.agentBranch,
+        gitRoot,
+        false,
+        metadata.baseCommit,
+        metadata.parentBranch,
+      )
     ) {
       removed++
     }

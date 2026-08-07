@@ -178,6 +178,8 @@ export async function runBridgeLoop(
     {
       worktreePath: string
       worktreeBranch?: string
+      headCommit?: string
+      parentBranch?: string
       gitRoot?: string
       hookBased?: boolean
     }
@@ -542,6 +544,8 @@ export async function runBridgeLoop(
             wt.worktreeBranch,
             wt.gitRoot,
             wt.hookBased,
+            wt.headCommit,
+            wt.parentBranch,
           ).catch((err: unknown) =>
             logger.logVerbose(
               `Failed to remove worktree ${wt.worktreePath}: ${errorMessage(err)}`,
@@ -987,6 +991,8 @@ export async function runBridgeLoop(
               sessionWorktrees.set(sessionId, {
                 worktreePath: wt.worktreePath,
                 worktreeBranch: wt.worktreeBranch,
+                headCommit: wt.headCommit,
+                parentBranch: wt.parentBranch,
                 gitRoot: wt.gitRoot,
                 hookBased: wt.hookBased,
               })
@@ -1073,6 +1079,8 @@ export async function runBridgeLoop(
                   wt.worktreeBranch,
                   wt.gitRoot,
                   wt.hookBased,
+                  wt.headCommit,
+                  wt.parentBranch,
                 ).catch((err: unknown) =>
                   logger.logVerbose(
                     `Failed to remove worktree ${wt.worktreePath}: ${errorMessage(err)}`,
@@ -1486,6 +1494,8 @@ export async function runBridgeLoop(
             wt.worktreeBranch,
             wt.gitRoot,
             wt.hookBased,
+            wt.headCommit,
+            wt.parentBranch,
           ),
         ),
       )

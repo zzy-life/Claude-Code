@@ -41,7 +41,7 @@ import { isInProcessTeammate } from '../../utils/teammateContext.js';
 import { teleportToRemote } from '../../utils/teleport.js';
 import { getAssistantMessageContentLength } from '../../utils/tokens.js';
 import { createAgentId } from '../../utils/uuid.js';
-import { createAgentWorktree, hasWorktreeChanges, removeAgentWorktree } from '../../utils/worktree.js';
+import { createAgentWorktree, removeAgentWorktree } from '../../utils/worktree.js';
 import { BASH_TOOL_NAME } from '../BashTool/toolName.js';
 import { BackgroundHint } from '../BashTool/UI.js';
 import { FILE_READ_TOOL_NAME } from '../FileReadTool/prompt.js';
@@ -588,6 +588,7 @@ export const AgentTool = buildTool({
       worktreePath: string;
       worktreeBranch?: string;
       headCommit?: string;
+      parentBranch?: string;
       gitRoot?: string;
       hookBased?: boolean;
     } | null = null;
@@ -659,6 +660,7 @@ export const AgentTool = buildTool({
         worktreePath,
         worktreeBranch,
         headCommit,
+        parentBranch,
         gitRoot,
         hookBased
       } = worktreeInfo;
@@ -672,10 +674,9 @@ export const AgentTool = buildTool({
           worktreePath
         };
       }
-      if (headCommit) {
-        const changed = await hasWorktreeChanges(worktreePath, headCommit);
-        if (!changed) {
-          await removeAgentWorktree(worktreePath, worktreeBranch, gitRoot);
+      if (headCommit && parentBranch) {
+        const removed = await removeAgentWorktree(worktreePath, worktreeBranch, gitRoot, false, headCommit, parentBranch);
+        if (removed) {
           // Clear worktreePath from metadata so resume doesn't try to use
           // a deleted directory. Fire-and-forget to match runAgent's
           // writeAgentMetadata handling.
@@ -686,7 +687,7 @@ export const AgentTool = buildTool({
           return {};
         }
       }
-      logForDebugging(`Agent worktree has changes, keeping: ${worktreePath}`);
+      logForDebugging(`Agent worktree could not be proven safe to remove, keeping: ${worktreePath}`);
       return {
         worktreePath,
         worktreeBranch
