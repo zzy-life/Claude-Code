@@ -674,7 +674,7 @@ export const AgentTool = buildTool({
           worktreePath
         };
       }
-      if (headCommit && parentBranch) {
+      if (headCommit) {
         const removed = await removeAgentWorktree(worktreePath, worktreeBranch, gitRoot, false, headCommit, parentBranch);
         if (removed) {
           // Clear worktreePath from metadata so resume doesn't try to use
