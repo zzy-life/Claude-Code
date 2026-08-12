@@ -4,7 +4,11 @@ import type {
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { CanUseToolFn } from './hooks/useCanUseTool.js'
-import { FallbackTriggeredError } from './services/api/withRetry.js'
+import {
+  FallbackTriggeredError,
+  getRetryDelay,
+  isTransientSubagentAPIError,
+} from './services/api/withRetry.js'
 import {
   calculateTokenWarningState,
   isAutoCompactEnabled,
@@ -110,6 +114,7 @@ import {
 } from './bootstrap/state.js'
 import { createBudgetTracker, checkTokenBudget } from './query/tokenBudget.js'
 import { count } from './utils/array.js'
+import { sleep } from './utils/sleep.js'
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const snipModule = feature('HISTORY_SNIP')
@@ -648,6 +653,24 @@ async function* queryLoop(
     }
 
     let attemptWithFallback = true
+    const maxSubagentModelRetries = 3
+    let subagentModelRetryCount = 0
+
+    function resetFailedModelAttempt(): void {
+      assistantMessages.length = 0
+      toolResults.length = 0
+      toolUseBlocks.length = 0
+      needsFollowUp = false
+
+      if (streamingToolExecutor) {
+        streamingToolExecutor.discard()
+        streamingToolExecutor = new StreamingToolExecutor(
+          toolUseContext.options.tools,
+          canUseTool,
+          toolUseContext,
+        )
+      }
+    }
 
     queryCheckpoint('query_api_loop_start')
     try {
@@ -891,6 +914,42 @@ async function* queryLoop(
             }
           }
         } catch (innerError) {
+          if (
+            toolUseContext.agentId &&
+            !toolUseContext.abortController.signal.aborted &&
+            isTransientSubagentAPIError(innerError) &&
+            toolUseBlocks.length === 0 &&
+            toolResults.length === 0 &&
+            subagentModelRetryCount < maxSubagentModelRetries
+          ) {
+            subagentModelRetryCount++
+
+            // Remove partial blocks from the failed model call. A tombstone keeps
+            // already-yielded text out of the transcript and UI before retrying.
+            for (const msg of assistantMessages) {
+              yield { type: 'tombstone' as const, message: msg }
+            }
+            resetFailedModelAttempt()
+
+            const delayMs = getRetryDelay(subagentModelRetryCount)
+            logForDebugging(
+              `Subagent model call failed transiently; retrying ${subagentModelRetryCount}/${maxSubagentModelRetries} in ${Math.round(delayMs)}ms`,
+              { level: 'warn' },
+            )
+            logEvent('tengu_subagent_model_retry', {
+              attempt: subagentModelRetryCount,
+              delayMs,
+              queryChainId: queryChainIdForAnalytics,
+              queryDepth: queryTracking.depth,
+            })
+            await sleep(delayMs, toolUseContext.abortController.signal)
+            if (toolUseContext.abortController.signal.aborted) {
+              throw innerError
+            }
+            attemptWithFallback = true
+            continue
+          }
+
           if (innerError instanceof FallbackTriggeredError && fallbackModel) {
             // Fallback was triggered - switch model and retry
             currentModel = fallbackModel
@@ -901,22 +960,7 @@ async function* queryLoop(
               assistantMessages,
               'Model fallback triggered',
             )
-            assistantMessages.length = 0
-            toolResults.length = 0
-            toolUseBlocks.length = 0
-            needsFollowUp = false
-
-            // Discard pending results from the failed attempt and create a
-            // fresh executor. This prevents orphan tool_results (with old
-            // tool_use_ids) from leaking into the retry.
-            if (streamingToolExecutor) {
-              streamingToolExecutor.discard()
-              streamingToolExecutor = new StreamingToolExecutor(
-                toolUseContext.options.tools,
-                canUseTool,
-                toolUseContext,
-              )
-            }
+            resetFailedModelAttempt()
 
             // Update tool use context with new model
             toolUseContext.options.mainLoopModel = fallbackModel

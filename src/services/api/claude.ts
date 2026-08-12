@@ -252,6 +252,7 @@ import {
   CannotRetryError,
   FallbackTriggeredError,
   is529Error,
+  isTransientSubagentAPIError,
   type RetryContext,
   withRetry,
 } from './withRetry.js'
@@ -1511,6 +1512,12 @@ async function* queryModel(
   let clientRequestId: string | undefined = undefined
   // eslint-disable-next-line eslint-plugin-n/no-unsupported-features/node-builtins -- Response is available in Node 18+ and is used by the SDK
   let streamResponse: Response | undefined = undefined
+  const requestAbortController = new AbortController()
+  const abortRequest = () => requestAbortController.abort(signal.reason)
+  signal.addEventListener('abort', abortRequest, { once: true })
+  const subagentRequestTimeoutMs = 3 * 60 * 1000
+  let subagentRequestTimedOut = false
+  let subagentRequestTimeout: ReturnType<typeof setTimeout> | undefined
 
   // Release all stream resources to prevent native memory leaks.
   // The Response object holds native TLS/socket buffers that live outside the
@@ -1803,6 +1810,12 @@ async function* queryModel(
         // awaits until response headers arrive, so this MUST be before the await
         // or the "Network TTFB" phase measurement is wrong.
         queryCheckpoint('query_api_request_sent')
+        if (options.agentId) {
+          subagentRequestTimeout = setTimeout(() => {
+            subagentRequestTimedOut = true
+            requestAbortController.abort()
+          }, subagentRequestTimeoutMs)
+        }
         if (!options.agentId) {
           headlessProfilerCheckpoint('api_request_sent')
         }
@@ -1823,7 +1836,7 @@ async function* queryModel(
           .create(
             { ...params, stream: true },
             {
-              signal,
+              signal: requestAbortController.signal,
               ...(clientRequestId && {
                 headers: { [CLIENT_REQUEST_ID_HEADER]: clientRequestId },
               }),
@@ -1840,8 +1853,9 @@ async function* queryModel(
         fallbackModel: options.fallbackModel,
         thinkingConfig,
         ...(isFastModeEnabled() ? { fastMode: isFastMode } : false),
-        signal,
+        signal: requestAbortController.signal,
         querySource: options.querySource,
+        ...(options.agentId && { maxRetries: 0 }),
       },
     )
 
@@ -2431,6 +2445,12 @@ async function* queryModel(
         })
       }
 
+      if (subagentRequestTimedOut) {
+        throw new APIConnectionTimeoutError({
+          message: 'Subagent model request timed out after 3 minutes',
+        })
+      }
+
       if (streamingError instanceof APIUserAbortError) {
         // Check if the abort signal was triggered by the user (ESC key)
         // If the signal is aborted, it's a user-initiated abort
@@ -2459,6 +2479,16 @@ async function* queryModel(
           // Throw a more specific error for timeout
           throw new APIConnectionTimeoutError({ message: 'Request timed out' })
         }
+      }
+
+      // Subagents retry the current model call from query.ts. Propagate only
+      // transient failures; main-thread behavior remains unchanged.
+      if (
+        options.agentId &&
+        !signal.aborted &&
+        isTransientSubagentAPIError(streamingError)
+      ) {
+        throw streamingError
       }
 
       // When the flag is enabled, skip the non-streaming fallback and let the
@@ -2601,6 +2631,20 @@ async function* queryModel(
     // no-op — the user would just see "Model fallback triggered: X -> Y" as
     // an error message with no actual retry on the fallback model.
     if (errorFromRetry instanceof FallbackTriggeredError) {
+      throw errorFromRetry
+    }
+
+    if (subagentRequestTimedOut) {
+      throw new APIConnectionTimeoutError({
+        message: 'Subagent model request timed out after 3 minutes',
+      })
+    }
+
+    if (
+      options.agentId &&
+      !signal.aborted &&
+      isTransientSubagentAPIError(errorFromRetry)
+    ) {
       throw errorFromRetry
     }
 
@@ -2806,6 +2850,10 @@ async function* queryModel(
       return
     }
   } finally {
+    if (subagentRequestTimeout) {
+      clearTimeout(subagentRequestTimeout)
+    }
+    signal.removeEventListener('abort', abortRequest)
     stopSessionActivity('api_call')
     // Must be in the finally block: if the generator is terminated early
     // via .return() (e.g. consumer breaks out of for-await-of, or query.ts

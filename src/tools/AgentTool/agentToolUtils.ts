@@ -13,7 +13,6 @@ import {
   logEvent,
 } from '../../services/analytics/index.js'
 import { clearDumpState } from '../../services/api/dumpPrompts.js'
-import { EMPTY_USAGE } from '../../services/api/emptyUsage.js'
 import type { AppState } from '../../state/AppState.js'
 import type {
   Tool,
@@ -317,8 +316,7 @@ export function finalizeAgentTool(
     }
   }
 
-  const usage = lastAssistantMessage.message.usage ?? EMPTY_USAGE
-  const totalTokens = getTokenCountFromUsage(usage)
+  const totalTokens = getTokenCountFromUsage(lastAssistantMessage.message.usage)
   const totalToolUseCount = countToolUses(agentMessages)
 
   logEvent('tengu_agent_tool_completed', {
@@ -354,7 +352,7 @@ export function finalizeAgentTool(
     totalDurationMs: Date.now() - startTime,
     totalTokens,
     totalToolUseCount,
-    usage,
+    usage: lastAssistantMessage.message.usage,
   }
 }
 

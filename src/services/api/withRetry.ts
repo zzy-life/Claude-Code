@@ -157,6 +157,24 @@ export class CannotRetryError extends Error {
   }
 }
 
+export function isTransientSubagentAPIError(error: unknown): boolean {
+  const cause = error instanceof CannotRetryError ? error.originalError : error
+  if (cause instanceof APIConnectionError) {
+    return true
+  }
+  if (!(cause instanceof APIError)) {
+    return false
+  }
+  return (
+    cause.status === 408 ||
+    cause.status === 409 ||
+    cause.status === 429 ||
+    cause.status === 529 ||
+    (cause.status !== undefined && cause.status >= 500) ||
+    cause.message?.includes('"type":"overloaded_error"') === true
+  )
+}
+
 export class FallbackTriggeredError extends Error {
   constructor(
     public readonly originalModel: string,
