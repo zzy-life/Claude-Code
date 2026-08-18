@@ -13,7 +13,7 @@ import {
   writeFile,
 } from 'fs/promises'
 import ignore from 'ignore'
-import { basename, dirname, join } from 'path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { saveCurrentProjectConfig } from './config.js'
 import { getCwd } from './cwd.js'
 import { logForDebugging } from './debug.js'
@@ -995,9 +995,27 @@ export async function createAgentWorktree(slug: string): Promise<{
 }> {
   validateWorktreeSlug(slug)
 
-  // Try hook-based worktree creation first (allows user-configured VCS)
+  const currentGitRoot = findGitRoot(getCwd())
+
+  // Hooks substitute the VCS backend, but their output is external input. Reject
+  // a path nested in the current Git worktree before the Agent starts writing to
+  // it; removing the parent worktree would otherwise destroy the child.
   if (hasWorktreeCreateHook()) {
     const hookResult = await executeWorktreeCreateHook(slug)
+    if (currentGitRoot) {
+      const hookPath = resolve(getCwd(), hookResult.worktreePath)
+      const relativeToCurrentRoot = relative(currentGitRoot, hookPath)
+      if (
+        relativeToCurrentRoot !== '' &&
+        !relativeToCurrentRoot.startsWith(`..${sep}`) &&
+        relativeToCurrentRoot !== '..' &&
+        !isAbsolute(relativeToCurrentRoot)
+      ) {
+        throw new Error(
+          `WorktreeCreate hook returned a path inside the current Git worktree: ${hookResult.worktreePath}. Refusing to create a nested worktree.`,
+        )
+      }
+    }
     logForDebugging(
       `Created hook-based agent worktree at: ${hookResult.worktreePath}`,
     )
@@ -1005,16 +1023,25 @@ export async function createAgentWorktree(slug: string): Promise<{
     return { worktreePath: hookResult.worktreePath, hookBased: true }
   }
 
-  // Fall back to git worktree
+  if (!currentGitRoot) {
+    throw new Error(
+      'Cannot create agent worktree: not in a git repository and no WorktreeCreate hooks are configured. ' +
+        'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
+    )
+  }
+
   // findCanonicalGitRoot (not findGitRoot) so agent worktrees always land in
   // the main repo's .claude/worktrees/ even when spawned from inside a session
   // worktree — otherwise they nest at <worktree>/.claude/worktrees/ and the
   // periodic cleanup (which scans the canonical root) never finds them.
   const gitRoot = findCanonicalGitRoot(getCwd())
-  if (!gitRoot) {
+  const currentRootIsWorktree = await stat(join(currentGitRoot, '.git')).then(
+    entry => entry.isFile(),
+    () => false,
+  )
+  if (!gitRoot || (currentRootIsWorktree && gitRoot === currentGitRoot)) {
     throw new Error(
-      'Cannot create agent worktree: not in a git repository and no WorktreeCreate hooks are configured. ' +
-        'Configure WorktreeCreate/WorktreeRemove hooks in settings.json to use worktree isolation with other VCS systems.',
+      'Cannot create agent worktree: failed to resolve the canonical repository root from the current worktree. Refusing to create a nested worktree.',
     )
   }
 
