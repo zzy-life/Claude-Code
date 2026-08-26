@@ -92,7 +92,7 @@ export type AppState = DeepImmutable<{
   mainLoopModel: ModelSetting
   mainLoopModelForSession: ModelSetting
   statusLineText: string | undefined
-  proxyQuotaRemainingPercentage: number | undefined
+  proxyQuotaRemaining: { fiveHour?: number; sevenDay?: number } | undefined
   contextWindowUsage: { tokens: number; window: number } | undefined
   expandedView: 'none' | 'tasks' | 'teammates'
   isBriefOnly: boolean
@@ -475,7 +475,7 @@ export function getDefaultAppState(): AppState {
     mainLoopModel: null, // alias, full name (as with --model or env var), or null (default)
     mainLoopModelForSession: null,
     statusLineText: undefined,
-    proxyQuotaRemainingPercentage: undefined,
+    proxyQuotaRemaining: undefined,
     contextWindowUsage: undefined,
     expandedView: 'none',
     isBriefOnly: false,

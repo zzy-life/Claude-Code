@@ -1,14 +1,22 @@
 import { createAxiosInstance } from '../../utils/proxy.js'
 
-export type ProxyQuotaUsage = {
-  seven_day?: {
-    utilization: number | null
-    resets_at: string | null
-  } | null
+type ProxyQuotaWindow = {
+  utilization: number | null
+  resets_at: string | null
 }
 
-/** Fetches the current proxy client's weekly quota utilization. */
-export async function fetchProxyQuotaUsage(): Promise<number | undefined> {
+export type ProxyQuotaUsage = {
+  five_hour?: ProxyQuotaWindow | null
+  seven_day?: ProxyQuotaWindow | null
+}
+
+export type ProxyQuotaRemaining = {
+  fiveHour?: number
+  sevenDay?: number
+}
+
+/** Fetches the current proxy client's quota remaining percentages. */
+export async function fetchProxyQuotaUsage(): Promise<ProxyQuotaRemaining | undefined> {
   const baseUrl = process.env.ANTHROPIC_BASE_URL
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!baseUrl || !apiKey) return undefined
@@ -18,10 +26,17 @@ export async function fetchProxyQuotaUsage(): Promise<number | undefined> {
     headers: { 'x-api-key': apiKey },
     timeout: 5000,
   })
-  const utilization = response.data.seven_day?.utilization
-  if (typeof utilization !== 'number' || !Number.isFinite(utilization)) {
-    return undefined
+  const toRemainingPercentage = (utilization: number | null | undefined) =>
+    typeof utilization === 'number' && Number.isFinite(utilization)
+      ? Math.round(Math.min(100, Math.max(0, 100 - utilization)))
+      : undefined
+
+  const remaining = {
+    fiveHour: toRemainingPercentage(response.data.five_hour?.utilization),
+    sevenDay: toRemainingPercentage(response.data.seven_day?.utilization),
   }
 
-  return Math.round(Math.min(100, Math.max(0, 100 - utilization)))
+  return remaining.fiveHour === undefined && remaining.sevenDay === undefined
+    ? undefined
+    : remaining
 }

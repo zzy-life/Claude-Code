@@ -667,11 +667,11 @@ export function REPL({
   const viewingAgentTaskId = useAppState(s => s.viewingAgentTaskId);
   const setAppState = useSetAppState();
   const refreshProxyQuota = useCallback(() => {
-    void fetchProxyQuotaUsage().then(percentage => {
-      if (percentage === undefined) return;
-      setAppState(prev => prev.proxyQuotaRemainingPercentage === percentage ? prev : {
+    void fetchProxyQuotaUsage().then(remaining => {
+      if (remaining === undefined) return;
+      setAppState(prev => prev.proxyQuotaRemaining?.fiveHour === remaining.fiveHour && prev.proxyQuotaRemaining?.sevenDay === remaining.sevenDay ? prev : {
         ...prev,
-        proxyQuotaRemainingPercentage: percentage,
+        proxyQuotaRemaining: remaining,
       });
     }).catch(error => {
       logForDebugging(`[Proxy quota] Refresh failed: ${error instanceof Error ? error.message : String(error)}`);

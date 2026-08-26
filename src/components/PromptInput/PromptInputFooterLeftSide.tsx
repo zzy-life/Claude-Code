@@ -250,7 +250,7 @@ function ModeIndicator({
   } = useTerminalSize();
   const modeCycleShortcut = useShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab');
   const tasks = useAppState(s => s.tasks);
-  const proxyQuotaRemainingPercentage = useAppState(s_0 => s_0.proxyQuotaRemainingPercentage);
+  const proxyQuotaRemaining = useAppState(s_0 => s_0.proxyQuotaRemaining);
   const contextWindowUsage = useAppState(s_1 => s_1.contextWindowUsage);
   const teamContext = useAppState(s_2 => s_2.teamContext);
   // Set once in initialState (main.tsx --remote mode) and never mutated — lazy
@@ -413,11 +413,18 @@ function ModeIndicator({
         ? for shortcuts
       </Text>);
   }
-  if (proxyQuotaRemainingPercentage !== undefined) {
-    const quotaColor = proxyQuotaRemainingPercentage >= 60 ? 'success' : proxyQuotaRemainingPercentage >= 30 ? 'warning' : 'error';
-    parts.push(<Text color={quotaColor} key="proxy-quota">
-        quota {proxyQuotaRemainingPercentage}%
-      </Text>);
+  if (proxyQuotaRemaining) {
+    const quotaColor = (percentage: number) => percentage >= 60 ? 'success' : percentage >= 30 ? 'warning' : 'error';
+    if (proxyQuotaRemaining.fiveHour !== undefined) {
+      parts.push(<Text color={quotaColor(proxyQuotaRemaining.fiveHour)} key="proxy-quota-five-hour">
+          5h {proxyQuotaRemaining.fiveHour}%
+        </Text>);
+    }
+    if (proxyQuotaRemaining.sevenDay !== undefined) {
+      parts.push(<Text color={quotaColor(proxyQuotaRemaining.sevenDay)} key="proxy-quota-seven-day">
+          7d {proxyQuotaRemaining.sevenDay}%
+        </Text>);
+    }
   }
   if (contextWindowUsage !== undefined) {
     parts.push(<Text dimColor key="context-window">
