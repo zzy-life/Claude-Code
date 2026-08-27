@@ -19,8 +19,6 @@ import { runWithAgentContext } from '../../utils/agentContext.js';
 import { isAgentSwarmsEnabled } from '../../utils/agentSwarmsEnabled.js';
 import { getCwd, runWithCwdOverride } from '../../utils/cwd.js';
 import { logForDebugging } from '../../utils/debug.js';
-import { findCanonicalGitRoot } from '../../utils/git.js';
-import { hasWorktreeCreateHook } from '../../utils/hooks.js';
 import { isEnvTruthy } from '../../utils/envUtils.js';
 import { AbortError, errorMessage, toError } from '../../utils/errors.js';
 import type { CacheSafeParams } from '../../utils/forkedAgent.js';
@@ -98,7 +96,7 @@ const fullInputSchema = lazySchema(() => {
     mode: permissionModeSchema().optional().describe('Permission mode for spawned teammate (e.g., "plan" to require plan approval).')
   });
   return baseInputSchema().merge(multiAgentInputSchema).extend({
-    isolation: ("external" === 'ant' ? z.enum(['worktree', 'remote']) : z.enum(['worktree'])).optional().describe("external" === 'ant' ? 'Isolation mode. "worktree" creates a temporary git worktree so the agent works on an isolated copy of the repo. "remote" launches the agent in a remote CCR environment (always runs in background).' : 'Isolation mode. "worktree" creates a temporary git worktree so the agent works on an isolated copy of the repo.'),
+    isolation: ("external" === 'ant' ? z.enum(['worktree', 'remote']) : z.enum(['worktree'])).optional().describe("external" === 'ant' ? 'Isolation mode. "worktree" creates a temporary git worktree and requires creation to succeed before the agent runs. If the current repository cannot provide a worktree and the user or task context already identifies a specific child repository, the main agent may enter that repository and retry once. Never recursively scan descendants for a usable Git repository. "remote" launches the agent in a remote CCR environment (always runs in background).' : 'Isolation mode. "worktree" creates a temporary git worktree and requires creation to succeed before the agent runs. If the current repository cannot provide a worktree and the user or task context already identifies a specific child repository, the main agent may enter that repository and retry once. Never recursively scan descendants for a usable Git repository.'),
     cwd: z.string().optional().describe('Absolute path to run the agent in. Overrides the working directory for all filesystem and shell operations within this agent. Mutually exclusive with isolation: "worktree".')
   });
 });
@@ -581,9 +579,7 @@ export const AgentTool = buildTool({
     // Create a stable agent ID early so it can be used for worktree slug
     const earlyAgentId = createAgentId();
 
-    // Set up worktree isolation if requested. In directories without a Git
-    // repository or a WorktreeCreate hook, run the agent in the current working
-    // directory rather than surfacing an expected worktree-creation failure.
+    // Worktree isolation is strict: creation must succeed before the agent runs.
     let worktreeInfo: {
       worktreePath: string;
       worktreeBranch?: string;
@@ -593,13 +589,8 @@ export const AgentTool = buildTool({
       hookBased?: boolean;
     } | null = null;
     if (effectiveIsolation === 'worktree') {
-      const gitRoot = findCanonicalGitRoot(getCwd());
-      if (gitRoot || hasWorktreeCreateHook()) {
-        const slug = `agent-${earlyAgentId.slice(0, 8)}`;
-        worktreeInfo = await createAgentWorktree(slug);
-      } else {
-        logForDebugging('Worktree isolation unavailable outside a Git repository; running agent in the current directory.');
-      }
+      const slug = `agent-${earlyAgentId.slice(0, 8)}`;
+      worktreeInfo = await createAgentWorktree(slug);
     }
 
     // Fork + worktree: inject a notice telling the child to translate paths

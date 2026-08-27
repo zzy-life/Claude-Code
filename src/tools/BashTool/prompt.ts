@@ -331,7 +331,7 @@ export function getSimplePrompt(): string {
   const instructionItems: Array<string | string[]> = [
     'If your command will create new directories or files, first use this tool to run `ls` to verify the parent directory exists and is the correct location.',
     'Always quote file paths that contain spaces with double quotes in your command (e.g., cd "path with spaces/file.txt")',
-    'Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of `cd`. You may use `cd` if the User explicitly requests it.',
+    'Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of `cd`. You may use `cd` if the User explicitly requests it, or once to enter a specific target repository already identified by the user or task context before retrying worktree isolation. Never recursively scan or enter descendant directories merely to find a usable Git repository.',
     `You may specify an optional timeout in milliseconds (up to ${getMaxTimeoutMs()}ms / ${getMaxTimeoutMs() / 60000} minutes). By default, your command will timeout after ${getDefaultTimeoutMs()}ms (${getDefaultTimeoutMs() / 60000} minutes).`,
     ...(backgroundNote !== null ? [backgroundNote] : []),
     'When issuing multiple commands:',
