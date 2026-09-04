@@ -10,13 +10,12 @@
  *
  * HOW IT WORKS:
  * 1. Claude creates its own tmux socket: `claude-<PID>` (e.g., `claude-12345`)
- * 2. ALL Tmux tool commands use this socket via the `-L` flag
- * 3. ALL Bash tool commands inherit TMUX env var pointing to this socket
- *    (set in Shell.ts via getClaudeTmuxEnv())
+ * 2. Internal Bash commands that invoke tmux initialize this socket lazily
+ * 3. Subsequent Bash commands inherit a TMUX env var pointing to this socket
+ *    (set in bashProvider.ts via getClaudeTmuxEnv())
  *
- * This means ANY tmux command run through Claude - whether via the Tmux tool
- * directly or via Bash - will operate on Claude's isolated socket, NOT the
- * user's tmux session.
+ * This means tmux commands run through the internal Bash provider operate on
+ * Claude's isolated socket, NOT the user's tmux session.
  *
  * IMPORTANT: The user's original TMUX env var is NOT used. After socket
  * initialization, getClaudeTmuxEnv() returns a value that overrides the
@@ -50,7 +49,7 @@ async function execTmux(
     // command line to bash which eats `#` as a comment: `display-message -p
     // #{socket_path},#{pid}` below becomes `display-message -p ` → exit 1 →
     // we silently fall back to the guessed path and never learn the real
-    // server PID. Same root cause as TungstenTool/utils.ts:execTmuxCommand.
+    // server PID. Execute tmux directly so bash cannot consume format strings.
     const result = await execFileNoThrow('wsl', ['-e', TMUX_COMMAND, ...args], {
       env: { ...process.env, WSL_UTF8: '1' },
       ...opts,
@@ -69,7 +68,7 @@ async function execTmux(
   }
 }
 
-// Socket state - initialized lazily when Tmux tool is first used or a tmux command is run
+// Socket state - initialized lazily when an internal tmux command is run
 let socketName: string | null = null
 let socketPath: string | null = null
 let serverPid: number | null = null
@@ -79,10 +78,6 @@ let initPromise: Promise<void> | null = null
 // tmux availability - checked once upfront
 let tmuxAvailabilityChecked = false
 let tmuxAvailable = false
-
-// Track whether the Tmux tool has been used at least once
-// Used to defer socket initialization until actually needed
-let tmuxToolUsed = false
 
 /**
  * Gets the socket name for Claude's isolated tmux session.
@@ -143,10 +138,7 @@ export function getClaudeTmuxEnv(): string | null {
  * Checks if tmux is available on this system.
  * This is checked once and cached for the lifetime of the process.
  *
- * When tmux is not available:
- * - TungstenTool (Tmux) will not work
- * - TeammateTool will not work (it uses tmux for pane management)
- * - Bash commands will run without tmux isolation
+ * When tmux is not available, Bash commands run without tmux isolation.
  */
 export async function checkTmuxAvailable(): Promise<boolean> {
   if (!tmuxAvailabilityChecked) {
@@ -162,7 +154,7 @@ export async function checkTmuxAvailable(): Promise<boolean> {
     tmuxAvailable = result.code === 0
     if (!tmuxAvailable) {
       logForDebugging(
-        `[Socket] tmux is not installed. The Tmux tool and Teammate tool will not be available.`,
+        `[Socket] tmux is not installed. Bash tmux isolation will not be available.`,
       )
     }
     tmuxAvailabilityChecked = true
@@ -180,25 +172,8 @@ export function isTmuxAvailable(): boolean {
 }
 
 /**
- * Marks that the Tmux tool has been used at least once.
- * Called by TungstenTool before initialization.
- * After this is called, Shell.ts will initialize the socket for subsequent Bash commands.
- */
-export function markTmuxToolUsed(): void {
-  tmuxToolUsed = true
-}
-
-/**
- * Returns whether the Tmux tool has been used at least once.
- * Used by Shell.ts to decide whether to initialize the socket.
- */
-export function hasTmuxToolBeenUsed(): boolean {
-  return tmuxToolUsed
-}
-
-/**
  * Ensures the socket is initialized with a tmux session.
- * Called by Shell.ts when the Tmux tool has been used or the command includes "tmux".
+ * Called by bashProvider.ts when an internal Bash command includes "tmux".
  * Safe to call multiple times; will only initialize once.
  *
  * If tmux is not installed, this function returns gracefully without
@@ -314,8 +289,8 @@ async function doInitialize(): Promise<void> {
   registerCleanup(killTmuxServer)
 
   // Set CLAUDE_CODE_SKIP_PROMPT_HISTORY in the tmux GLOBAL environment (-g).
-  // Without -g this would only apply to the 'base' session, and new sessions
-  // created by TungstenTool (e.g. 'test', 'verify') would not inherit it.
+  // Without -g this would only apply to the 'base' session, and later sessions
+  // created on the same socket would not inherit it.
   // Any Claude Code instance spawned on this socket will inherit this env var,
   // preventing test/verification sessions from polluting the user's real
   // command history and --resume session list.
@@ -329,8 +304,8 @@ async function doInitialize(): Promise<void> {
   ])
 
   // Same WSL_INTEROP pin as the new-session -e above, but in the GLOBAL env
-  // so sessions created by TungstenTool inherit it too. The -e on new-session
-  // only covers the base session's initial shell; a later `new-session -s cc`
+  // so later sessions inherit it too. The -e on new-session only covers the
+  // base session's initial shell; a later `new-session -s cc`
   // inherits the SERVER's env, which still holds the stale socket from the
   // wsl.exe that spawned it.
   if (getPlatform() === 'windows') {
@@ -423,5 +398,4 @@ export function resetSocketState(): void {
   initPromise = null
   tmuxAvailabilityChecked = false
   tmuxAvailable = false
-  tmuxToolUsed = false
 }

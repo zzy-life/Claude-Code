@@ -80,7 +80,6 @@ export const IDLE_SPECULATION_STATE: SpeculationState = { status: 'idle' }
 
 export type FooterItem =
   | 'tasks'
-  | 'tmux'
   | 'bagel'
   | 'teams'
   | 'bridge'
@@ -231,22 +230,6 @@ export type AppState = DeepImmutable<{
   thinkingEnabled: boolean | undefined
   promptSuggestionEnabled: boolean
   sessionHooks: SessionHooksState
-  tungstenActiveSession?: {
-    sessionName: string
-    socketName: string
-    target: string // The tmux target (e.g., "session:window.pane")
-  }
-  tungstenLastCapturedTime?: number // Timestamp when frame was captured for model
-  tungstenLastCommand?: {
-    command: string // The command string to display (e.g., "Enter", "echo hello")
-    timestamp: number // When the command was sent
-  }
-  // Sticky tmux panel visibility — mirrors globalConfig.tungstenPanelVisible for reactivity.
-  tungstenPanelVisible?: boolean
-  // Transient auto-hide at turn end — separate from tungstenPanelVisible so the
-  // pill stays in the footer (user can reopen) but the panel content doesn't take
-  // screen space when idle. Cleared on next Tmux tool use or user toggle. NOT persisted.
-  tungstenPanelAutoHidden?: boolean
   // WebBrowser tool (codename bagel): pill visible in footer
   bagelActive?: boolean
   // WebBrowser tool: current page URL shown in pill label

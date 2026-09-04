@@ -380,7 +380,7 @@ bun run version
 
 ```
 src/                    # 核心源码（1,987 个 TS/TSX）
-├── tools/              # 53 个工具（Bash/FileEdit/Agent/MCP...）
+├── tools/              # 最多 53 个静态内置工具（实际数量受运行条件影响）
 ├── commands/           # 87 个斜杠命令
 ├── services/           # API / MCP / analytics / autoDream
 ├── components/         # 148 个终端 UI 组件（React + Ink）
@@ -396,6 +396,99 @@ src/                    # 核心源码（1,987 个 TS/TSX）
 shims/                  # 原生模块兼容替代
 vendor/                 # 原生绑定源码
 ```
+
+---
+
+## 工具清单
+
+工具注册以 `src/tools.ts` 中的 `getAllBaseTools()` 为准。当前源码最多定义 **53 个静态内置工具**：19 个基础工具、2 个 MCP 资源辅助工具、32 个条件启用或实验性工具。此外，MCP Server 还可以动态注入任意数量的工具，因此单次会话中的实际工具总数并不固定。
+
+最终工具池会经过功能开关、环境变量、运行模式、权限拒绝规则和各工具 `isEnabled()` 的过滤；Simple 模式通常只保留 `Bash`、`Read` 和 `Edit`。内置工具与 MCP 工具的合并逻辑位于 `assembleToolPool()`，发生重名时内置工具优先。
+
+### 基础工具（19 个）
+
+| 工具 | 作用 |
+|---|---|
+| `Agent`（旧别名 `Task`） | 启动子代理执行多步骤任务，支持后台运行、模型选择和 worktree 隔离。 |
+| `TaskOutput` | 获取后台 Shell、子代理或远程任务的输出。 |
+| `Bash` | 执行 Shell 命令，支持权限检查、沙箱和后台运行。 |
+| `Glob` | 按文件名模式查找文件；构建内嵌搜索能力时会被隐藏。 |
+| `Grep` | 使用正则表达式搜索文件内容；构建内嵌搜索能力时会被隐藏。 |
+| `ExitPlanMode` | 结束计划模式，请求用户批准后进入实现阶段。 |
+| `Read` | 读取文本、图片、PDF 和 Jupyter Notebook 等文件。 |
+| `Edit` | 对现有文件执行精确字符串替换。 |
+| `Write` | 创建文件或完整覆盖文件内容。 |
+| `NotebookEdit` | 插入、替换或删除 Jupyter Notebook 单元格。 |
+| `WebFetch` | 获取指定网页并按提示提取、分析内容。 |
+| `TodoWrite` | 维护旧版会话待办列表。 |
+| `WebSearch` | 搜索互联网以获取时效性信息。 |
+| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或代理任务。 |
+| `AskUserQuestion` | 向用户发起结构化单选、多选或澄清问题。 |
+| `Skill` | 加载并执行已经安装的 Skill。 |
+| `EnterPlanMode` | 请求进入计划模式，以便先研究代码和设计实现方案。 |
+| `SendMessage` | 向团队中的其他代理发送消息。 |
+| `SendUserMessage`（源码对象名 `BriefTool`） | 主动向用户发送消息、提问或请求附件。 |
+
+### MCP 资源辅助工具（2 个）
+
+| 工具 | 作用 |
+|---|---|
+| `ListMcpResourcesTool` | 列出 MCP Server 暴露的资源。 |
+| `ReadMcpResourceTool` | 根据 URI 读取 MCP Server 暴露的资源。 |
+
+这两个工具默认不会直接加入最终工具池，仅在已连接的 MCP Server 支持 `resources` 时注入。
+
+### 条件启用或实验性工具（32 个）
+
+| 工具 | 作用或启用条件 |
+|---|---|
+| `Config` | 修改 Claude Code 配置；仅 Anthropic 内部用户启用。 |
+| `SuggestBackgroundPR` | 建议或引导通过后台代理处理 PR。 |
+| `WebBrowser` | 浏览器访问与自动化操作。 |
+| `TaskCreate` | 创建新版结构化任务。 |
+| `TaskGet` | 获取指定结构化任务详情。 |
+| `TaskUpdate` | 更新任务状态、负责人和依赖关系。 |
+| `TaskList` | 列出新版结构化任务。 |
+| `OverflowTestTool` | 测试工具输出或上下文溢出行为。 |
+| `CtxInspectTool` | 检查上下文折叠相关状态。 |
+| `terminal_capture` | 捕获终端面板内容。 |
+| `LSP` | 使用语言服务器执行诊断、符号查询等操作。 |
+| `EnterWorktree` | 创建并进入隔离的 Git worktree。 |
+| `ExitWorktree` | 退出会话创建的 worktree，并选择保留或删除。 |
+| `ListPeers` | 列出可通过 UDS Inbox 通信的其他进程或代理。 |
+| `TeamCreate` | 创建 Agent Team。 |
+| `TeamDelete` | 删除 Agent Team。 |
+| `verify_plan_execution` | 检查计划中的步骤是否真正执行完成。 |
+| `REPL` | 在受控 VM/REPL 中执行代码和封装后的基础工具。 |
+| `workflow` | 执行项目内置的 Workflow 脚本。 |
+| `Sleep` | 在主动模式或 KAIROS 模式下暂停并等待事件。 |
+| `CronCreate` | 创建定时触发任务。 |
+| `CronDelete` | 删除定时触发任务。 |
+| `CronList` | 列出定时触发任务。 |
+| `RemoteTrigger` | 创建或处理远程 Agent 触发器。 |
+| `MonitorTool` | 实验性监控能力。 |
+| `send_user_file` | 在 KAIROS 模式下向用户发送文件。 |
+| `PushNotification` | 向用户发送推送通知。 |
+| `SubscribePR` | 订阅 GitHub PR/Webhook 事件。 |
+| `PowerShell` | 执行 PowerShell 命令，并进行权限和安全检查。 |
+| `snip` | 从会话历史中裁剪指定内容。 |
+| `TestingPermissionTool` | 在测试环境中验证工具权限流程。 |
+| `ToolSearch` | 搜索延迟加载的工具定义，减少一次性注入模型的工具数量。 |
+
+### 动态 MCP 工具
+
+MCP Server 通过 `tools/list` 返回的工具会在连接后动态加入工具池，通常命名为：
+
+```text
+mcp__<服务器名>__<工具名>
+```
+
+因此，更准确的数量表达是：**最多 53 个静态内置工具，加上 N 个动态 MCP 工具**。关键实现位置如下：
+
+- 静态工具注册：`src/tools.ts` 中的 `getAllBaseTools()`
+- 最终启用过滤：`src/tools.ts` 中的 `getTools()`
+- 内置与 MCP 工具合并：`src/tools.ts` 中的 `assembleToolPool()`
+- MCP 工具实例化：`src/services/mcp/client.ts`
 
 ---
 
@@ -540,7 +633,7 @@ vendor/                 # 原生绑定源码
 | 远程与后台会话 | `useRemoteSession`、`useSSHSession`、`useDirectConnect`、`LocalMainSessionTask`、`useSessionBackgrounding` | 提供远程/SSH/直连会话能力，并支持将主会话转入后台。 |
 | 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置和动态实验配置，采集诊断/会话追踪并维护活动状态。 |
 | 条件加载模块 | `useVoiceIntegration`、`useFrustrationDetection`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
-| 其他界面能力 | `Spinner`、`TaskListV2`、`CompanionSprite`、`DevBar`、`TungstenLiveMonitor` | 显示加载状态、任务列表、助手形象、开发栏及工具实时监视器。 |
+| 其他界面能力 | `Spinner`、`TaskListV2`、`CompanionSprite`、`DevBar` | 显示加载状态、任务列表、助手形象及开发栏。 |
 
 
 

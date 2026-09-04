@@ -152,7 +152,7 @@ export function toolUseSearchText(input: unknown): string {
     const v = o[k]
     if (typeof v === 'string') parts.push(v)
   }
-  // args[] (Tmux/TungstenTool), files[] (SendUserFile) — tool-use
+  // args[] and files[] tool inputs render the joined array as the primary display.
   // renders the joined array as the primary display. Under-count > skip.
   for (const k of ['args', 'files']) {
     const v = o[k]
