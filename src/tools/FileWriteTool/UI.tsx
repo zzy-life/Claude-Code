@@ -20,7 +20,7 @@ import { getCwd } from '../../utils/cwd.js';
 import { getPatchForDisplay } from '../../utils/diff.js';
 import { getDisplayPath } from '../../utils/file.js';
 import { logError } from '../../utils/log.js';
-import { getPlansDirectory } from '../../utils/plans.js';
+import { isPlanFilePath } from '../../utils/plans.js';
 import { openForScan, readCapped } from '../../utils/readEditContext.js';
 import type { Output } from './FileWriteTool.js';
 const MAX_LINES_TO_RENDER = 10;
@@ -129,7 +129,7 @@ export function userFacingName(input: Partial<{
   file_path: string;
   content: string;
 }> | undefined): string {
-  if (input?.file_path?.startsWith(getPlansDirectory())) {
+  if (input?.file_path && isPlanFilePath(input.file_path)) {
     return 'Updated plan';
   }
   return 'Write';
@@ -174,7 +174,7 @@ export function renderToolUseMessage(input: Partial<{
     return null;
   }
   // For plan files, path is already in userFacingName
-  if (input.file_path.startsWith(getPlansDirectory())) {
+  if (isPlanFilePath(input.file_path)) {
     return '';
   }
   return <FilePathLink filePath={input.file_path}>
@@ -375,7 +375,7 @@ export function renderToolResultMessage({
   switch (type) {
     case 'create':
       {
-        const isPlanFile = filePath.startsWith(getPlansDirectory());
+        const isPlanFile = isPlanFilePath(filePath);
 
         // Plan files: invert condensed behavior
         // - Regular mode: just show hint (user can type /plan to see full content)
@@ -397,7 +397,7 @@ export function renderToolResultMessage({
       }
     case 'update':
       {
-        const isPlanFile = filePath.startsWith(getPlansDirectory());
+        const isPlanFile = isPlanFilePath(filePath);
         return <FileEditToolUpdatedMessage filePath={filePath} structuredPatch={structuredPatch} firstLine={content.split('\n')[0] ?? null} fileContent={originalFile ?? undefined} style={style} verbose={verbose} previewHint={isPlanFile ? '/plan to preview' : undefined} />;
       }
   }

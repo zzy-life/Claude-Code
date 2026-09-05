@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { copyFile, writeFile } from 'fs/promises'
 import memoize from 'lodash-es/memoize.js'
-import { join } from 'path'
+import { basename, dirname, join, normalize, resolve } from 'path'
 import type { AgentId, SessionId } from 'src/types/ids.js'
 import type { LogOption } from 'src/types/logs.js'
 import type {
@@ -104,6 +104,35 @@ export function getPlanFilePath(agentId?: AgentId): string {
 
   // Subagents: include agent ID
   return join(getPlansDirectory(), `${planSlug}-agent-${agentId}.md`)
+}
+
+/** Check whether a path is this session's main or agent-specific plan file. */
+export function isPlanFilePath(filePath: string): boolean {
+  const absolutePath = normalize(resolve(getCwd(), filePath))
+  const plansDirectory = normalize(getPlansDirectory())
+  const normalizeForComparison = (value: string) =>
+    process.platform === 'win32' ? value.toLowerCase() : value
+
+  if (
+    normalizeForComparison(dirname(absolutePath)) !==
+    normalizeForComparison(plansDirectory)
+  ) {
+    return false
+  }
+
+  const planSlug = getPlanSlugCache().get(getSessionId())
+  if (!planSlug) return false
+
+  const fileName = normalizeForComparison(basename(absolutePath))
+  const normalizedPlanSlug = normalizeForComparison(planSlug)
+  if (fileName === `${normalizedPlanSlug}.md`) return true
+
+  const agentPlanPrefix = `${normalizedPlanSlug}-agent-`
+  return (
+    fileName.startsWith(agentPlanPrefix) &&
+    fileName.endsWith('.md') &&
+    fileName.length > agentPlanPrefix.length + '.md'.length
+  )
 }
 
 /**
