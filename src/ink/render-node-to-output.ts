@@ -742,13 +742,12 @@ function renderNodeToOutput(
           }
           node.scrollAnchor = undefined
         }
-        // At-bottom follow. Positional: if scrollTop was at (or past) the
-        // previous max, pin to the new max. Scroll away → stop following;
-        // scroll back (or scrollToBottom/sticky attr) → resume. The sticky
-        // flag is OR'd in for cold start (scrollTop=0 before first layout)
-        // and scrollToBottom-from-far-away (flag set before scrollTop moves)
-        // — the imperative field takes precedence over the attribute so
-        // scrollTo/scrollBy can break stickiness. pendingDelta<0 guard:
+        // At-bottom follow. An explicit false is the authoritative signal
+        // that the user scrolled away to read history; streaming output must
+        // not infer stickiness from the old bottom and pull the viewport back.
+        // Positional inference is only allowed before an imperative scroll has
+        // set stickyScroll. scrollToBottom() explicitly restores true.
+        // pendingDelta<0 guard:
         // don't cancel an in-flight scroll-up when content races in.
         // Capture scrollTop before follow so ink.tsx can translate any
         // active text selection by the same delta (native terminal behavior:
@@ -763,26 +762,13 @@ function renderNodeToOutput(
         // because the user was at bottom.
         const grew = scrollHeight >= prevScrollHeight
         const atBottom =
-          sticky || (grew && scrollTopBeforeFollow >= prevMaxScroll)
+          sticky === true ||
+          (node.stickyScroll === undefined &&
+            grew &&
+            scrollTopBeforeFollow >= prevMaxScroll)
         if (atBottom && (node.pendingScrollDelta ?? 0) >= 0) {
           node.scrollTop = maxScroll
           node.pendingScrollDelta = undefined
-          // Sync flag so useVirtualScroll's isSticky() agrees with positional
-          // state — sticky-broken-but-at-bottom (wheel tremor, click-select
-          // at max) otherwise leaves useVirtualScroll's clamp holding the
-          // viewport short of new streaming content. scrollTo/scrollBy set
-          // false; this restores true, same as scrollToBottom() would.
-          // Only restore when (a) positionally at bottom and (b) the flag
-          // was explicitly broken (===false) by scrollTo/scrollBy. When
-          // undefined (never set by user action) leave it alone — setting it
-          // would make the sticky flag sticky-by-default and lock out
-          // direct scrollTop writes (e.g. the alt-screen-perf test).
-          if (
-            node.stickyScroll === false &&
-            scrollTopBeforeFollow >= prevMaxScroll
-          ) {
-            node.stickyScroll = true
-          }
         }
         const followDelta = (node.scrollTop ?? 0) - scrollTopBeforeFollow
         if (followDelta > 0) {

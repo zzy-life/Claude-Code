@@ -46,7 +46,7 @@ type Props = {
 // vim/nvim/opencode app-side defaults. We can't detect which, so knob it.
 const WHEEL_ACCEL_WINDOW_MS = 40;
 const WHEEL_ACCEL_STEP = 0.3;
-const WHEEL_ACCEL_MAX = 6;
+const WHEEL_ACCEL_MAX = 4;
 
 // Encoder bounce debounce + wheel-mode decay curve. Worn/cheap optical
 // encoders emit spurious reverse-direction ticks during fast spins — measured
@@ -64,14 +64,14 @@ const WHEEL_ACCEL_MAX = 6;
 // gap or trackpad-flick-burst signals a possible device switch.
 const WHEEL_BOUNCE_GAP_MAX_MS = 200; // flip-back must arrive within this
 // Mouse is ~9 events/sec vs VS Code's ~30 — STEP is 3× xterm.js's 5 to
-// compensate. At gap=100ms (m≈0.63): one click gives 1+15*0.63≈10.5.
+// compensate. Keep the cap conservative so a fast wheel cannot push the
+// pending target far beyond the virtualized range during streaming output.
 const WHEEL_MODE_STEP = 15;
-const WHEEL_MODE_CAP = 15;
-// Max mult growth per event. Without this, the +STEP*m term jumps mult
-// from 1→10 in one event when wheelMode engages mid-scroll (bounce
-// detected after N events in trackpad mode at mult=1). User sees scroll
-// suddenly go 10× faster. Cap=3 gives 1→4→7→10→13→15 over ~0.5s at
-// 9 events/sec — smooth ramp instead of a jump. Decay is unaffected
+const WHEEL_MODE_CAP = 6;
+// Max mult growth per event. Without this, the +STEP*m term jumps sharply
+// when wheelMode engages mid-scroll (bounce detected after N events in
+// trackpad mode at mult=1). Cap=3 reaches the multiplier cap over two events
+// instead of changing speed in a single step. Decay is unaffected
 // (target<mult wins the min).
 const WHEEL_MODE_RAMP = 3;
 // Device-switch disengage: mouse finger-repositions max at ~830ms (measured);
