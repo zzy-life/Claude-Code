@@ -425,7 +425,7 @@ vendor/                 # 原生绑定源码
 | `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或代理任务。 |
 | `AskUserQuestion` | 向用户发起结构化单选、多选或澄清问题。 |
 | `Skill` | 加载并执行已经安装的 Skill。 |
-| `EnterPlanMode` | 请求进入计划模式，以便先研究代码和设计实现方案。 |
+| `EnterPlanMode` | 请求进入计划模式；方案必须写入项目根目录的 Markdown 文件，再提交用户审批。 |
 | `SendMessage` | 向团队中的其他代理发送消息。 |
 | `SendUserMessage`（源码对象名 `BriefTool`） | 主动向用户发送消息、提问或请求附件。 |
 

@@ -3228,7 +3228,7 @@ function getPlanModeV2Instructions(attachment: {
 
 ## Plan File Info:
 ${planFileInfo}
-You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+You must build your plan incrementally by writing to or editing this Markdown file in the project root. Console output does not replace the plan file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 
 ## Plan Workflow
 
@@ -3335,7 +3335,7 @@ ${planFileInfo}
 
 ## Iterative Planning Workflow
 
-You are pair-planning with the user. Explore the code to build context, ask the user questions when you hit decisions you can't make alone, and write your findings into the plan file as you go. The plan file (above) is the ONLY file you may edit — it starts as a rough skeleton and gradually becomes the final plan.
+You are pair-planning with the user. Explore the code to build context, ask the user questions when you hit decisions you can't make alone, and write your findings into the Markdown plan file in the project root as you go. Console output does not replace the plan file. The plan file (above) is the ONLY file you may edit — it starts as a rough skeleton and gradually becomes the final plan.
 
 ### The Loop
 
@@ -3408,7 +3408,7 @@ function getPlanModeV2SubAgentInstructions(attachment: {
 
 ## Plan File Info:
 ${planFileInfo}
-You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+You must build your plan incrementally by writing to or editing this Markdown file in the project root. Console output does not replace the plan file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 Answer the user's query comprehensively, using the ${ASK_USER_QUESTION_TOOL_NAME} tool if you need to ask the user clarifying questions. If you do use the ${ASK_USER_QUESTION_TOOL_NAME}, make sure to ask all clarifying questions you need to fully understand the user's intent before proceeding.`
 
   return wrapMessagesInSystemReminder([

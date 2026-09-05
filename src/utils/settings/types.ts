@@ -825,8 +825,7 @@ export const SettingsSchema = lazySchema(() =>
         .string()
         .optional()
         .describe(
-          'Custom directory for plan files, relative to project root. ' +
-            'If not set, defaults to ~/.claude/plans/',
+          'Deprecated compatibility setting. Plan files are always stored in the project root.',
         ),
       ...(process.env.USER_TYPE === 'ant'
         ? {

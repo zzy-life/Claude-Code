@@ -7,9 +7,10 @@ In plan mode, you'll:
 1. Thoroughly explore the codebase using Glob, Grep, and Read tools
 2. Understand existing patterns and architecture
 3. Design an implementation approach
-4. Present your plan to the user for approval
-5. Use ${ASK_USER_QUESTION_TOOL_NAME} if you need to clarify approaches
-6. Exit plan mode with ExitPlanMode when ready to implement
+4. Create a Markdown plan file in the project root and write the complete plan to it
+5. Present the saved plan to the user for approval; console output alone is not sufficient
+6. Use ${ASK_USER_QUESTION_TOOL_NAME} if you need to clarify approaches
+7. Exit plan mode with ExitPlanMode when ready to implement
 
 `
 

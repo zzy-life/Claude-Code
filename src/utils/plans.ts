@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { copyFile, writeFile } from 'fs/promises'
 import memoize from 'lodash-es/memoize.js'
-import { join, resolve, sep } from 'path'
+import { join } from 'path'
 import type { AgentId, SessionId } from 'src/types/ids.js'
 import type { LogOption } from 'src/types/logs.js'
 import type {
@@ -14,12 +14,10 @@ import { getPlanSlugCache, getSessionId } from '../bootstrap/state.js'
 import { EXIT_PLAN_MODE_V2_TOOL_NAME } from '../tools/ExitPlanModeTool/constants.js'
 import { getCwd } from './cwd.js'
 import { logForDebugging } from './debug.js'
-import { getClaudeConfigHomeDir } from './envUtils.js'
 import { isENOENT } from './errors.js'
 import { getEnvironmentKind } from './filePersistence/outputsScanner.js'
 import { getFsImplementation } from './fsOperations.js'
 import { logError } from './log.js'
-import { getInitialSettings } from './settings/settings.js'
 import { generateWordSlug } from './words.js'
 
 const MAX_SLUG_RETRIES = 10
@@ -75,30 +73,10 @@ export function clearAllPlanSlugs(): void {
 // Memoized: called from render bodies (FileReadTool/FileEditTool/FileWriteTool UI.tsx)
 // and permission checks. Inputs (initial settings + cwd) are fixed at startup, so the
 // mkdirSync result is stable for the session. Without memoization, each rendered tool
-// message triggers a mkdirSync syscall (regressed in #20005).
+// message triggers a mkdirSync syscall (regressed in #20005). The default is the project
+// root so plan documents remain visible and reviewable with the working tree.
 export const getPlansDirectory = memoize(function getPlansDirectory(): string {
-  const settings = getInitialSettings()
-  const settingsDir = settings.plansDirectory
-  let plansPath: string
-
-  if (settingsDir) {
-    // Settings.json (relative to project root)
-    const cwd = getCwd()
-    const resolved = resolve(cwd, settingsDir)
-
-    // Validate path stays within project root to prevent path traversal
-    if (!resolved.startsWith(cwd + sep) && resolved !== cwd) {
-      logError(
-        new Error(`plansDirectory must be within project root: ${settingsDir}`),
-      )
-      plansPath = join(getClaudeConfigHomeDir(), 'plans')
-    } else {
-      plansPath = resolved
-    }
-  } else {
-    // Default
-    plansPath = join(getClaudeConfigHomeDir(), 'plans')
-  }
+  const plansPath = getCwd()
 
   // Ensure directory exists (mkdirSync with recursive: true is a no-op if it exists)
   try {

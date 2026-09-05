@@ -113,9 +113,10 @@ In plan mode, you should:
 3. Consider multiple approaches and their trade-offs
 4. Use AskUserQuestion if you need to clarify the approach
 5. Design a concrete implementation strategy
-6. When ready, use ExitPlanMode to present your plan for approval
+6. Create the designated Markdown plan file in the project root and write the complete plan to it
+7. When ready, use ExitPlanMode to present the saved plan for approval
 
-Remember: DO NOT write or edit any files yet. This is a read-only exploration and planning phase.`
+Remember: DO NOT write or edit any files except the designated plan file. The plan must be saved to that file; console output alone is not sufficient.`
 
     return {
       type: 'tool_result',
