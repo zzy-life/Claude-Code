@@ -530,7 +530,10 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
     get inputSchema(): InputSchema {
       return inputSchema()
     },
-    shouldDefer: true,
+    // Team control messages must remain callable without a ToolSearch round trip.
+    // In particular, an idle teammate may receive shutdown_request as its first
+    // message before SendMessage has ever been discovered.
+    shouldDefer: false,
 
     isEnabled() {
       return isAgentSwarmsEnabled()

@@ -130,7 +130,7 @@
 | GrowthBook | 调试日志、覆盖、20 分钟刷新（vs 外部 6 小时） |
 | 调试 | API 错误详情、推测性执行日志、prompt dump |
 | 命令 | 所有 `INTERNAL_ONLY_COMMANDS`（24+ 个） |
-| CLI 参数 | `--delegate-permissions`、`--afk`、`--tasks`、`--agent-teams` |
+| CLI 参数 | `--delegate-permissions`、`--afk`、`--tasks` |
 | 环境变量 | `CLAUDE_INTERNAL_FC_OVERRIDES`（JSON 覆盖 GrowthBook） |
 | 配置 | `/config` Gates 标签页（UI 覆盖 GrowthBook） |
 | 错误处理 | 5xx 额外重试逻辑 |

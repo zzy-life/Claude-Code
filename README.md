@@ -569,7 +569,7 @@ mcp__<服务器名>__<工具名>
 | `/install-github-app` | 为仓库配置 Claude GitHub Actions。 |
 | `/install-slack-app` | 安装 Claude Slack App。 |
 | `/login`、`/logout` | 登录或登出 Anthropic 账户。 |
-| `/usage` | 显示 Claude.ai 套餐用量限制；仅 Claude.ai OAuth 订阅者可见。通过自定义 `ANTHROPIC_BASE_URL` 的代理、Bedrock、Vertex、Foundry 或普通 API Key 使用时会被隐藏。 |
+| `/usage` | 显示 Claude.ai 套餐用量限制；仅 Claude.ai OAuth 订阅者可见。通过自定义 `ANTHROPIC_BASE_URL` 的代理、Bedrock、Vertex、Foundry 或普通 API Key 使用时，该命令会被隐藏；支持 `GET /v1/usage` 的代理仍可在输入框 footer 显示额度提示。 |
 | `/upgrade` | 升级至 Max；受账户资格限制。 |
 | `/output-style` | 已弃用；请改用 `/config` 调整输出样式。 |
 | `/statusline` | 配置状态栏显示。 |

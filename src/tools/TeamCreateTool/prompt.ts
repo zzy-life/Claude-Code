@@ -2,14 +2,36 @@ export function getPrompt(): string {
   return `
 # TeamCreate
 
+## Authorization Boundary
+
+A team is an opt-in, persistent coordination mechanism. Do NOT create one unless either:
+
+1. The user explicitly asks for a team, swarm, or coordinated group of agents; or
+2. Before substantive execution begins, you use AskUserQuestion to propose a team and the user explicitly selects the team option.
+
+You may proactively propose a team only once, at the beginning of the current task. Substantive execution begins when you edit or write files, run implementation or test commands, create and start tasks, or launch an Agent. After that point, do not propose or create a team unless the user explicitly asks for one.
+
 ## When to Use
 
-Use this tool proactively whenever:
-- The user explicitly asks to use a team, swarm, or group of agents
-- The user mentions wanting agents to work together, coordinate, or collaborate
-- A task is complex enough that it would benefit from parallel work by multiple agents (e.g., building a full-stack feature with frontend and backend work, refactoring a codebase while keeping tests passing, implementing a multi-step project with research, planning, and coding phases)
+After authorization, use a team only when the work requires persistent coordination between multiple agents, such as:
+- Agents must communicate directly with each other
+- Agents share task ownership or need dynamic reassignment
+- Work must be handed off between agents across multiple turns
+- Dependencies between agents cannot be managed as independent, one-shot Agent calls
 
-When in doubt about whether a task warrants a team, prefer spawning a team.
+## When NOT to Use
+
+Do not propose or create a team merely because:
+- A task is large, complex, or has multiple steps
+- Several independent subtasks can run in parallel
+- You want research, implementation, review, testing, or a second opinion
+- One or more independent Agent calls can report their results directly to you
+
+Use independent Agent calls by default. When uncertain, do not create a team.
+
+## Asking for Authorization
+
+Only ask when you have identified a concrete need for cross-agent coordination. Present independent agents as the recommended default and explain that a team adds shared tasks, direct messaging, and lifecycle management. Do not ask for routine, bounded, or merely parallel work.
 
 ## Choosing Agent Types for Teammates
 

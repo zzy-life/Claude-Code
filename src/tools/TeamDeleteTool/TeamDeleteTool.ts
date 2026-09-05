@@ -82,16 +82,15 @@ export const TeamDeleteTool: Tool<InputSchema, Output> = buildTool({
           m => m.name !== TEAM_LEAD_NAME,
         )
 
-        // Separate truly active members from idle/dead ones
-        // Members with isActive === false are idle (finished their turn or crashed)
-        const activeMembers = nonLeadMembers.filter(m => m.isActive !== false)
-
-        if (activeMembers.length > 0) {
-          const memberNames = activeMembers.map(m => m.name).join(', ')
+        // A member remains registered until the shutdown protocol completes or
+        // the user explicitly kills it. Idle only means it finished a turn; it
+        // must not be treated as safe to delete.
+        if (nonLeadMembers.length > 0) {
+          const memberNames = nonLeadMembers.map(m => m.name).join(', ')
           return {
             data: {
               success: false,
-              message: `Cannot cleanup team with ${activeMembers.length} active member(s): ${memberNames}. Use requestShutdown to gracefully terminate teammates first.`,
+              message: `Cannot cleanup team with ${nonLeadMembers.length} registered member(s): ${memberNames}. Gracefully shut them down or explicitly kill them first.`,
               team_name: teamName,
             },
           }

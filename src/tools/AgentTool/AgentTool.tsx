@@ -91,9 +91,9 @@ const baseInputSchema = lazySchema(() => z.object({
 const fullInputSchema = lazySchema(() => {
   // Multi-agent parameters
   const multiAgentInputSchema = z.object({
-    name: z.string().optional().describe('Name for the spawned agent. Makes it addressable via SendMessage({to: name}) while running.'),
-    team_name: z.string().optional().describe('Team name for spawning. Uses current team context if omitted.'),
-    mode: permissionModeSchema().optional().describe('Permission mode for spawned teammate (e.g., "plan" to require plan approval).')
+    name: z.string().optional().describe('Optional display name for an independent agent. In an active team context, providing name spawns a persistent teammate instead; do this only after Team authorization.'),
+    team_name: z.string().optional().describe('Existing authorized team to join as a persistent teammate. Do not set this for independent Agent delegation. Uses the active team context if omitted.'),
+    mode: permissionModeSchema().optional().describe('Permission mode for an authorized teammate (e.g., "plan" to require plan approval).')
   });
   return baseInputSchema().merge(multiAgentInputSchema).extend({
     isolation: ("external" === 'ant' ? z.enum(['worktree', 'remote']) : z.enum(['worktree'])).optional().describe("external" === 'ant' ? 'Isolation mode. "worktree" creates a temporary git worktree and requires creation to succeed before the agent runs. If the current repository cannot provide a worktree and the user or task context already identifies a specific child repository, the main agent may enter that repository and retry once. Never recursively scan descendants for a usable Git repository. "remote" launches the agent in a remote CCR environment (always runs in background).' : 'Isolation mode. "worktree" creates a temporary git worktree and requires creation to succeed before the agent runs. If the current repository cannot provide a worktree and the user or task context already identifies a specific child repository, the main agent may enter that repository and retry once. Never recursively scan descendants for a usable Git repository.'),

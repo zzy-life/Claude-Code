@@ -465,6 +465,30 @@ function formatAsTeammateMessage(
   return `<${TEAMMATE_MESSAGE_TAG} teammate_id="${from}"${colorAttr}${summaryAttr}>\n${content}\n</${TEAMMATE_MESSAGE_TAG}>`
 }
 
+function formatShutdownRequestPrompt(
+  from: string,
+  requestId: string,
+  reason?: string,
+): string {
+  const request = jsonStringify({
+    type: 'shutdown_request',
+    request_id: requestId,
+    from,
+    reason,
+  })
+  const instructions = `Shutdown control request. You MUST respond by calling the ${SEND_MESSAGE_TOOL_NAME} tool; do not print or quote a shutdown_response as assistant text.
+
+To approve, call ${SEND_MESSAGE_TOOL_NAME} with:
+{"to":"${TEAM_LEAD_NAME}","message":{"type":"shutdown_response","request_id":"${requestId}","approve":true}}
+
+To reject, call ${SEND_MESSAGE_TOOL_NAME} with approve=false and include a non-empty reason.`
+
+  return formatAsTeammateMessage(
+    from,
+    `${request}\n\n${instructions}`,
+  )
+}
+
 /**
  * Configuration for running an in-process teammate.
  */
@@ -662,8 +686,7 @@ async function tryClaimNextTask(
 type WaitResult =
   | {
       type: 'shutdown_request'
-      request: ReturnType<typeof isShutdownRequest>
-      originalMessage: string
+      request: NonNullable<ReturnType<typeof isShutdownRequest>>
     }
   | {
       type: 'new_message'
@@ -798,8 +821,7 @@ async function waitForNextPromptOrShutdown(
         )
         return {
           type: 'shutdown_request',
-          request: shutdownParsed,
-          originalMessage: msg.text,
+          request: shutdownParsed!,
         }
       }
 
@@ -1361,16 +1383,18 @@ export async function runInProcessTeammate(
       )
 
       switch (waitResult.type) {
-        case 'shutdown_request':
-          // Pass shutdown request to model for decision
-          // Format as teammate-message for consistency with how tmux teammates receive it
-          // The model will use approveShutdown or rejectShutdown tool
+        case 'shutdown_request': {
+          // Preserve the model's ability to approve or reject, but make the
+          // required SendMessage tool call explicit. A bare protocol JSON prompt
+          // can be copied into assistant text instead of executed as a tool.
           logForDebugging(
             `[inProcessRunner] ${identity.agentId} received shutdown request - passing to model`,
           )
-          currentPrompt = formatAsTeammateMessage(
-            waitResult.request?.from || 'team-lead',
-            waitResult.originalMessage,
+          const request = waitResult.request
+          currentPrompt = formatShutdownRequestPrompt(
+            request.from || TEAM_LEAD_NAME,
+            request.requestId,
+            request.reason,
           )
           // Add shutdown request to task.messages for transcript display
           appendTeammateMessage(
@@ -1379,6 +1403,7 @@ export async function runInProcessTeammate(
             setAppState,
           )
           break
+        }
 
         case 'new_message':
           // New prompt from leader or teammate

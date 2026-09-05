@@ -109,7 +109,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `--delegate-permissions` | `--permission-mode auto` 别名 |
 | `--afk` | 已弃用的 auto 模式别名 |
 | `--tasks [id]` | 任务模式 |
-| `--agent-teams` | 多代理团队模式 |
 
 ### Feature-gated 参数
 

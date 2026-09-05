@@ -37,7 +37,7 @@ Your plain text output is NOT visible to other agents — to communicate, you MU
 
 ## Protocol responses (legacy)
 
-If you receive a JSON message with \`type: "shutdown_request"\` or \`type: "plan_approval_request"\`, respond with the matching \`_response\` type — echo the \`request_id\`, set \`approve\` true/false:
+If you receive a JSON message with \`type: "shutdown_request"\` or \`type: "plan_approval_request"\`, you MUST call the SendMessage tool with the matching \`_response\` type — echo the \`request_id\` and set \`approve\` true/false. Do not print or quote the response JSON as assistant text; text output does not execute the protocol:
 
 \`\`\`json
 {"to": "team-lead", "message": {"type": "shutdown_response", "request_id": "...", "approve": true}}

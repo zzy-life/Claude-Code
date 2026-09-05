@@ -203,6 +203,14 @@ ${effectiveAgents.map(agent => formatAgentLine(agent)).join('\n')}`
 
 The ${AGENT_TOOL_NAME} tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
+## Agent vs Team
+
+Use ${AGENT_TOOL_NAME} for bounded delegation. An agent performs an independent task and reports its result back to you. Multiple independent agents may run in parallel without creating a team.
+
+Use TeamCreate only when agents must coordinate persistently through shared tasks, direct messages, handoffs, or dynamic reassignment. Task size, complexity, and parallelism alone do not justify a team.
+
+A team requires user authorization. Unless the user explicitly requested a team, you may propose one through AskUserQuestion only once and only before substantive execution begins. After editing files, running implementation or test commands, starting tasks, or launching an agent, do not propose or create a team unless the user explicitly asks for one.
+
 ${agentListSection}
 
 ${
@@ -232,11 +240,16 @@ ${
   const whenNotToUseSection = forkEnabled
     ? ''
     : `
+Prefer the ${AGENT_TOOL_NAME} tool for open-ended, read-only investigations that require searching across many files or multiple rounds of exploration, especially when only the final conclusion is useful in your context.
+
 When NOT to use the ${AGENT_TOOL_NAME} tool:
 - If you want to read a specific file path, use the ${FILE_READ_TOOL_NAME} tool or ${fileSearchHint} instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
 - If you are searching for a specific class definition like "class Foo", use ${contentSearchHint} instead, to find the match more quickly
 - If you are searching for code within a specific file or set of 2-3 files, use the ${FILE_READ_TOOL_NAME} tool instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- If the raw code is decision-critical context you must understand before editing it, read it directly instead of delegating that understanding
 - Other tasks that are not related to the agent descriptions above
+
+Read-only work does not require a team. Use TeamCreate only for authorized cross-agent coordination.
 `
 
   // When listing via attachment, the "launch multiple agents" note is in the
