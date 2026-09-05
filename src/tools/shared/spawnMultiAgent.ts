@@ -489,7 +489,7 @@ async function handleSpawnSplitPane(
   const teamFile = await readTeamFileAsync(teamName)
   if (!teamFile) {
     throw new Error(
-      `Team "${teamName}" does not exist. Call spawnTeam first to create the team.`,
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
     )
   }
   teamFile.members.push({
@@ -703,7 +703,7 @@ async function handleSpawnSeparateWindow(
   const teamFile = await readTeamFileAsync(teamName)
   if (!teamFile) {
     throw new Error(
-      `Team "${teamName}" does not exist. Call spawnTeam first to create the team.`,
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
     )
   }
   teamFile.members.push({
@@ -989,7 +989,7 @@ async function handleSpawnInProcess(
   const teamFile = await readTeamFileAsync(teamName)
   if (!teamFile) {
     throw new Error(
-      `Team "${teamName}" does not exist. Call spawnTeam first to create the team.`,
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
     )
   }
   teamFile.members.push({
@@ -1089,5 +1089,19 @@ export async function spawnTeammate(
   config: SpawnTeammateConfig,
   context: ToolUseContext,
 ): Promise<{ data: SpawnOutput }> {
-  return handleSpawn(config, context)
+  const teamName = config.team_name || context.getAppState().teamContext?.teamName
+  if (!teamName) {
+    throw new Error(
+      'team_name is required for spawn operation. Call TeamCreate and wait for it to complete before starting a teammate.',
+    )
+  }
+
+  const teamFile = await readTeamFileAsync(teamName)
+  if (!teamFile) {
+    throw new Error(
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
+    )
+  }
+
+  return handleSpawn({ ...config, team_name: teamName }, context)
 }

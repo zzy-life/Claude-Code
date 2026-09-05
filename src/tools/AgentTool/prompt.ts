@@ -112,79 +112,17 @@ ${forkEnabled ? 'For fresh agents, terse' : 'Terse'} command-style prompts produ
 **Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." Those phrases push synthesis onto the agent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.
 `
 
-  const forkExamples = `Example usage:
+  const forkExamples = `Examples:
 
-<example>
-user: "What's left on this branch before we can ship?"
-assistant: <thinking>Forking this \u2014 it's a survey question. I want the punch list, not the git output in my context.</thinking>
-${AGENT_TOOL_NAME}({
-  name: "ship-audit",
-  description: "Branch ship-readiness audit",
-  prompt: "Audit what's left before this branch can ship. Check: uncommitted changes, commits ahead of main, whether tests exist, whether the GrowthBook gate is wired up, whether CI-relevant files changed. Report a punch list \u2014 done vs. missing. Under 200 words."
-})
-assistant: Ship-readiness audit running.
-<commentary>
-Turn ends here. The coordinator knows nothing about the findings yet. What follows is a SEPARATE turn \u2014 the notification arrives from outside, as a user-role message. It is not something the coordinator writes.
-</commentary>
-[later turn \u2014 notification arrives as user message]
-assistant: Audit's back. Three blockers: no tests for the new prompt path, GrowthBook gate wired but not in build_flags.yaml, and one uncommitted file.
-</example>
-
-<example>
-user: "so is the gate wired up or not"
-<commentary>
-User asks mid-wait. The audit fork was launched to answer exactly this, and it hasn't returned. The coordinator does not have this answer. Give status, not a fabricated result.
-</commentary>
-assistant: Still waiting on the audit \u2014 that's one of the things it's checking. Should land shortly.
-</example>
-
-<example>
-user: "Can you get a second opinion on whether this migration is safe?"
-assistant: <thinking>I'll ask the code-reviewer agent — it won't see my analysis, so it can give an independent read.</thinking>
-<commentary>
-A subagent_type is specified, so the agent starts fresh. It needs full context in the prompt. The briefing explains what to assess and why.
-</commentary>
-${AGENT_TOOL_NAME}({
-  name: "migration-review",
-  description: "Independent migration review",
-  subagent_type: "code-reviewer",
-  prompt: "Review migration 0042_user_schema.sql for safety. Context: we're adding a NOT NULL column to a 50M-row table. Existing rows get a backfill default. I want a second opinion on whether the backfill approach is safe under concurrent writes — I've checked locking behavior but want independent verification. Report: is this safe, and if not, what specifically breaks?"
-})
-</example>
+- Fork inherited-context work by omitting \`subagent_type\`:
+  \`${AGENT_TOOL_NAME}({ name: "ship-audit", description: "Audit branch readiness", prompt: "Audit this branch for uncommitted changes, missing tests, and CI blockers; report only remaining blockers in under 200 words." })\`
+- Start a fresh specialist by setting \`subagent_type\` and briefing it with all necessary context.
+- Until a background completion notification arrives, report only that it is still running; never infer its findings.
 `
 
-  const currentExamples = `Example usage:
+  const currentExamples = `Example:
 
-<example_agent_descriptions>
-"test-runner": use this agent after you are done writing code to run tests
-"greeting-responder": use this agent to respond to user greetings with a friendly joke
-</example_agent_descriptions>
-
-<example>
-user: "Please write a function that checks if a number is prime"
-assistant: I'm going to use the ${FILE_WRITE_TOOL_NAME} tool to write the following code:
-<code>
-function isPrime(n) {
-  if (n <= 1) return false
-  for (let i = 2; i * i <= n; i++) {
-    if (n % i === 0) return false
-  }
-  return true
-}
-</code>
-<commentary>
-Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
-</commentary>
-assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the test-runner agent
-</example>
-
-<example>
-user: "Hello"
-<commentary>
-Since the user is greeting, use the greeting-responder agent to respond with a friendly joke
-</commentary>
-assistant: "I'm going to use the ${AGENT_TOOL_NAME} tool to launch the greeting-responder agent"
-</example>
+After completing an implementation, if a suitable validation agent is available, launch it to run the relevant checks and report the result.
 `
 
   // When the gate is on, the agent list lives in an agent_listing_delta

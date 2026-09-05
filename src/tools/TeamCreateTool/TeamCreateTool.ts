@@ -31,7 +31,7 @@ import {
 } from '../../utils/tasks.js'
 import { generateWordSlug } from '../../utils/words.js'
 import { TEAM_CREATE_TOOL_NAME } from './constants.js'
-import { getPrompt } from './prompt.js'
+import { getActiveTeamContract, getPrompt } from './prompt.js'
 import { renderToolUseMessage } from './UI.js'
 
 const inputSchema = lazySchema(() =>
@@ -119,7 +119,7 @@ export const TeamCreateTool: Tool<InputSchema, Output> = buildTool({
       content: [
         {
           type: 'text' as const,
-          text: jsonStringify(data),
+          text: `${jsonStringify(data)}\n\n${getActiveTeamContract()}`,
         },
       ],
     }
