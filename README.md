@@ -380,7 +380,7 @@ bun run version
 
 ```
 src/                    # 核心源码（1,987 个 TS/TSX）
-├── tools/              # 最多 53 个静态内置工具（实际数量受运行条件影响）
+├── tools/              # 最多 51 个静态内置工具（实际数量受运行条件影响）
 ├── commands/           # 87 个斜杠命令
 ├── services/           # API / MCP / analytics / autoDream
 ├── components/         # 148 个终端 UI 组件（React + Ink）
@@ -401,7 +401,7 @@ vendor/                 # 原生绑定源码
 
 ## 工具清单
 
-工具注册以 `src/tools.ts` 中的 `getAllBaseTools()` 为准。当前源码最多定义 **53 个静态内置工具**：19 个基础工具、2 个 MCP 资源辅助工具、32 个条件启用或实验性工具。此外，MCP Server 还可以动态注入任意数量的工具，因此单次会话中的实际工具总数并不固定。
+工具注册以 `src/tools.ts` 中的 `getAllBaseTools()` 为准。当前源码最多定义 **51 个静态内置工具**：19 个基础工具、2 个 MCP 资源辅助工具、30 个条件启用或实验性工具。此外，MCP Server 还可以动态注入任意数量的工具，因此单次会话中的实际工具总数并不固定。
 
 最终工具池会经过功能开关、环境变量、运行模式、权限拒绝规则和各工具 `isEnabled()` 的过滤；Simple 模式通常只保留 `Bash`、`Read` 和 `Edit`。内置工具与 MCP 工具的合并逻辑位于 `assembleToolPool()`，发生重名时内置工具优先。
 
@@ -438,7 +438,7 @@ vendor/                 # 原生绑定源码
 
 这两个工具默认不会直接加入最终工具池，仅在已连接的 MCP Server 支持 `resources` 时注入。
 
-### 条件启用或实验性工具（32 个）
+### 条件启用或实验性工具（30 个）
 
 | 工具 | 作用或启用条件 |
 |---|---|
@@ -449,8 +449,6 @@ vendor/                 # 原生绑定源码
 | `TaskGet` | 获取指定结构化任务详情。 |
 | `TaskUpdate` | 更新任务状态、负责人和依赖关系。 |
 | `TaskList` | 列出新版结构化任务。 |
-| `OverflowTestTool` | 测试工具输出或上下文溢出行为。 |
-| `CtxInspectTool` | 检查上下文折叠相关状态。 |
 | `terminal_capture` | 捕获终端面板内容。 |
 | `LSP` | 使用语言服务器执行诊断、符号查询等操作。 |
 | `EnterWorktree` | 创建并进入隔离的 Git worktree。 |
@@ -483,7 +481,7 @@ MCP Server 通过 `tools/list` 返回的工具会在连接后动态加入工具�
 mcp__<服务器名>__<工具名>
 ```
 
-因此，更准确的数量表达是：**最多 53 个静态内置工具，加上 N 个动态 MCP 工具**。关键实现位置如下：
+因此，更准确的数量表达是：**最多 51 个静态内置工具，加上 N 个动态 MCP 工具**。关键实现位置如下：
 
 - 静态工具注册：`src/tools.ts` 中的 `getAllBaseTools()`
 - 最终启用过滤：`src/tools.ts` 中的 `getTools()`
