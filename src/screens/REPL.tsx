@@ -148,6 +148,7 @@ import { mergeClients, useMergedClients } from '../hooks/useMergedClients.js';
 import { getQuerySourceForREPL } from '../utils/promptCategory.js';
 import { useMergedTools } from '../hooks/useMergedTools.js';
 import { mergeAndFilterTools } from '../utils/toolPool.js';
+import { resolveCurrentToolExposure } from '../utils/toolExposure.js';
 import { useMergedCommands } from '../hooks/useMergedCommands.js';
 import { useSkillsChange } from '../hooks/useSkillsChange.js';
 import { useManagePlugins } from '../hooks/useManagePlugins.js';
@@ -2431,8 +2432,8 @@ export function REPL({
       const state = store.getState();
       const assembled = assembleToolPool(state.toolPermissionContext, state.mcp.tools);
       const merged = mergeAndFilterTools(combinedInitialTools, assembled, state.toolPermissionContext.mode);
-      if (!mainThreadAgentDefinition) return merged;
-      return resolveAgentTools(mainThreadAgentDefinition, merged, false, true).resolvedTools;
+      const permitted = mainThreadAgentDefinition ? resolveAgentTools(mainThreadAgentDefinition, merged, false, true).resolvedTools : merged;
+      return resolveCurrentToolExposure(permitted, state, 'repl').tools;
     };
     return {
       abortController,

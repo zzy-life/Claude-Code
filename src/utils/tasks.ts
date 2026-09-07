@@ -17,6 +17,59 @@ import { getTeammateContext } from './teammateContext.js'
 // Listeners for task list updates (used for immediate UI refresh in same process)
 const tasksUpdated = createSignal()
 
+// Request-time tool exposure cannot perform filesystem I/O. Track known task
+// presence from mutations in this process; restored task lists are discovered by
+// the existing asynchronous UI store and then published here.
+const knownTaskPresence = new Map<string, boolean>()
+const taskPresenceHydrations = new Map<string, Promise<boolean>>()
+
+export function getKnownTaskPresence(
+  taskListId = getTaskListId(),
+): boolean | undefined {
+  return knownTaskPresence.get(taskListId)
+}
+
+export function setKnownTaskPresence(
+  taskListId: string,
+  hasTasks: boolean,
+): boolean {
+  if (knownTaskPresence.get(taskListId) === hasTasks) return false
+  knownTaskPresence.set(taskListId, hasTasks)
+  notifyTasksUpdated()
+  return true
+}
+
+export function clearKnownTaskPresence(taskListId: string): boolean {
+  if (!knownTaskPresence.has(taskListId)) return false
+  knownTaskPresence.delete(taskListId)
+  notifyTasksUpdated()
+  return true
+}
+
+export async function hydrateKnownTaskPresence(
+  taskListId = getTaskListId(),
+): Promise<boolean> {
+  const knownPresence = getKnownTaskPresence(taskListId)
+  if (knownPresence !== undefined) return knownPresence
+
+  const existingHydration = taskPresenceHydrations.get(taskListId)
+  if (existingHydration) return existingHydration
+
+  const hydration = listTasks(taskListId)
+    .then(tasks => {
+      const currentPresence = getKnownTaskPresence(taskListId)
+      if (currentPresence !== undefined) return currentPresence
+
+      const hasTasks = tasks.some(task => !task.metadata?._internal)
+      setKnownTaskPresence(taskListId, hasTasks)
+      return hasTasks
+    })
+    .finally(() => taskPresenceHydrations.delete(taskListId))
+
+  taskPresenceHydrations.set(taskListId, hydration)
+  return hydration
+}
+
 /**
  * Team name set by the leader when creating a team.
  * Used by getTaskListId() so the leader's tasks are stored under the team name
@@ -179,7 +232,7 @@ export async function resetTaskList(taskListId: string): Promise<void> {
         }
       }
     }
-    notifyTasksUpdated()
+    if (!setKnownTaskPresence(taskListId, false)) notifyTasksUpdated()
   } finally {
     if (release) {
       await release()
@@ -298,7 +351,7 @@ export async function createTask(
     const task: Task = { id, ...taskData }
     const path = getTaskPath(taskListId, id)
     await writeFile(path, jsonStringify(task, null, 2))
-    notifyTasksUpdated()
+    if (!setKnownTaskPresence(taskListId, true)) notifyTasksUpdated()
     return id
   } finally {
     if (release) {
@@ -363,7 +416,23 @@ async function updateTaskUnsafe(
   const updated: Task = { ...existing, ...updates, id: taskId }
   const path = getTaskPath(taskListId, taskId)
   await writeFile(path, jsonStringify(updated, null, 2))
-  notifyTasksUpdated()
+
+  if (
+    Boolean(existing.metadata?._internal) !==
+    Boolean(updated.metadata?._internal)
+  ) {
+    const tasks = await listTasks(taskListId)
+    if (
+      !setKnownTaskPresence(
+        taskListId,
+        tasks.some(task => !task.metadata?._internal),
+      )
+    ) {
+      notifyTasksUpdated()
+    }
+  } else {
+    notifyTasksUpdated()
+  }
   return updated
 }
 
@@ -433,7 +502,11 @@ export async function deleteTask(
       }
     }
 
-    notifyTasksUpdated()
+    const taskPresenceChanged = setKnownTaskPresence(
+      taskListId,
+      allTasks.some(task => !task.metadata?._internal),
+    )
+    if (!taskPresenceChanged) notifyTasksUpdated()
     return true
   } catch {
     return false

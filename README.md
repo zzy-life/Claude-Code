@@ -427,7 +427,7 @@ vendor/                 # 原生绑定源码
 | 工具搜索 | `ENABLE_TOOL_SEARCH` 未设置时默认为开启；`false` 或 `auto:100` 关闭，`true` 或 `auto:0` 强制开启，`auto`/`auto:1..99` 按延迟工具描述总量阈值决定。 |
 | 工具搜索兼容性 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` 会强制关闭；不支持 `tool_reference` 的模型（默认匹配 Haiku）关闭；`ToolSearch` 被 deny 时也关闭。自定义 `ANTHROPIC_BASE_URL` 默认会关闭，但可显式设置非空 `ENABLE_TOOL_SEARCH` 表示代理兼容。 |
 
-下表中的“直接”表示通过以上过滤后，完整工具说明和参数 Schema 从本次 API 请求直接发送；“按需”表示工具搜索开启时先注入名称，查询到该工具后才发送完整 Schema，工具搜索关闭时退化为直接发送。
+下表中的“直接”表示通过以上过滤后，完整工具说明和参数 Schema 从本次 API 请求直接发送；“按需”表示工具搜索开启时先注入名称，查询到该工具后才发送完整 Schema，工具搜索关闭时退化为直接发送。部分生命周期工具会在运行时发生提升或隐藏：Plan、Team、Task 和后台任务根据当前状态调整；Worktree 创建/退出工具则保留原有按需可发现方式，由工具调用时校验状态。
 
 ### 常规内置工具
 
@@ -445,14 +445,14 @@ vendor/                 # 原生绑定源码
 | `WebFetch` | 获取并分析指定网页。 | 基础注册。 | **按需**。 |
 | `WebSearch` | 搜索互联网获取时效信息。 | 基础注册；First-party 和 Foundry 启用，Vertex 仅对 Claude 4 系列启用，其他 Provider 禁用。 | **按需**。 |
 | `Skill` | 加载并执行已安装 Skill。 | 基础注册。 | **直接**；可用 Skill 清单另由会话提醒注入。 |
-| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或 Agent。 | 基础注册。 | **按需**。 |
-| `AskUserQuestion` | 发起结构化单选、多选或澄清问题。 | 基础注册；启用 KAIROS/KAIROS_CHANNELS 且存在远程 channel 时禁用，避免无人操作本地 TUI 对话框。 | **按需**。 |
-| `EnterPlanMode` | 请求进入计划模式。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**。 |
-| `ExitPlanMode` | 读取方案文件并请求批准进入实现。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**。 |
-| `SendMessage` | 向队友、团队广播或受支持的本地/远程收件箱发送消息，并处理旧版 shutdown/plan-approval 协议。 | 基础注册；Team 功能当前已成为外部基础能力，`isAgentSwarmsEnabled()` 恒为 true。 | **直接，明确不延迟**，保证控制消息可随时发送和响应。 |
+| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或 Agent。 | 基础注册。 | 无运行中后台任务时隐藏；存在运行中任务时**直接**。 |
+| `AskUserQuestion` | 发起结构化单选、多选或澄清问题。 | 基础注册；启用 KAIROS/KAIROS_CHANNELS 且存在远程 channel 时禁用，避免无人操作本地 TUI 对话框。 | **直接**。 |
+| `EnterPlanMode` | 请求进入计划模式。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | 普通模式**按需**；Plan 模式隐藏。 |
+| `ExitPlanMode` | 读取方案文件并请求批准进入实现。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | 普通模式隐藏；Plan 模式**直接**。 |
+| `SendMessage` | 向队友、独立 Agent、团队广播或受支持的本地/远程 peer 发送消息，并处理旧版 shutdown/plan-approval 协议；向已停止但可恢复的独立 Agent 发消息时可触发恢复。 | 基础注册；Team 功能当前已成为外部基础能力，`isAgentSwarmsEnabled()` 恒为 true；本地 UDS/Remote Control peer 路径还要求构建包含 `UDS_INBOX`。 | 存在 Team、独立 Agent 或 peer 通信能力时**直接**，否则隐藏；启用 `UDS_INBOX` 的构建保守保持直接。 |
 | `SendUserMessage`（源码对象 `BriefTool`） | 在 Brief/KAIROS 模式中把消息、问题或附件发送给用户。 | 构建必须包含 `KAIROS` 或 `KAIROS_BRIEF`；同时需 Assistant 模式已激活或用户主动 opt-in，并通过 `tengu_kairos_brief` 资格/kill-switch。 | **直接，明确不延迟**。 |
 
-`TodoWrite` 与 Task V2 互斥：交互式会话默认启用 Task V2，因此通常显示 `TaskCreate`/`TaskGet`/`TaskUpdate`/`TaskList`；非交互式会话默认回退到 `TodoWrite`，除非显式设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。
+`TodoWrite` 与 Task V2 互斥：交互式会话默认启用 Task V2，因此通常显示 `TaskCreate`/`TaskGet`/`TaskUpdate`/`TaskList`；非交互式会话默认回退到 `TodoWrite`，除非显式设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。启用 Task V2 的 Headless/SDK 会在首次请求或恢复后的首次请求前读取一次当前任务目录，再按实际任务状态解析工具集；后续请求复用内存状态。
 
 两者解决的问题层级不同：`TodoWrite` 是由单个 Agent 整体重写的一张轻量会话清单；Task V2 将每项工作保存为带唯一 ID 的独立任务，可单独查询和更新，并支持负责人、阻塞依赖、metadata、磁盘持久化及 Team 共享。保留两套主要是为了让非交互式 CLI 和 SDK 继续兼容旧工具名及输入 Schema，同时让交互式会话和多 Agent 协作使用能力更完整的新任务系统。
 
@@ -474,23 +474,23 @@ vendor/                 # 原生绑定源码
 | 工具 | 作用 | 进入候选池/启用条件 | 注入时机 |
 |---|---|---|---|
 | `TodoWrite` | 整体写入或替换当前 Agent 的轻量会话待办清单；适合旧版非交互调用和无需协作的简单进度展示。 | 仅 `isTodoV2Enabled()` 为 false。 | **按需**。 |
-| `TaskCreate` | 创建状态为 `pending` 的独立结构化任务；适合拆分工作或建立可分派任务。 | `isTodoV2Enabled()`：交互式会话默认开启；非交互式须设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。 | **按需**。 |
-| `TaskGet` | 获取指定任务的完整描述、负责人和依赖；适合开始工作或更新前确认最新状态。 | 同 `TaskCreate`。 | **按需**。 |
-| `TaskUpdate` | 增量更新状态、负责人、依赖和 metadata；适合认领、分派、解除阻塞和完成任务，团队中还可触发分派消息。 | 同 `TaskCreate`。 | **按需**。 |
-| `TaskList` | 查看任务概览并发现未认领、可执行或仍被阻塞的任务；适合主 Agent 和队友协调下一步工作。 | 同 `TaskCreate`。 | **按需**。 |
+| `TaskCreate` | 创建状态为 `pending` 的独立结构化任务；适合拆分工作或建立可分派任务。 | `isTodoV2Enabled()`：交互式会话默认开启；非交互式须设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。 | 默认**按需**；Team 活跃时**直接**。 |
+| `TaskGet` | 获取指定任务的完整描述、负责人和依赖；适合开始工作或更新前确认最新状态。 | 同 `TaskCreate`。 | 已知无任务且无 Team 时隐藏；任务状态未知或已有任务时**按需**。 |
+| `TaskUpdate` | 增量更新状态、负责人、依赖和 metadata；适合认领、分派、解除阻塞和完成任务，团队中还可触发分派消息。 | 同 `TaskCreate`。 | 已知无任务且无 Team 时隐藏；状态未知时**按需**；已有任务或 Team 活跃时**直接**。 |
+| `TaskList` | 查看任务概览并发现未认领、可执行或仍被阻塞的任务；适合主 Agent 和队友协调下一步工作。 | 同 `TaskCreate`。 | 已知无任务且无 Team 时隐藏；状态未知时**按需**；已有任务或 Team 活跃时**直接**。 |
 
 ### Team 工具（当前实现）
 
-Team 不再受实验开关限制：`TeamCreate`、`TeamDelete` 和 `SendMessage` 都会进入基础候选池。不过，**技术上可用不等于模型可随意创建 Team**：工具提示要求 Team 必须由用户明确提出，或由模型在开始任何实质执行前通过 `AskUserQuestion` 提议并取得明确授权；普通、独立的并行调查应优先使用多个一次性 `Agent`，不能仅因任务较大就创建 Team。
+Team 不再受实验开关限制：`TeamCreate`、`TeamDelete` 和 `SendMessage` 都会进入基础候选池，再由请求级暴露策略决定直接加载或隐藏。不过，**技术上可用不等于模型可随意创建 Team**：工具提示要求 Team 必须由用户明确提出，或由模型在开始任何实质执行前通过 `AskUserQuestion` 提议并取得明确授权；普通、独立的并行调查应优先使用多个一次性 `Agent`，不能仅因任务较大就创建 Team。
 
 | 工具 | 作用与调用条件 | 注入时机 |
 |---|---|---|
-| `TeamCreate` | 创建持久协作 Team 及共享任务目录。仅在需要队友直接通信、共享任务所有权、动态转派或跨轮次交接，并已获得用户授权时调用；必须先单独成功创建 Team，之后才能创建共享任务或通过 `Agent(name, team_name)` 启动队友。一个 lead 不能同时领导多个 Team。 | **按需**。成功调用后，返回结果会把活跃 Team 操作契约直接补充给模型；团队上下文随后还会通过附件持续注入。 |
-| `TeamDelete` | 清理 Team、任务目录、邮箱和上下文。删除前必须先关闭或移除全部非 lead 注册成员，idle 成员也算；否则拒绝删除。 | **按需**。仅用于已创建 Team 的生命周期末尾。 |
-| `SendMessage` | 按队友名投递，`*` 表示广播；结构化 shutdown/plan-approval 消息有额外目标限制。 | **直接**，无须先经 `ToolSearch`。Team 创建后，邮箱消息作为附件在后续轮次注入。 |
+| `TeamCreate` | 创建持久协作 Team 及共享任务目录。仅在需要队友直接通信、共享任务所有权、动态转派或跨轮次交接，并已获得用户授权时调用；必须先单独成功创建 Team，之后才能创建共享任务或通过 `Agent(name, team_name)` 启动队友。一个 lead 不能同时领导多个 Team。 | 无 Team 时**直接**发送完整 Schema；Team 创建成功后隐藏。成功调用后，返回结果会把活跃 Team 操作契约直接补充给模型；团队上下文随后还会通过附件持续注入。 |
+| `TeamDelete` | 清理 Team、任务目录、邮箱和上下文。删除前必须先关闭或移除全部非 lead 注册成员，idle 成员也算；否则拒绝删除。 | 无 Team 时隐藏；仍有非 lead 注册成员时**按需**；成员全部退出后**直接**。调用时仍读取 Team 文件做最终校验。 |
+| `SendMessage` | 按队友名、独立 Agent ID 或 peer 地址投递，`*` 表示 Team 广播；结构化 shutdown/plan-approval 消息有额外目标限制。 | 存在 Team、可恢复/运行中的独立 Agent 或 peer 通信能力时**直接**；否则隐藏。启用 `UDS_INBOX` 的构建因 peer 列表不在同步 AppState 中而保守保持直接，实际目标由 `ListPeers` 发现。 |
 | `Agent` | 无 `name` 时是有界的一次性子代理；有活跃 Team 且传入 `name` 时才进入持久队友分支。队友不能再创建队友，但可省略 `name` 启动同步子代理。 | **直接**。 |
 
-Team 下的 Task ID 解析顺序为：`CLAUDE_CODE_TASK_LIST_ID` → 进程内队友所属 Team → `CLAUDE_CODE_TEAM_NAME` → lead 当前 Team → 当前 Session。因而 lead 与队友默认共享同一任务表。
+Team 下的 Task ID 解析顺序为：`CLAUDE_CODE_TASK_LIST_ID` → 进程内队友所属 Team → `CLAUDE_CODE_TEAM_NAME` → lead 当前 Team → 当前 Session。因而 lead 与队友默认共享同一任务表。队友完成 shutdown 协议或被显式移除后，会同时从 `teamContext.teammates` 和 Team 文件成员列表移除，因此可以低成本判断是否还存在非 lead 注册成员；`TeamDelete` 调用时仍以 Team 文件为最终校验。
 
 ### 条件构建或条件启用工具
 
@@ -503,8 +503,8 @@ Team 下的 Task ID 解析顺序为：`CLAUDE_CODE_TASK_LIST_ID` → 进程内�
 | `WebBrowser` | 浏览器访问和自动化。 | 构建包含 `WEB_BROWSER_TOOL`。 | **直接**。 |
 | `terminal_capture` | 捕获终端面板内容。 | 构建包含 `TERMINAL_PANEL`。 | **直接**。 |
 | `LSP` | 使用语言服务器执行诊断和符号查询。 | truthy 的 `ENABLE_LSP_TOOL`，并通过工具自身 `isEnabled()`。 | **按需**。 |
-| `EnterWorktree` | 创建并进入会话隔离 worktree。 | `isWorktreeModeEnabled()` 当前恒为 true；实际调用仍要求用户明确提到 worktree，且当前环境必须是 Git 仓库或配置了 Worktree hooks。 | **按需**。 |
-| `ExitWorktree` | 离开由本会话创建的 worktree并保留或删除。 | 与 `EnterWorktree` 一同恒定注册；只对本会话通过 `EnterWorktree` 创建的 worktree 生效。 | **按需**。 |
+| `EnterWorktree` | 创建并进入会话隔离 worktree。 | `isWorktreeModeEnabled()` 当前恒为 true；实际调用仍要求用户明确提到 worktree，且当前环境必须是 Git 仓库或配置了 Worktree hooks。 | 始终**按需可发现**；已有 Worktree 时仍保留，由工具调用时拒绝重复进入。 |
+| `ExitWorktree` | 离开由本会话创建的 worktree并保留或删除。 | 与 `EnterWorktree` 一同恒定注册；只对本会话通过 `EnterWorktree` 创建或恢复的 Worktree 生效。 | 始终**按需可发现**；无对应会话时由工具安全拒绝，不使用进程级状态动态隐藏。 |
 | `ListPeers` | 列出 UDS Inbox 可通信进程。 | 构建包含 `UDS_INBOX`。 | **直接**。 |
 | `verify_plan_execution` | 核对计划步骤是否执行。 | `CLAUDE_CODE_VERIFY_PLAN === 'true'`。 | **直接**。 |
 | `REPL` | 在受控 VM 中执行代码并包装底层工具。 | `USER_TYPE === 'ant'` 且 REPL 模块存在；运行时还需 REPL 模式生效。 | **直接**；生效后替换一组底层原语。 |

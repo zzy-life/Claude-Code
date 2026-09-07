@@ -16,6 +16,7 @@ import { initializeTeammateContextFromSession } from '../utils/swarm/reconnectio
 import { readTeamFile } from '../utils/swarm/teamHelpers.js'
 import { initializeTeammateHooks } from '../utils/swarm/teammateInit.js'
 import { getDynamicTeamContext } from '../utils/teammate.js'
+import { setLeaderTeamName } from '../utils/tasks.js'
 
 type SetAppState = (f: (prevState: AppState) => AppState) => void
 
@@ -50,9 +51,15 @@ export function useSwarmInitialization(
       if (teamName && agentName) {
         // Resumed agent session - set up team context from stored info
         initializeTeammateContextFromSession(setAppState, teamName, agentName)
+        const teamFile = readTeamFile(teamName)
+        const resumedMember = teamFile?.members.find(
+          (m: { name: string }) => m.name === agentName,
+        )
+        if (teamFile && resumedMember?.agentId === teamFile.leadAgentId) {
+          setLeaderTeamName(teamName)
+        }
 
         // Get agentId from team file for hook initialization
-        const teamFile = readTeamFile(teamName)
         const member = teamFile?.members.find(
           (m: { name: string }) => m.name === agentName,
         )

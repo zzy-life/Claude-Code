@@ -10,6 +10,7 @@ import {
   listTasks,
   onTasksUpdated,
   resetTaskList,
+  setKnownTaskPresence,
 } from '../utils/tasks.js'
 import { isTeamLead } from '../utils/teammate.js'
 
@@ -119,6 +120,10 @@ class TasksV2Store {
       t => !t.metadata?._internal,
     )
     this.#tasks = current
+    const taskPresenceChanged = setKnownTaskPresence(
+      taskListId,
+      current.length > 0,
+    )
 
     const hasIncomplete = current.some(t => t.status !== 'completed')
 
@@ -135,7 +140,7 @@ class TasksV2Store {
       this.#hideTimer.unref()
     }
 
-    this.#notify()
+    if (!taskPresenceChanged) this.#notify()
 
     // Schedule fallback poll only when there are incomplete tasks that
     // need monitoring. When all tasks are completed (or there are none),

@@ -4191,6 +4191,22 @@ You have exited auto mode. The user may now want to interact more directly. You 
         createUserMessage({ content: parts.join('\n\n'), isMeta: true }),
       ])
     }
+    case 'tool_availability_delta': {
+      const parts: string[] = []
+      if (attachment.addedLines.length > 0) {
+        parts.push(
+          `Tool availability changed for this request:\n${attachment.addedLines.join('\n')}`,
+        )
+      }
+      if (attachment.removedNames.length > 0) {
+        parts.push(
+          `The following tool availability notes no longer apply:\n${attachment.removedNames.join('\n')}`,
+        )
+      }
+      return wrapMessagesInSystemReminder([
+        createUserMessage({ content: parts.join('\n\n'), isMeta: true }),
+      ])
+    }
     case 'agent_listing_delta': {
       const parts: string[] = []
       if (attachment.addedLines.length > 0) {

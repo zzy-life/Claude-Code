@@ -56,6 +56,7 @@ import { registerFrontmatterHooks } from '../../utils/hooks/registerFrontmatterH
 import { clearSessionHooks } from '../../utils/hooks/sessionHooks.js'
 import { executeSubagentStartHooks } from '../../utils/hooks.js'
 import { createUserMessage } from '../../utils/messages.js'
+import { resolveCurrentToolExposure } from '../../utils/toolExposure.js'
 import { getAgentModel } from '../../utils/model/agent.js'
 import type { ModelAlias } from '../../utils/model/aliases.js'
 import {
@@ -497,25 +498,13 @@ export async function* runAgent({
     }
   }
 
-  const resolvedTools = useExactTools
+  const permittedTools = useExactTools
     ? availableTools
     : resolveAgentTools(agentDefinition, availableTools, isAsync).resolvedTools
 
   const additionalWorkingDirectories = Array.from(
     appState.toolPermissionContext.additionalWorkingDirectories.keys(),
   )
-
-  const agentSystemPrompt = override?.systemPrompt
-    ? override.systemPrompt
-    : asSystemPrompt(
-        await getAgentSystemPrompt(
-          agentDefinition,
-          toolUseContext,
-          resolvedAgentModel,
-          additionalWorkingDirectories,
-          resolvedTools,
-        ),
-      )
 
   // Determine abortController:
   // - Override takes precedence
@@ -655,13 +644,26 @@ export async function* runAgent({
     toolUseContext.options.mcpClients,
   )
 
-  // Merge agent MCP tools with resolved agent tools, deduplicating by name.
-  // resolvedTools is already deduplicated (see resolveAgentTools), so skip
-  // the spread + uniqBy overhead when there are no agent-specific MCP tools.
-  const allTools =
+  // Merge agent MCP tools with the permission-filtered pool. Apply lifecycle
+  // exposure after merging so newly connected agent-specific tools are retained.
+  const mergedTools =
     agentMcpTools.length > 0
-      ? uniqBy([...resolvedTools, ...agentMcpTools], 'name')
-      : resolvedTools
+      ? uniqBy([...permittedTools, ...agentMcpTools], 'name')
+      : permittedTools
+  const allTools = useExactTools
+    ? mergedTools
+    : resolveCurrentToolExposure(mergedTools, agentGetAppState(), 'agent').tools
+  const agentSystemPrompt = override?.systemPrompt
+    ? override.systemPrompt
+    : asSystemPrompt(
+        await getAgentSystemPrompt(
+          agentDefinition,
+          toolUseContext,
+          resolvedAgentModel,
+          additionalWorkingDirectories,
+          allTools,
+        ),
+      )
 
   // Build agent-specific options
   const agentOptions: ToolUseContext['options'] = {
@@ -685,6 +687,14 @@ export async function* runAgent({
     mcpClients: mergedMcpClients,
     mcpResources: toolUseContext.options.mcpResources,
     agentDefinitions: toolUseContext.options.agentDefinitions,
+    ...(!useExactTools && {
+      refreshTools: () =>
+        resolveCurrentToolExposure(
+          mergedTools,
+          agentGetAppState(),
+          'agent',
+        ).tools,
+    }),
     // Fork children (useExactTools path) need querySource on context.options
     // for the recursive-fork guard at AgentTool.tsx call() — it checks
     // options.querySource === 'agent:builtin:fork'. This survives autocompact

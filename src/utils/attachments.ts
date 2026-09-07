@@ -167,6 +167,7 @@ import {
   modelSupportsToolReference,
   type DeferredToolsDeltaScanContext,
 } from './toolSearch.js'
+import { getToolAvailabilityLines, getToolExposureContext } from './toolExposure.js'
 import {
   getMcpInstructionsDelta,
   isMcpInstructionsDeltaEnabled,
@@ -689,6 +690,12 @@ export type Attachment =
       removedNames: string[]
     }
   | {
+      type: 'tool_availability_delta'
+      addedNames: string[]
+      addedLines: string[]
+      removedNames: string[]
+    }
+  | {
       type: 'agent_listing_delta'
       addedTypes: string[]
       addedLines: string[]
@@ -845,6 +852,15 @@ export async function getAttachments(
               : 'attachments_subagent',
             querySource,
           },
+        ),
+      ),
+    ),
+    maybe('tool_availability_delta', () =>
+      Promise.resolve(
+        getToolAvailabilityDeltaAttachment(
+          toolUseContext,
+          messages,
+          getToolExposureSurfaceForAttachment(querySource, isMainThread),
         ),
       ),
     ),
@@ -1475,6 +1491,57 @@ export function getDeferredToolsDeltaAttachment(
   const delta = getDeferredToolsDelta(tools, messages ?? [], scanContext)
   if (!delta) return []
   return [{ type: 'deferred_tools_delta', ...delta }]
+}
+
+function getToolExposureSurfaceForAttachment(
+  querySource: QuerySource | undefined,
+  isMainThread: boolean,
+): 'repl' | 'headless' | 'coordinator' | 'agent' {
+  if (!isMainThread) return 'agent'
+  if (querySource?.startsWith('repl_main_thread')) return 'repl'
+  if (querySource?.startsWith('coordinator')) return 'coordinator'
+  return 'headless'
+}
+
+export function getToolAvailabilityDeltaAttachment(
+  toolUseContext: ToolUseContext,
+  messages: Message[] | undefined,
+  surface: 'repl' | 'headless' | 'coordinator' | 'agent',
+): Attachment[] {
+  const current = getToolAvailabilityLines(
+    toolUseContext.options.tools,
+    getToolExposureContext(toolUseContext.getAppState(), surface),
+  )
+
+  const announced = new Map<string, string>()
+  for (const msg of messages ?? []) {
+    if (msg.type !== 'attachment') continue
+    if (msg.attachment.type !== 'tool_availability_delta') continue
+    for (let i = 0; i < msg.attachment.addedNames.length; i++) {
+      const name = msg.attachment.addedNames[i]
+      const line = msg.attachment.addedLines[i]
+      if (name && line) announced.set(name, line)
+    }
+    for (const name of msg.attachment.removedNames) announced.delete(name)
+  }
+
+  const currentNames = new Set(current.map(line => line.name))
+  const added = current.filter(line => announced.get(line.name) !== line.line)
+  const removed: string[] = []
+  for (const name of announced.keys()) {
+    if (!currentNames.has(name)) removed.push(name)
+  }
+
+  if (added.length === 0 && removed.length === 0) return []
+
+  return [
+    {
+      type: 'tool_availability_delta',
+      addedNames: added.map(line => line.name),
+      addedLines: added.map(line => line.line),
+      removedNames: removed,
+    },
+  ]
 }
 
 /**

@@ -77,6 +77,7 @@ import {
 } from './utils/sessionStorage.js'
 import { asSystemPrompt } from './utils/systemPromptType.js'
 import { resolveThemeSetting } from './utils/systemTheme.js'
+import { hydrateKnownTaskPresence } from './utils/tasks.js'
 import {
   shouldEnableThinkingByDefault,
   type ThinkingConfig,
@@ -130,6 +131,7 @@ const snipProjection = feature('HISTORY_SNIP')
 export type QueryEngineConfig = {
   cwd: string
   tools: Tools
+  refreshTools?: () => Tools
   commands: Command[]
   mcpClients: MCPServerConnection[]
   agents: AgentDefinition[]
@@ -233,10 +235,13 @@ export class QueryEngine {
       agents = [],
       setSDKStatus,
       orphanedPermission,
+      refreshTools,
     } = this.config
 
     this.discoveredSkillNames.clear()
     setCwd(cwd)
+    await hydrateKnownTaskPresence()
+    const currentTools = refreshTools?.() ?? tools
     const persistSession = !isSessionPersistenceDisabled()
     const startTime = Date.now()
 
@@ -290,7 +295,7 @@ export class QueryEngine {
       userContext: baseUserContext,
       systemContext,
     } = await fetchSystemPromptParts({
-      tools,
+      tools: currentTools,
       mainLoopModel: initialMainLoopModel,
       additionalWorkingDirectories: Array.from(
         initialAppState.toolPermissionContext.additionalWorkingDirectories.keys(),
@@ -325,7 +330,7 @@ export class QueryEngine {
     ])
 
     // Register function hook for structured output enforcement
-    const hasStructuredOutputTool = tools.some(t =>
+    const hasStructuredOutputTool = currentTools.some(t =>
       toolMatchesName(t, SYNTHETIC_OUTPUT_TOOL_NAME),
     )
     if (jsonSchema && hasStructuredOutputTool) {
@@ -349,7 +354,7 @@ export class QueryEngine {
       options: {
         commands,
         debug: false, // we use stdout, so don't want to clobber it
-        tools,
+        tools: currentTools,
         verbose,
         mainLoopModel: initialMainLoopModel,
         thinkingConfig: initialThinkingConfig,
@@ -360,6 +365,7 @@ export class QueryEngine {
         customSystemPrompt,
         appendSystemPrompt,
         agentDefinitions: { activeAgents: agents, allAgents: [] },
+        refreshTools,
         theme: resolveThemeSetting(getGlobalConfig().theme),
         maxBudgetUsd,
       },
@@ -399,7 +405,7 @@ export class QueryEngine {
       this.hasHandledOrphanedPermission = true
       for await (const message of handleOrphanedPermission(
         orphanedPermission,
-        tools,
+        currentTools,
         this.mutableMessages,
         processUserInputContext,
       )) {
@@ -497,7 +503,7 @@ export class QueryEngine {
       options: {
         commands,
         debug: false,
-        tools,
+        tools: currentTools,
         verbose,
         mainLoopModel,
         thinkingConfig: initialThinkingConfig,
@@ -509,6 +515,7 @@ export class QueryEngine {
         appendSystemPrompt,
         theme: resolveThemeSetting(getGlobalConfig().theme),
         agentDefinitions: { activeAgents: agents, allAgents: [] },
+        refreshTools,
         maxBudgetUsd,
       },
       getAppState,
@@ -538,7 +545,7 @@ export class QueryEngine {
     headlessProfilerCheckpoint('after_skills_plugins')
 
     yield buildSystemInitMessage({
-      tools,
+      tools: currentTools,
       mcpClients,
       model: mainLoopModel,
       permissionMode: initialAppState.toolPermissionContext
@@ -1190,6 +1197,7 @@ export async function* ask({
   isMeta,
   cwd,
   tools,
+  refreshTools,
   mcpClients,
   verbose = false,
   thinkingConfig,
@@ -1221,6 +1229,7 @@ export async function* ask({
   isMeta?: boolean
   cwd: string
   tools: Tools
+  refreshTools?: () => Tools
   verbose?: boolean
   mcpClients: MCPServerConnection[]
   thinkingConfig?: ThinkingConfig
@@ -1249,6 +1258,7 @@ export async function* ask({
   const engine = new QueryEngine({
     cwd,
     tools,
+    refreshTools,
     commands,
     mcpClients,
     agents,

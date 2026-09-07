@@ -22,6 +22,7 @@ import { assembleToolPool, filterToolsByDenyRules } from 'src/tools.js'
 import uniqBy from 'lodash-es/uniqBy.js'
 import { uniq } from 'src/utils/array.js'
 import { mergeAndFilterTools } from 'src/utils/toolPool.js'
+import { resolveCurrentToolExposure } from 'src/utils/toolExposure.js'
 import {
   logEvent,
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -343,7 +344,9 @@ import {
   isShutdownApproved,
 } from '../utils/teammateMailbox.js'
 import { removeTeammateFromTeamFile } from '../utils/swarm/teamHelpers.js'
-import { unassignTeammateTasks } from '../utils/tasks.js'
+import {
+  unassignTeammateTasks,
+} from '../utils/tasks.js'
 import { getRunningTasks } from '../utils/task/framework.js'
 import { isBackgroundTask } from '../tasks/types.js'
 import { stopTask } from '../tasks/stopTask.js'
@@ -1496,7 +1499,11 @@ function runHeadlessStreaming(
         allTools = [...allTools, syntheticOutputResult.tool]
       }
     }
-    return allTools
+    const surface =
+      feature('COORDINATOR_MODE') && coordinatorModeModule?.isCoordinatorMode()
+        ? 'coordinator'
+        : 'headless'
+    return resolveCurrentToolExposure(allTools, appState, surface).tools
   }
 
   // Bridge handle for remote-control (SDK control message).
@@ -2154,6 +2161,7 @@ function runHeadlessStreaming(
               isMeta: cmd.isMeta,
               cwd: cwd(),
               tools: allTools,
+              refreshTools: () => buildAllTools(getAppState()),
               verbose: options.verbose,
               mcpClients: allMcpClients,
               thinkingConfig: options.thinkingConfig,

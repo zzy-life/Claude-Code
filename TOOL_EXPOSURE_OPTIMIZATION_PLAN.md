@@ -10,7 +10,7 @@
 
 - 模型在加载完整 Schema 前即可理解延迟工具的基本用途和关键限制。
 - Team 授权边界不依赖 `TeamCreate` 是否已经通过 `ToolSearch` 加载。
-- 在第二阶段让工具随 Team、Plan、Worktree、Task 和后台任务状态出现或消失。
+- 在第二阶段让 Team、Plan、Task、后台任务和通信工具随状态动态暴露；Worktree 工具保留固定的按需可发现策略。
 - 保持工具 Schema 的 Session 级缓存稳定，动态状态通过过滤或附件传递。
 
 ## 非目标
@@ -18,7 +18,16 @@
 - 不改变工具权限判断和调用结果。
 - 第一阶段不修改现有 `shouldDefer` 取值。
 - 第一阶段不改变 `ToolSearch` 的开关、阈值和 `tool_reference` 协议。
-- 不在第一阶段引入新的 Team、Task 或 Worktree 状态机。
+- 不在第一阶段引入新的 Team、Task 或后台任务状态机。
+
+## 已确认的设计决定
+
+- `TeamCreate` 在无 Team 时直接发送完整 Schema，创建成功后隐藏；`EnterWorktree` 始终保持轻量可发现，重复进入等无效状态继续由工具自身校验并返回明确错误。
+- Worktree 工具保留改造前的暴露逻辑：`EnterWorktree`、`ExitWorktree` 均保持按需可发现，是否存在本会话 Worktree 由工具调用时校验，不用进程级 Worktree 状态动态改变工具池。
+- `SendMessage` 根据真实通信能力动态暴露：存在 Team、运行中/已停止的独立 Agent，或 peer 通信能力时直接加载，否则隐藏。普通 Shell 后台任务不算通信目标；启用 `UDS_INBOX` 的构建因 peer 列表不在同步 AppState 中而保守保持直接。
+- Team 活跃但仍有非 lead 注册成员时，`TeamDelete` 只保持轻量可发现；所有非 lead 成员退出并从 `teamContext.teammates`/Team 文件移除后，再直接加载。成员退出协议已经同步更新这两处状态，获取成本可控，工具调用时仍保留最终文件校验。
+- Headless/SDK 在启动或恢复会话时应异步读取一次当前 Task 目录，将任务存在性从 `unknown` 水合为 `true` 或 `false`；请求级暴露函数本身不执行文件系统 I/O。
+- 为 Plan、Team、Task、后台任务及不同运行 surface 补充纯策略测试；README 必须区分默认按需状态与生命周期内的直接加载/隐藏行为。
 
 ---
 
@@ -101,23 +110,23 @@ MCP 工具若通过 `_meta['anthropic/searchHint']` 提供提示，也使用相�
 3. **轻量可发现**：仅公告名称、用途和前置条件，需要时通过 `ToolSearch` 加载。
 4. **完全隐藏**：当前状态下一定无法调用，不向模型公告。
 
-### 建议分类
+### 最终分类
 
-| 级别 | 初始建议工具 |
+| 级别 | 工具与状态 |
 |---|---|
 | 核心常驻 | `Read`、`Edit`、`Write`、`Bash`、`Agent`、`Skill`、`AskUserQuestion`、`ToolSearch` |
-| 状态常驻 | Team 活跃时的 `SendMessage` 和核心 Task 工具、Plan 模式的 `ExitPlanMode`、Worktree 会话中的 `ExitWorktree`、存在后台任务时的 `TaskStop` |
-| 轻量可发现 | `TeamCreate`、`EnterWorktree`、`WebFetch`、`WebSearch`、`NotebookEdit`、`LSP`、Cron 和大多数条件工具 |
-| 完全隐藏 | 无 Team 时的 `TeamDelete`、无 Worktree 时的 `ExitWorktree`、无后台任务时的 `TaskStop`、未连接语言服务器时的 `LSP`、Provider 不支持时的 `WebSearch` |
+| 状态常驻 | 无 Team 时的 `TeamCreate`、存在通信目标时的 `SendMessage`、Team 活跃时的核心 Task 工具、Plan 模式的 `ExitPlanMode`、存在后台任务时的 `TaskStop` |
+| 轻量可发现 | `EnterWorktree`、`ExitWorktree`、`WebFetch`、`WebSearch`、`NotebookEdit`、`LSP`、Cron 和大多数条件工具 |
+| 完全隐藏 | Team 活跃时的 `TeamCreate`、无 Team 时的 `TeamDelete`、无通信目标时的 `SendMessage`、无后台任务时的 `TaskStop`、未连接语言服务器时的 `LSP`、Provider 不支持时的 `WebSearch` |
 
 ### 状态转换
 
 #### Team
 
-- 无 Team：轻量公布 `TeamCreate`；隐藏 `TeamDelete`。
-- 用户已明确授权：下一请求预加载 `TeamCreate` 完整 Schema。
-- Team 已创建：隐藏 `TeamCreate`；直接加载 `SendMessage` 和核心 Task 工具；轻量公布 `TeamDelete`。
-- 全部非 lead 成员退出：预加载 `TeamDelete`。
+- 无 Team：直接加载 `TeamCreate`；隐藏 `TeamDelete`。
+- Team 创建成功：隐藏 `TeamCreate`，避免继续发送已经不可调用的 Schema。
+- Team 已创建：直接加载 `SendMessage` 和核心 Task 工具；仍有非 lead 注册成员时只轻量公布 `TeamDelete`。
+- 全部非 lead 成员退出并从 Team 状态移除：直接加载 `TeamDelete`；调用时仍读取 Team 文件做最终校验。
 
 #### Plan
 
@@ -127,28 +136,32 @@ MCP 工具若通过 `_meta['anthropic/searchHint']` 提供提示，也使用相�
 
 #### Worktree
 
-- 默认：轻量公布 `EnterWorktree`，隐藏 `ExitWorktree`。
-- 用户明确提出 worktree：预加载 `EnterWorktree`。
-- 已进入本会话 worktree：隐藏 `EnterWorktree`，直接加载 `ExitWorktree`。
+- 保留改造前逻辑：`EnterWorktree` 和 `ExitWorktree` 始终轻量可发现，不根据进程级 Worktree 状态动态隐藏或提升。
+- `EnterWorktree` 仅在用户明确要求 worktree 时调用；若本会话已有 Worktree，由工具自身拒绝重复进入。
+- `ExitWorktree` 仅操作本会话通过 `EnterWorktree` 创建或恢复的 Worktree；不存在对应会话时保持安全 no-op/校验失败。
+- 这样避免进程内主会话和多个 Agent 共享模块级 Worktree 状态时相互改变对方的工具可见性。
 
 #### Task
 
 - 无任务且无 Team：仅公布或加载 `TaskCreate`。
 - 已有任务：加载 `TaskList`、`TaskUpdate`；`TaskGet` 保持按需。
 - Team 创建后：直接加载 `TaskCreate`、`TaskUpdate`、`TaskList`。
+- 任务存在性初始为 `unknown` 时，不隐藏任务管理工具；Headless/SDK 在首次请求或恢复后的首次请求前异步读取当前 Task 目录，将状态水合为有任务或无任务，再重新解析本轮工具集。后续请求复用已知状态，不重复读取目录。
 
-#### 后台任务
+#### 后台任务与通信
 
 - 无后台任务：隐藏 `TaskStop`。
 - 存在运行中后台任务：直接加载 `TaskStop`。
 - `TaskOutput` 仅为恢复旧会话或没有输出文件的兼容路径保留。
+- `SendMessage` 在存在 Team、运行中/已停止的独立 Agent 或 peer 通信能力时直接加载，否则隐藏；普通 Shell 后台任务不构成消息目标。
+- 启用 `UDS_INBOX` 的构建中，peer 列表需要异步枚举且不在同步 AppState 内，因此保守保持 `SendMessage` 直接加载，由 `ListPeers` 提供实际目标。
 
 ### 动态信息承载方式
 
 稳定规则继续放在工具 `prompt()`；动态信息通过过滤结果或新的 availability delta 附件传递，例如：
 
 ```text
-TeamCreate: unavailable — already leading team "audit"
+TeamCreate: hidden — already leading team "audit"
 TeamDelete: blocked — 2 non-lead members remain
 ExitWorktree: available — active worktree "feature-x"
 TaskStop: available — 1 background task is running
@@ -156,12 +169,12 @@ TaskStop: available — 1 background task is running
 
 不要把动态状态拼进 `tool.prompt()`，因为 `toolToAPISchema()` 会缓存基础 Schema，容易产生过期描述或破坏 Prompt Cache。
 
-### 第二阶段建议实施顺序
+### 第二阶段实施顺序
 
 1. 定义统一的工具可见性级别和请求级过滤接口。
-2. 先接入 Plan、Worktree 等单一状态生命周期。
-3. 接入后台任务和 Task 生命周期。
-4. 最后接入 Team 状态，因为它涉及授权、成员、邮箱和共享任务表。
+2. 接入 Plan 状态；Worktree 仅接入统一过滤接口，不读取进程级 Worktree 状态。
+3. 接入后台任务、通信目标和 Task 生命周期，并为 Headless/SDK 水合持久化任务状态。
+4. 接入 Team 状态，包括创建后隐藏、成员退出后的删除工具提升，以及共享任务表。
 5. 为状态转换、恢复会话、Coordinator、同步/后台 Agent 分别补充测试。
 
 ### 第二阶段主要风险
