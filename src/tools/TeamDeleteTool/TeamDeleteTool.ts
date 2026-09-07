@@ -32,6 +32,8 @@ export type Input = z.infer<InputSchema>
 export const TeamDeleteTool: Tool<InputSchema, Output> = buildTool({
   name: TEAM_DELETE_TOOL_NAME,
   searchHint: 'disband a swarm team and clean up',
+  deferredSummary:
+    'delete the active team only after every non-leader member has been removed',
   maxResultSizeChars: 100_000,
   shouldDefer: true,
 

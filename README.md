@@ -399,94 +399,169 @@ vendor/                 # 原生绑定源码
 
 ---
 
-## 工具清单
+## 工具清单与注入机制
 
-工具注册以 `src/tools.ts` 中的 `getAllBaseTools()` 为准。当前源码最多定义 **51 个静态内置工具**：19 个基础工具、2 个 MCP 资源辅助工具、30 个条件启用或实验性工具。此外，MCP Server 还可以动态注入任意数量的工具，因此单次会话中的实际工具总数并不固定。
+工具注册以 `src/tools.ts` 的 `getAllBaseTools()` 为准。当前源码最多注册 **51 个静态内置工具**，MCP Server 还可动态提供任意数量的工具；“源码中存在”“进入候选池”“本次请求发送给模型”是三个不同阶段，不能直接用源码目录数量推断模型实际可见的工具数。
 
-最终工具池会经过功能开关、环境变量、运行模式、权限拒绝规则和各工具 `isEnabled()` 的过滤；Simple 模式通常只保留 `Bash`、`Read` 和 `Edit`。内置工具与 MCP 工具的合并逻辑位于 `assembleToolPool()`，发生重名时内置工具优先。
+### 工具如何进入模型上下文
 
-### 基础工具（19 个）
+1. **构建期裁剪**：`feature('...')` 决定某些模块是否被打包；未编入当前构建的工具不可能在运行时启用。
+2. **候选池注册**：`getAllBaseTools()` 根据构建特性、`USER_TYPE` 和环境变量组成静态候选池。
+3. **会话级过滤**：`getTools()` 再应用 Simple/REPL 等运行模式、权限中的整工具 deny 规则，以及每个工具的 `isEnabled()`。
+4. **动态合并**：`assembleToolPool()` 合并已连接 MCP Server 的工具；同名时内置工具优先。REPL 通过 `useMergedTools()` 使用该结果，Coordinator 还会再次缩减工具集。
+5. **请求级注入**：`toolToAPISchema()` 调用工具的 `prompt()`，生成 `name`、完整操作说明和 `input_schema`，随后 `queryModel()` 把它们放入 Anthropic Messages API 的 `tools` 参数。严格来说，工具定义不是拼接进 `system` 字符串，而是作为与系统提示词并列的 API 工具定义发送。
+6. **延迟加载**：启用 `ToolSearch` 时，MCP 工具以及声明了 `shouldDefer: true` 的内置工具，初始通常只通过 `<system-reminder>` 中的 deferred-tools delta（旧路径为 `<available-deferred-tools>`）告知名称、轻量用途和关键边界；模型先调用 `ToolSearch`，其完整说明和 JSON Schema 才从后续请求开始进入 `tools`。若工具搜索关闭，则这些工具直接内联。
+7. **运行时补充上下文**：团队上下文、团队邮箱、Task V2 提醒、Agent 清单变化和 deferred-tool 名称变化由 `src/utils/attachments.ts` 作为隐藏的用户消息附件注入，不属于工具 Schema。
 
-| 工具 | 作用 |
+`description()` 主要用于 UI、工具选择器或摘要；模型在 API 工具定义中读到的长说明来自 `prompt()`。
+
+### 所有会话都会经过的通用限制
+
+| 限制 | 实际行为 |
 |---|---|
-| `Agent`（旧别名 `Task`） | 启动子代理执行多步骤任务，支持后台运行、模型选择和 worktree 隔离。 |
-| `TaskOutput` | 获取后台 Shell、子代理或远程任务的输出。 |
-| `Bash` | 执行 Shell 命令，支持权限检查、沙箱和后台运行。 |
-| `Glob` | 按文件名模式查找文件；构建内嵌搜索能力时会被隐藏。 |
-| `Grep` | 使用正则表达式搜索文件内容；构建内嵌搜索能力时会被隐藏。 |
-| `ExitPlanMode` | 结束计划模式，请求用户批准后进入实现阶段。 |
-| `Read` | 读取文本、图片、PDF 和 Jupyter Notebook 等文件。 |
-| `Edit` | 对现有文件执行精确字符串替换。 |
-| `Write` | 创建文件或完整覆盖文件内容。 |
-| `NotebookEdit` | 插入、替换或删除 Jupyter Notebook 单元格。 |
-| `WebFetch` | 获取指定网页并按提示提取、分析内容。 |
-| `TodoWrite` | 维护旧版会话待办列表。 |
-| `WebSearch` | 搜索互联网以获取时效性信息。 |
-| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或代理任务。 |
-| `AskUserQuestion` | 向用户发起结构化单选、多选或澄清问题。 |
-| `Skill` | 加载并执行已经安装的 Skill。 |
-| `EnterPlanMode` | 请求进入计划模式；方案必须写入项目根目录的 Markdown 文件，再提交用户审批。 |
-| `SendMessage` | 向团队中的其他代理发送消息。 |
-| `SendUserMessage`（源码对象名 `BriefTool`） | 主动向用户发送消息、提问或请求附件。 |
+| 整工具 deny 规则 | 若权限配置对某工具名或某个 MCP Server 前缀设置无参数的 deny，该工具会在请求前移除，而不只是调用时拒绝。 |
+| `CLAUDE_CODE_SIMPLE` | 普通情况下仅留下 `Bash`、`Read`、`Edit`；若同时处于 Coordinator 模式，还加入 `Agent`、`TaskStop`、`SendMessage`。Simple + REPL 模式则用 `REPL` 替代底层原语。 |
+| REPL 模式 | `REPL` 启用后，`REPL_ONLY_TOOLS` 中的底层工具不再直接暴露，而由 VM 内的 REPL 包装调用。 |
+| Coordinator 模式 | 主协调器只保留 `Agent`、`TaskStop`、`SendMessage`、`StructuredOutput`，以及名称匹配 PR 活动订阅/退订的 MCP 工具。 |
+| 子 Agent | 使用独立的 worker 权限上下文重新组装工具池，再按同步/后台、内置/自定义 Agent 类型过滤；MCP 工具通常可保留。 |
+| 工具搜索 | `ENABLE_TOOL_SEARCH` 未设置时默认为开启；`false` 或 `auto:100` 关闭，`true` 或 `auto:0` 强制开启，`auto`/`auto:1..99` 按延迟工具描述总量阈值决定。 |
+| 工具搜索兼容性 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` 会强制关闭；不支持 `tool_reference` 的模型（默认匹配 Haiku）关闭；`ToolSearch` 被 deny 时也关闭。自定义 `ANTHROPIC_BASE_URL` 默认会关闭，但可显式设置非空 `ENABLE_TOOL_SEARCH` 表示代理兼容。 |
 
-### MCP 资源辅助工具（2 个）
+下表中的“直接”表示通过以上过滤后，完整工具说明和参数 Schema 从本次 API 请求直接发送；“按需”表示工具搜索开启时先注入名称，查询到该工具后才发送完整 Schema，工具搜索关闭时退化为直接发送。
 
-| 工具 | 作用 |
-|---|---|
-| `ListMcpResourcesTool` | 列出 MCP Server 暴露的资源。 |
-| `ReadMcpResourceTool` | 根据 URI 读取 MCP Server 暴露的资源。 |
+### 常规内置工具
 
-这两个工具默认不会直接加入最终工具池，仅在已连接的 MCP Server 支持 `resources` 时注入。
+| 工具 | 作用 | 进入候选池/启用条件 | 注入时机 |
+|---|---|---|---|
+| `Agent`（旧别名 `Task`） | 启动同步或后台子代理，支持模型选择和 worktree 隔离；在已有 Team 上下文中传 `name` 时创建持久队友。 | 基础注册；仍受通用模式、权限和 Agent 类型过滤。 | **直接**；启用 fork-subagent 时还会明确禁止延迟。Agent 类型清单默认写入该工具的 `prompt()`；若 `CLAUDE_CODE_AGENT_LIST_IN_MESSAGES` 或 `tengu_agent_list_attach` 开启，则改由 `agent_listing_delta` 附件动态注入。 |
+| `TaskOutput` | 获取后台 Shell、Agent 或远程任务输出；当前已建议改为读取任务返回的输出文件。 | 基础注册。 | **按需**。 |
+| `Bash` | 执行 Shell 命令，支持权限、沙箱和后台运行。 | 基础注册。 | **直接**。 |
+| `Glob` | 按文件名模式查找文件。 | 仅 `hasEmbeddedSearchTools()` 为 false；含内嵌 `bfs` 搜索能力的构建不注册。 | **直接**。 |
+| `Grep` | 使用正则表达式搜索文件内容。 | 与 `Glob` 相同。 | **直接**。 |
+| `Read` | 读取文本、图片、PDF、Notebook 等文件。 | 基础注册。 | **直接**。 |
+| `Edit` | 对现有文件执行精确字符串替换。 | 基础注册。 | **直接**。 |
+| `Write` | 创建文件或完整覆盖文件。 | 基础注册。 | **直接**。 |
+| `NotebookEdit` | 插入、替换或删除 Notebook 单元格。 | 基础注册。 | **按需**。 |
+| `WebFetch` | 获取并分析指定网页。 | 基础注册。 | **按需**。 |
+| `WebSearch` | 搜索互联网获取时效信息。 | 基础注册；First-party 和 Foundry 启用，Vertex 仅对 Claude 4 系列启用，其他 Provider 禁用。 | **按需**。 |
+| `Skill` | 加载并执行已安装 Skill。 | 基础注册。 | **直接**；可用 Skill 清单另由会话提醒注入。 |
+| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或 Agent。 | 基础注册。 | **按需**。 |
+| `AskUserQuestion` | 发起结构化单选、多选或澄清问题。 | 基础注册；启用 KAIROS/KAIROS_CHANNELS 且存在远程 channel 时禁用，避免无人操作本地 TUI 对话框。 | **按需**。 |
+| `EnterPlanMode` | 请求进入计划模式。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**。 |
+| `ExitPlanMode` | 读取方案文件并请求批准进入实现。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**。 |
+| `SendMessage` | 向队友、团队广播或受支持的本地/远程收件箱发送消息，并处理旧版 shutdown/plan-approval 协议。 | 基础注册；Team 功能当前已成为外部基础能力，`isAgentSwarmsEnabled()` 恒为 true。 | **直接，明确不延迟**，保证控制消息可随时发送和响应。 |
+| `SendUserMessage`（源码对象 `BriefTool`） | 在 Brief/KAIROS 模式中把消息、问题或附件发送给用户。 | 构建必须包含 `KAIROS` 或 `KAIROS_BRIEF`；同时需 Assistant 模式已激活或用户主动 opt-in，并通过 `tengu_kairos_brief` 资格/kill-switch。 | **直接，明确不延迟**。 |
 
-### 条件启用或实验性工具（30 个）
+`TodoWrite` 与 Task V2 互斥：交互式会话默认启用 Task V2，因此通常显示 `TaskCreate`/`TaskGet`/`TaskUpdate`/`TaskList`；非交互式会话默认回退到 `TodoWrite`，除非显式设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。
 
-| 工具 | 作用或启用条件 |
-|---|---|
-| `Config` | 修改 Claude Code 配置；仅 Anthropic 内部用户启用。 |
-| `SuggestBackgroundPR` | 建议或引导通过后台代理处理 PR。 |
-| `WebBrowser` | 浏览器访问与自动化操作。 |
-| `TaskCreate` | 创建新版结构化任务。 |
-| `TaskGet` | 获取指定结构化任务详情。 |
-| `TaskUpdate` | 更新任务状态、负责人和依赖关系。 |
-| `TaskList` | 列出新版结构化任务。 |
-| `terminal_capture` | 捕获终端面板内容。 |
-| `LSP` | 使用语言服务器执行诊断、符号查询等操作。 |
-| `EnterWorktree` | 创建并进入隔离的 Git worktree。 |
-| `ExitWorktree` | 退出会话创建的 worktree，并选择保留或删除。 |
-| `ListPeers` | 列出可通过 UDS Inbox 通信的其他进程或代理。 |
-| `TeamCreate` | 创建 Agent Team。 |
-| `TeamDelete` | 删除 Agent Team。 |
-| `verify_plan_execution` | 检查计划中的步骤是否真正执行完成。 |
-| `REPL` | 在受控 VM/REPL 中执行代码和封装后的基础工具。 |
-| `workflow` | 执行项目内置的 Workflow 脚本。 |
-| `Sleep` | 在主动模式或 KAIROS 模式下暂停并等待事件。 |
-| `CronCreate` | 创建定时触发任务。 |
-| `CronDelete` | 删除定时触发任务。 |
-| `CronList` | 列出定时触发任务。 |
-| `RemoteTrigger` | 创建或处理远程 Agent 触发器。 |
-| `MonitorTool` | 实验性监控能力。 |
-| `send_user_file` | 在 KAIROS 模式下向用户发送文件。 |
-| `PushNotification` | 向用户发送推送通知。 |
-| `SubscribePR` | 订阅 GitHub PR/Webhook 事件。 |
-| `PowerShell` | 执行 PowerShell 命令，并进行权限和安全检查。 |
-| `snip` | 从会话历史中裁剪指定内容。 |
-| `TestingPermissionTool` | 在测试环境中验证工具权限流程。 |
-| `ToolSearch` | 搜索延迟加载的工具定义，减少一次性注入模型的工具数量。 |
+两者解决的问题层级不同：`TodoWrite` 是由单个 Agent 整体重写的一张轻量会话清单；Task V2 将每项工作保存为带唯一 ID 的独立任务，可单独查询和更新，并支持负责人、阻塞依赖、metadata、磁盘持久化及 Team 共享。保留两套主要是为了让非交互式 CLI 和 SDK 继续兼容旧工具名及输入 Schema，同时让交互式会话和多 Agent 协作使用能力更完整的新任务系统。
 
-### 动态 MCP 工具
+#### TodoWrite 与 Task V2 的使用场景
 
-MCP Server 通过 `tools/list` 返回的工具会在连接后动态加入工具池，通常命名为：
+| 场景 | 使用的工具 | 原因 |
+|---|---|---|
+| 普通交互式 Claude Code 会话 | Task V2 | 默认启用，可按任务 ID 精确更新，适合跟踪当前编码任务。 |
+| Agent Team 协作 | Task V2 | 多个 Agent 需要共享任务、设置 `owner`、声明 `blocks`/`blockedBy` 并避免整体清单相互覆盖。 |
+| 任务之间存在先后依赖 | Task V2 | 可明确记录阻塞关系，并通过 `TaskList` 找到已经解除阻塞的工作。 |
+| 任务需要跨进程读取或恢复 | Task V2 | 每个任务独立持久化到 `~/.claude/tasks/<任务列表ID>/`。 |
+| `claude -p`、SDK 等非交互式调用 | `TodoWrite`（默认） | 保持旧版工具名和输入 Schema 兼容，调用方无须立即适配四个 Task V2 工具。 |
+| 非交互式调用需要任务分派、依赖或持久化 | Task V2 | 设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS` 后显式启用新版工具。 |
+| 单个 Agent 只需展示简单步骤清单 | `TodoWrite`（仅在其可用的会话中） | 一次提交完整 `todos` 数组即可更新清单，不需要负责人和依赖模型。 |
+| 单一、简单、可立即完成的工作 | 两者都不使用 | 工具提示均要求避免为没有跟踪价值的简单任务创建清单。 |
+
+选择原则：**由运行模式决定默认工具，不需要人为同时选择**。模型应在当前会话提供的工具中使用对应的一套；只有非交互式调用方确实需要 Task V2 能力时，才设置 `CLAUDE_CODE_ENABLE_TASKS=1`。`TodoWrite` 每次调用会替换完整数组，更适合单 Agent；Task V2 按任务 ID 增量修改，更适合持久化和协作，但一次完整操作通常需要多次工具调用。
+
+| 工具 | 作用 | 进入候选池/启用条件 | 注入时机 |
+|---|---|---|---|
+| `TodoWrite` | 整体写入或替换当前 Agent 的轻量会话待办清单；适合旧版非交互调用和无需协作的简单进度展示。 | 仅 `isTodoV2Enabled()` 为 false。 | **按需**。 |
+| `TaskCreate` | 创建状态为 `pending` 的独立结构化任务；适合拆分工作或建立可分派任务。 | `isTodoV2Enabled()`：交互式会话默认开启；非交互式须设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。 | **按需**。 |
+| `TaskGet` | 获取指定任务的完整描述、负责人和依赖；适合开始工作或更新前确认最新状态。 | 同 `TaskCreate`。 | **按需**。 |
+| `TaskUpdate` | 增量更新状态、负责人、依赖和 metadata；适合认领、分派、解除阻塞和完成任务，团队中还可触发分派消息。 | 同 `TaskCreate`。 | **按需**。 |
+| `TaskList` | 查看任务概览并发现未认领、可执行或仍被阻塞的任务；适合主 Agent 和队友协调下一步工作。 | 同 `TaskCreate`。 | **按需**。 |
+
+### Team 工具（当前实现）
+
+Team 不再受实验开关限制：`TeamCreate`、`TeamDelete` 和 `SendMessage` 都会进入基础候选池。不过，**技术上可用不等于模型可随意创建 Team**：工具提示要求 Team 必须由用户明确提出，或由模型在开始任何实质执行前通过 `AskUserQuestion` 提议并取得明确授权；普通、独立的并行调查应优先使用多个一次性 `Agent`，不能仅因任务较大就创建 Team。
+
+| 工具 | 作用与调用条件 | 注入时机 |
+|---|---|---|
+| `TeamCreate` | 创建持久协作 Team 及共享任务目录。仅在需要队友直接通信、共享任务所有权、动态转派或跨轮次交接，并已获得用户授权时调用；必须先单独成功创建 Team，之后才能创建共享任务或通过 `Agent(name, team_name)` 启动队友。一个 lead 不能同时领导多个 Team。 | **按需**。成功调用后，返回结果会把活跃 Team 操作契约直接补充给模型；团队上下文随后还会通过附件持续注入。 |
+| `TeamDelete` | 清理 Team、任务目录、邮箱和上下文。删除前必须先关闭或移除全部非 lead 注册成员，idle 成员也算；否则拒绝删除。 | **按需**。仅用于已创建 Team 的生命周期末尾。 |
+| `SendMessage` | 按队友名投递，`*` 表示广播；结构化 shutdown/plan-approval 消息有额外目标限制。 | **直接**，无须先经 `ToolSearch`。Team 创建后，邮箱消息作为附件在后续轮次注入。 |
+| `Agent` | 无 `name` 时是有界的一次性子代理；有活跃 Team 且传入 `name` 时才进入持久队友分支。队友不能再创建队友，但可省略 `name` 启动同步子代理。 | **直接**。 |
+
+Team 下的 Task ID 解析顺序为：`CLAUDE_CODE_TASK_LIST_ID` → 进程内队友所属 Team → `CLAUDE_CODE_TEAM_NAME` → lead 当前 Team → 当前 Session。因而 lead 与队友默认共享同一任务表。
+
+### 条件构建或条件启用工具
+
+`feature('NAME')` 是构建期能力：必须由当前发行构建包含，用户仅设置同名环境变量通常不能把已被裁剪的代码重新启用。下表同时列出构建条件与额外运行时条件。
+
+| 工具 | 作用 | 完整启用条件 | 注入时机 |
+|---|---|---|---|
+| `Config` | 修改 Claude Code 配置。 | `USER_TYPE === 'ant'`。 | **按需**。 |
+| `SuggestBackgroundPR` | 建议使用后台代理处理 PR。 | `USER_TYPE === 'ant'`，对应模块才会被加载。 | **直接**。 |
+| `WebBrowser` | 浏览器访问和自动化。 | 构建包含 `WEB_BROWSER_TOOL`。 | **直接**。 |
+| `terminal_capture` | 捕获终端面板内容。 | 构建包含 `TERMINAL_PANEL`。 | **直接**。 |
+| `LSP` | 使用语言服务器执行诊断和符号查询。 | truthy 的 `ENABLE_LSP_TOOL`，并通过工具自身 `isEnabled()`。 | **按需**。 |
+| `EnterWorktree` | 创建并进入会话隔离 worktree。 | `isWorktreeModeEnabled()` 当前恒为 true；实际调用仍要求用户明确提到 worktree，且当前环境必须是 Git 仓库或配置了 Worktree hooks。 | **按需**。 |
+| `ExitWorktree` | 离开由本会话创建的 worktree并保留或删除。 | 与 `EnterWorktree` 一同恒定注册；只对本会话通过 `EnterWorktree` 创建的 worktree 生效。 | **按需**。 |
+| `ListPeers` | 列出 UDS Inbox 可通信进程。 | 构建包含 `UDS_INBOX`。 | **直接**。 |
+| `verify_plan_execution` | 核对计划步骤是否执行。 | `CLAUDE_CODE_VERIFY_PLAN === 'true'`。 | **直接**。 |
+| `REPL` | 在受控 VM 中执行代码并包装底层工具。 | `USER_TYPE === 'ant'` 且 REPL 模块存在；运行时还需 REPL 模式生效。 | **直接**；生效后替换一组底层原语。 |
+| `workflow` | 执行内置 Workflow 脚本。 | 构建包含 `WORKFLOW_SCRIPTS`。 | **直接**；子 Agent 默认禁止递归调用。 |
+| `Sleep` | 在主动/KAIROS 模式暂停并等待事件。 | 构建包含 `PROACTIVE` 或 `KAIROS`。 | **直接**。 |
+| `CronCreate` | 创建会话级或持久定时任务。 | 构建包含 `AGENT_TRIGGERS`；`CLAUDE_CODE_DISABLE_CRON` 未开启；`tengu_kairos_cron` kill-switch 为 true（默认 true）。 | **按需**。 |
+| `CronDelete` | 删除定时任务。 | 同 `CronCreate`。 | **按需**。 |
+| `CronList` | 列出定时任务。 | 同 `CronCreate`。 | **按需**。 |
+| `RemoteTrigger` | 创建或处理远程 Agent 触发器。 | 构建包含 `AGENT_TRIGGERS_REMOTE`，且 `tengu_surreal_dali` 为 true、策略 `allow_remote_sessions` 允许。实际调用还要求 Claude.ai OAuth 和组织 ID 可用。 | **按需**。 |
+| `Monitor` | 实验性监控能力。 | 构建包含 `MONITOR_TOOL` 且模块导出真实工具；当前还原源码的 `MonitorTool` 为 `null`，因此实际不会注册。 | **直接**（存在真实工具时）。 |
+| `send_user_file` | 通过 KAIROS/Bridge 向用户发送文件。 | 构建包含 `KAIROS`，且模块导出真实工具并通过自身运行时条件；当前还原目录仅保留 `prompt.ts`，无法从本仓库进一步确认实现 gate。 | Bridge 已连接时由延迟判断明确强制**直接**；其余时机取决于真实工具定义。 |
+| `PushNotification` | 发送推送通知。 | 构建包含 `KAIROS` 或 `KAIROS_PUSH_NOTIFICATION`。 | **直接**。 |
+| `SubscribePR` | 订阅 GitHub PR/Webhook 事件。 | 构建包含 `KAIROS_GITHUB_WEBHOOKS`。 | **直接**。 |
+| `PowerShell` | 使用独立的权限和路径规则执行 PowerShell。 | 仅 Windows；内部用户默认开启，可用 falsy 的 `CLAUDE_CODE_USE_POWERSHELL_TOOL` 关闭；外部用户默认关闭，须设置 truthy 的该变量开启。 | **直接**。 |
+| `snip` | 裁剪会话历史内容。 | 构建包含 `HISTORY_SNIP`。 | **直接**。 |
+| `TestingPermissionTool` | 测试工具权限流程。 | 仅 `NODE_ENV === 'test'`。 | **直接**。 |
+| `ToolSearch` | 查询延迟工具的完整说明和 Schema。 | `isToolSearchEnabledOptimistic()` 先允许注册，并在每次模型请求前再检查环境模式、模型兼容性、工具是否被 deny 以及 auto 阈值。 | 工具搜索实际开启时**直接**；关闭时从请求工具列表移除。 |
+
+### MCP 工具与资源辅助工具
+
+MCP Server 连接成功后，通过 `tools/list` 返回的工具动态加入工具池，通常命名为：
 
 ```text
 mcp__<服务器名>__<工具名>
 ```
 
-因此，更准确的数量表达是：**最多 51 个静态内置工具，加上 N 个动态 MCP 工具**。关键实现位置如下：
+MCP 工具默认均为**按需**：首次公布名称以及可用的轻量用途提示，经 `ToolSearch` 返回 `tool_reference` 后，完整 Schema 才在后续请求发送；若服务端通过 `_meta['anthropic/alwaysLoad']` 设置 `alwaysLoad: true`，则改为直接注入。工具搜索关闭时，所有 MCP 工具直接内联。
 
-- 静态工具注册：`src/tools.ts` 中的 `getAllBaseTools()`
-- 最终启用过滤：`src/tools.ts` 中的 `getTools()`
-- 内置与 MCP 工具合并：`src/tools.ts` 中的 `assembleToolPool()`
-- MCP 工具实例化：`src/services/mcp/client.ts`
+| 工具 | 启用条件 | 注入时机 |
+|---|---|---|
+| `ListMcpResourcesTool` | 至少一个已连接 MCP Server 声明 `capabilities.resources`；全局只追加一组资源辅助工具。 | **按需**。它虽然列在 `getAllBaseTools()`，但会被 `getTools()` 的 special-tools 过滤，随后仅由 MCP 连接流程动态加入。 |
+| `ReadMcpResourceTool` | 与 `ListMcpResourcesTool` 相同。 | **按需**。 |
+| `mcp__*` | 对应 MCP Server 已配置、连接成功并通过 `tools/list` 返回该工具，同时未被权限 deny。 | 默认**按需**；`alwaysLoad: true` 时**直接**。晚连接、断线重连或工具列表变化会通过 MCP/deferred-tools delta 附件更新模型可见名称。 |
+
+因此，更准确的数量表达是：**最多 51 个静态注册项，加上 N 个动态 MCP 工具，但每次请求只发送通过全部 gate 且当前需要的子集**。
+
+### 主会话与子 Agent 的注入差异
+
+- 主 REPL：`useMergedTools()` → `assembleToolPool()` → `mergeAndFilterTools()` → `queryModel()` → `toolToAPISchema()` → API `tools`。
+- 普通同步子 Agent：重新组装 worker 工具池；默认移除 `TaskOutput`、计划模式工具、`AskUserQuestion`、`TaskStop`，外部构建还会移除递归 `Agent`。
+- 普通后台 Agent：进一步只保留后台白名单中的文件、搜索、Shell、Skill、ToolSearch、worktree 等工具；MCP 工具在基础过滤中例外放行。
+- 进程内 Team 队友：除后台白名单外，还可使用共享的 `TaskCreate`、`TaskGet`、`TaskUpdate`、`TaskList` 和 `SendMessage`；可启动同步子 Agent，但不能启动后台 Agent 或继续创建队友。若队友处于 plan 权限模式，可额外获得 `ExitPlanMode`。
+- Coordinator：只负责分派和输出，不直接获得常规文件/Shell 工具；worker 再按自己的权限上下文取得执行工具。
+
+关键实现位置：
+
+- 静态注册和会话过滤：`src/tools.ts`
+- 工具接口、`prompt()` 与 `description()`：`src/Tool.ts`
+- 主 REPL 合并：`src/hooks/useMergedTools.ts`
+- Coordinator 过滤：`src/utils/toolPool.ts`、`src/constants/tools.ts`
+- 子 Agent 过滤：`src/tools/AgentTool/agentToolUtils.ts`
+- API Schema 生成：`src/utils/api.ts` 的 `toolToAPISchema()`
+- 请求级延迟加载：`src/utils/toolSearch.ts`、`src/tools/ToolSearchTool/prompt.ts`、`src/services/api/claude.ts`
+- 动态提醒和上下文附件：`src/utils/attachments.ts`
+- MCP 工具和资源辅助工具注入：`src/services/mcp/client.ts`
+- Team 生命周期：`src/tools/TeamCreateTool`、`src/tools/TeamDeleteTool`、`src/tools/SendMessageTool`
+- Task V2 启用和共享任务表：`src/utils/tasks.ts`
 
 ---
 

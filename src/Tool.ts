@@ -376,6 +376,12 @@ export type Tool<
    * Prefer terms not already in the tool name (e.g. 'jupyter' for NotebookEdit).
    */
   searchHint?: string
+  /**
+   * Stable one-line purpose or critical usage boundary shown when the tool is
+   * deferred and its full prompt/schema has not been loaded yet. Falls back to
+   * searchHint when omitted. Do not include dynamic session state here.
+   */
+  deferredSummary?: string
   call(
     args: z.infer<Input>,
     context: ToolUseContext,

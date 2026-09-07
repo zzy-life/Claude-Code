@@ -37,11 +37,11 @@ function getToolLocationHint(): string {
     process.env.USER_TYPE === 'ant' ||
     getFeatureValue_CACHED_MAY_BE_STALE('tengu_glacier_2xr', false)
   return deltaEnabled
-    ? 'Deferred tools appear by name in <system-reminder> messages.'
-    : 'Deferred tools appear by name in <available-deferred-tools> messages.'
+    ? 'Deferred tools appear with lightweight purpose hints in <system-reminder> messages.'
+    : 'Deferred tools appear with lightweight purpose hints in <available-deferred-tools> messages.'
 }
 
-const PROMPT_TAIL = ` Until fetched, only the name is known — there is no parameter schema, so the tool cannot be invoked. This tool takes a query, matches it against the deferred tool list, and returns the matched tools' complete JSONSchema definitions inside a <functions> block. Once a tool's schema appears in that result, it is callable exactly like any tool defined at the top of the prompt.
+const PROMPT_TAIL = ` Until fetched, only the name and lightweight purpose hint are known — there is no parameter schema, so the tool cannot be invoked. This tool takes a query, matches it against the deferred tool list, and returns the matched tools' complete JSONSchema definitions inside a <functions> block. Once a tool's schema appears in that result, it is callable exactly like any tool defined at the top of the prompt.
 
 Result format: each matched tool appears as one <function>{"description": "...", "name": "...", "parameters": {...}}</function> line inside the <functions> block — the same encoding as the tool list at the top of this prompt.
 
@@ -108,12 +108,14 @@ export function isDeferredTool(tool: Tool): boolean {
 }
 
 /**
- * Format one deferred-tool line for the <available-deferred-tools> user
- * message. Search hints (tool.searchHint) are not rendered — the
- * hints A/B (exp_xenhnnmn0smrx4, stopped Mar 21) showed no benefit.
+ * Format one deferred-tool line for both deferred_tools_delta attachments and
+ * the legacy <available-deferred-tools> message. The full prompt and schema are
+ * still withheld; this only gives the model enough context to decide whether
+ * loading the tool is appropriate.
  */
 export function formatDeferredToolLine(tool: Tool): string {
-  return tool.name
+  const summary = tool.deferredSummary ?? tool.searchHint
+  return summary ? `${tool.name} — ${summary}` : tool.name
 }
 
 export function getPrompt(): string {

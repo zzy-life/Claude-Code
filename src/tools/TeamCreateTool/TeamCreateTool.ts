@@ -74,6 +74,8 @@ function generateUniqueTeamName(providedName: string): string {
 export const TeamCreateTool: Tool<InputSchema, Output> = buildTool({
   name: TEAM_CREATE_TOOL_NAME,
   searchHint: 'create a multi-agent swarm team',
+  deferredSummary:
+    'create a persistent team only after user authorization; use independent Agent calls for ordinary parallel work',
   maxResultSizeChars: 100_000,
   shouldDefer: true,
 
