@@ -3401,14 +3401,14 @@ function getPlanModeV2SubAgentInstructions(attachment: {
   planExists: boolean
 }): UserMessage[] {
   const planFileInfo = attachment.planExists
-    ? `A plan file already exists at ${attachment.planFilePath}. You can read it and make incremental edits using the ${FileEditTool.name} tool if you need to.`
-    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${FileWriteTool.name} tool if you need to.`
+    ? `The parent session's plan file exists at ${attachment.planFilePath}. You may read it for context, but you MUST NOT edit it.`
+    : `The parent session's plan file should be created by the parent session at ${attachment.planFilePath}. You MUST NOT create it.`
 
-  const content = `Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supercedes any other instructions you have received (for example, to make edits). Instead, you should:
+  const content = `Plan mode is active in the parent session. The user indicated that they do not want execution yet -- you are a read-only research subagent. You MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), create or edit plan files, or otherwise make any changes to the system. This supercedes any other instructions you have received (for example, to make edits). Instead, you should:
 
 ## Plan File Info:
 ${planFileInfo}
-You must build your plan incrementally by writing to or editing this Markdown file in the project root. Console output does not replace the plan file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
+Only the parent session may create or edit the Markdown plan file. Report your findings back to the parent session; the parent session will update the plan file if needed. Console output does not replace the plan file.
 Answer the user's query comprehensively, using the ${ASK_USER_QUESTION_TOOL_NAME} tool if you need to ask the user clarifying questions. If you do use the ${ASK_USER_QUESTION_TOOL_NAME}, make sure to ask all clarifying questions you need to fully understand the user's intent before proceeding.`
 
   return wrapMessagesInSystemReminder([

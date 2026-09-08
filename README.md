@@ -427,28 +427,30 @@ vendor/                 # 原生绑定源码
 | 工具搜索 | `ENABLE_TOOL_SEARCH` 未设置时默认为开启；`false` 或 `auto:100` 关闭，`true` 或 `auto:0` 强制开启，`auto`/`auto:1..99` 按延迟工具描述总量阈值决定。 |
 | 工具搜索兼容性 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` 会强制关闭；不支持 `tool_reference` 的模型（默认匹配 Haiku）关闭；`ToolSearch` 被 deny 时也关闭。自定义 `ANTHROPIC_BASE_URL` 默认会关闭，但可显式设置非空 `ENABLE_TOOL_SEARCH` 表示代理兼容。 |
 
-下表中的“直接”表示通过以上过滤后，完整工具说明和参数 Schema 从本次 API 请求直接发送；“按需”表示工具搜索开启时先注入名称，查询到该工具后才发送完整 Schema，工具搜索关闭时退化为直接发送。
+下表中的“直接”表示通过以上过滤后，完整工具说明和参数 Schema 从本次 API 请求直接发送；“按需”表示工具进入候选池后不会立即发送完整 Schema：工具搜索开启时，模型先看到工具名称和轻量用途提示，并在判断当前任务需要该工具时通过 `ToolSearch` 查询，查询命中后才从后续请求发送完整 Schema；工具搜索关闭时则退化为直接发送。各按需项同时说明通常触发查询的任务时机。
+
+缓存测试结论：在当前代理链路中，首次加载延迟工具会使请求工具数增加并造成一次 Prompt Cache 未命中；工具列表稳定后随即恢复命中。因此延迟工具系统不会持续破坏缓存，但首次加载每种新工具可能产生一次缓存失效。此现象属于当前代理对 `defer_loading`/`tool_reference` 的实际处理结果，不应直接等同于 Anthropic 原生 API 的行为。
 
 ### 常规内置工具
 
 | 工具 | 作用 | 进入候选池/启用条件 | 注入时机 |
 |---|---|---|---|
 | `Agent`（旧别名 `Task`） | 启动同步或后台子代理，支持模型选择和 worktree 隔离；在已有 Team 上下文中传 `name` 时创建持久队友。 | 基础注册；仍受通用模式、权限和 Agent 类型过滤。 | **直接**；启用 fork-subagent 时还会明确禁止延迟。Agent 类型清单默认写入该工具的 `prompt()`；若 `CLAUDE_CODE_AGENT_LIST_IN_MESSAGES` 或 `tengu_agent_list_attach` 开启，则改由 `agent_listing_delta` 附件动态注入。 |
-| `TaskOutput` | 获取后台 Shell、Agent 或远程任务输出；当前已建议改为读取任务返回的输出文件。 | 基础注册。 | **按需**。 |
+| `TaskOutput` | 获取后台 Shell、Agent 或远程任务输出；当前已建议改为读取任务返回的输出文件。 | 基础注册。 | **按需**：需要等待或查看仍在运行、且没有可直接读取输出文件的后台任务时查询。 |
 | `Bash` | 执行 Shell 命令，支持权限、沙箱和后台运行。 | 基础注册。 | **直接**。 |
 | `Glob` | 按文件名模式查找文件。 | 仅 `hasEmbeddedSearchTools()` 为 false；含内嵌 `bfs` 搜索能力的构建不注册。 | **直接**。 |
 | `Grep` | 使用正则表达式搜索文件内容。 | 与 `Glob` 相同。 | **直接**。 |
 | `Read` | 读取文本、图片、PDF、Notebook 等文件。 | 基础注册。 | **直接**。 |
 | `Edit` | 对现有文件执行精确字符串替换。 | 基础注册。 | **直接**。 |
 | `Write` | 创建文件或完整覆盖文件。 | 基础注册。 | **直接**。 |
-| `NotebookEdit` | 插入、替换或删除 Notebook 单元格。 | 基础注册。 | **按需**。 |
-| `WebFetch` | 获取并分析指定网页。 | 基础注册。 | **按需**。 |
-| `WebSearch` | 搜索互联网获取时效信息。 | 基础注册；First-party 和 Foundry 启用，Vertex 仅对 Claude 4 系列启用，其他 Provider 禁用。 | **按需**。 |
+| `NotebookEdit` | 插入、替换或删除 Notebook 单元格。 | 基础注册。 | **按需**：任务要求修改 `.ipynb` 的指定单元格（插入、替换或删除）时查询；只读取 Notebook 时仍使用 `Read`。 |
+| `WebFetch` | 获取并分析指定网页。 | 基础注册。 | **按需**：用户提供了需要读取、摘取或分析的具体公开 URL 时查询；需要先发现网页时使用 `WebSearch`。 |
+| `WebSearch` | 搜索互联网获取时效信息。 | 基础注册；First-party 和 Foundry 启用，Vertex 仅对 Claude 4 系列启用，其他 Provider 禁用。 | **按需**：问题依赖最新资料、当前事件或本地知识中没有的信息，且需要先在互联网上发现来源时查询。 |
 | `Skill` | 加载并执行已安装 Skill。 | 基础注册。 | **直接**；可用 Skill 清单另由会话提醒注入。 |
-| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或 Agent。 | 基础注册。 | **按需**。 |
-| `AskUserQuestion` | 发起结构化单选、多选或澄清问题。 | 基础注册；启用 KAIROS/KAIROS_CHANNELS 且存在远程 channel 时禁用，避免无人操作本地 TUI 对话框。 | **按需**。 |
-| `EnterPlanMode` | 请求进入计划模式。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**。 |
-| `ExitPlanMode` | 读取方案文件并请求批准进入实现。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**。 |
+| `TaskStop`（旧别名 `KillShell`） | 停止后台 Shell 或 Agent。 | 基础注册。 | **按需**：用户要求取消后台工作，或后台任务已无须继续、阻塞流程或行为异常时查询。 |
+| `AskUserQuestion` | 发起结构化单选、多选或澄清问题。 | 基础注册；启用 KAIROS/KAIROS_CHANNELS 且存在远程 channel 时禁用，避免无人操作本地 TUI 对话框。 | **按需**：存在无法从代码或上下文确定、且会影响实现方向的需求或选项时查询。 |
+| `EnterPlanMode` | 请求进入计划模式。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**：准备开展非简单的新功能、多文件修改、架构选择或需求不清的实现任务，需要先研究并取得方案认可时查询。 |
+| `ExitPlanMode` | 读取方案文件并请求批准进入实现。 | 与 `AskUserQuestion` 使用相同的 channel 禁用条件。 | **按需**：已处于计划模式、方案文件已经完整写好且不存在未决问题，需要请求用户批准实现时查询。 |
 | `SendMessage` | 向队友、团队广播或受支持的本地/远程收件箱发送消息，并处理旧版 shutdown/plan-approval 协议。 | 基础注册；Team 功能当前已成为外部基础能力，`isAgentSwarmsEnabled()` 恒为 true。 | **直接，明确不延迟**，保证控制消息可随时发送和响应。 |
 | `SendUserMessage`（源码对象 `BriefTool`） | 在 Brief/KAIROS 模式中把消息、问题或附件发送给用户。 | 构建必须包含 `KAIROS` 或 `KAIROS_BRIEF`；同时需 Assistant 模式已激活或用户主动 opt-in，并通过 `tengu_kairos_brief` 资格/kill-switch。 | **直接，明确不延迟**。 |
 
@@ -473,11 +475,11 @@ vendor/                 # 原生绑定源码
 
 | 工具 | 作用 | 进入候选池/启用条件 | 注入时机 |
 |---|---|---|---|
-| `TodoWrite` | 整体写入或替换当前 Agent 的轻量会话待办清单；适合旧版非交互调用和无需协作的简单进度展示。 | 仅 `isTodoV2Enabled()` 为 false。 | **按需**。 |
-| `TaskCreate` | 创建状态为 `pending` 的独立结构化任务；适合拆分工作或建立可分派任务。 | `isTodoV2Enabled()`：交互式会话默认开启；非交互式须设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。 | **按需**。 |
-| `TaskGet` | 获取指定任务的完整描述、负责人和依赖；适合开始工作或更新前确认最新状态。 | 同 `TaskCreate`。 | **按需**。 |
-| `TaskUpdate` | 增量更新状态、负责人、依赖和 metadata；适合认领、分派、解除阻塞和完成任务，团队中还可触发分派消息。 | 同 `TaskCreate`。 | **按需**。 |
-| `TaskList` | 查看任务概览并发现未认领、可执行或仍被阻塞的任务；适合主 Agent 和队友协调下一步工作。 | 同 `TaskCreate`。 | **按需**。 |
+| `TodoWrite` | 整体写入或替换当前 Agent 的轻量会话待办清单；适合旧版非交互调用和无需协作的简单进度展示。 | 仅 `isTodoV2Enabled()` 为 false。 | **按需**：旧任务系统可用，且当前工作包含多个值得展示进度、但不需要负责人或依赖关系的步骤时查询。 |
+| `TaskCreate` | 创建状态为 `pending` 的独立结构化任务；适合拆分工作或建立可分派任务。 | `isTodoV2Enabled()`：交互式会话默认开启；非交互式须设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。 | **按需**：当前工作需要拆成多个可独立跟踪、分派或建立依赖的任务时查询。 |
+| `TaskGet` | 获取指定任务的完整描述、负责人和依赖；适合开始工作或更新前确认最新状态。 | 同 `TaskCreate`。 | **按需**：准备开始、接手或修改某个已知任务，需要读取其完整要求和最新依赖时查询。 |
+| `TaskUpdate` | 增量更新状态、负责人、依赖和 metadata；适合认领、分派、解除阻塞和完成任务，团队中还可触发分派消息。 | 同 `TaskCreate`。 | **按需**：任务的状态、负责人、描述、依赖或 metadata 发生变化时查询。 |
+| `TaskList` | 查看任务概览并发现未认领、可执行或仍被阻塞的任务；适合主 Agent 和队友协调下一步工作。 | 同 `TaskCreate`。 | **按需**：需要查看整体进度、寻找下一项可执行任务或确认阻塞关系时查询。 |
 
 ### Team 工具（当前实现）
 
@@ -485,8 +487,8 @@ Team 不再受实验开关限制：`TeamCreate`、`TeamDelete` 和 `SendMessage`
 
 | 工具 | 作用与调用条件 | 注入时机 |
 |---|---|---|
-| `TeamCreate` | 创建持久协作 Team 及共享任务目录。仅在需要队友直接通信、共享任务所有权、动态转派或跨轮次交接，并已获得用户授权时调用；必须先单独成功创建 Team，之后才能创建共享任务或通过 `Agent(name, team_name)` 启动队友。一个 lead 不能同时领导多个 Team。 | **按需**。成功调用后，返回结果会把活跃 Team 操作契约直接补充给模型；团队上下文随后还会通过附件持续注入。 |
-| `TeamDelete` | 清理 Team、任务目录、邮箱和上下文。删除前必须先关闭或移除全部非 lead 注册成员，idle 成员也算；否则拒绝删除。 | **按需**。仅用于已创建 Team 的生命周期末尾。 |
+| `TeamCreate` | 创建持久协作 Team 及共享任务目录。仅在需要队友直接通信、共享任务所有权、动态转派或跨轮次交接，并已获得用户授权时调用；必须先单独成功创建 Team，之后才能创建共享任务或通过 `Agent(name, team_name)` 启动队友。一个 lead 不能同时领导多个 Team。 | **按需**：用户明确要求 Team，或任务确实需要持久的跨代理协调且模型在实质执行前已取得用户授权时查询。成功调用后，返回结果会把活跃 Team 操作契约直接补充给模型；团队上下文随后还会通过附件持续注入。 |
+| `TeamDelete` | 清理 Team、任务目录、邮箱和上下文。删除前必须先关闭或移除全部非 lead 注册成员，idle 成员也算；否则拒绝删除。 | **按需**：已创建的 Team 完成或废弃，且所有非 lead 成员均已关闭或移除，需要清理团队资源时查询。 |
 | `SendMessage` | 按队友名投递，`*` 表示广播；结构化 shutdown/plan-approval 消息有额外目标限制。 | **直接**，无须先经 `ToolSearch`。Team 创建后，邮箱消息作为附件在后续轮次注入。 |
 | `Agent` | 无 `name` 时是有界的一次性子代理；有活跃 Team 且传入 `name` 时才进入持久队友分支。队友不能再创建队友，但可省略 `name` 启动同步子代理。 | **直接**。 |
 
@@ -498,22 +500,22 @@ Team 下的 Task ID 解析顺序为：`CLAUDE_CODE_TASK_LIST_ID` → 进程内�
 
 | 工具 | 作用 | 完整启用条件 | 注入时机 |
 |---|---|---|---|
-| `Config` | 修改 Claude Code 配置。 | `USER_TYPE === 'ant'`。 | **按需**。 |
+| `Config` | 修改 Claude Code 配置。 | `USER_TYPE === 'ant'`。 | **按需**：内部用户明确要求读取或修改 Claude Code 配置，且应使用专用配置工具而非手工编辑时查询。 |
 | `SuggestBackgroundPR` | 建议使用后台代理处理 PR。 | `USER_TYPE === 'ant'`，对应模块才会被加载。 | **直接**。 |
 | `WebBrowser` | 浏览器访问和自动化。 | 构建包含 `WEB_BROWSER_TOOL`。 | **直接**。 |
 | `terminal_capture` | 捕获终端面板内容。 | 构建包含 `TERMINAL_PANEL`。 | **直接**。 |
-| `LSP` | 使用语言服务器执行诊断和符号查询。 | truthy 的 `ENABLE_LSP_TOOL`，并通过工具自身 `isEnabled()`。 | **按需**。 |
-| `EnterWorktree` | 创建并进入会话隔离 worktree。 | `isWorktreeModeEnabled()` 当前恒为 true；实际调用仍要求用户明确提到 worktree，且当前环境必须是 Git 仓库或配置了 Worktree hooks。 | **按需**。 |
-| `ExitWorktree` | 离开由本会话创建的 worktree并保留或删除。 | 与 `EnterWorktree` 一同恒定注册；只对本会话通过 `EnterWorktree` 创建的 worktree 生效。 | **按需**。 |
+| `LSP` | 使用语言服务器执行诊断和符号查询。 | truthy 的 `ENABLE_LSP_TOOL`，并通过工具自身 `isEnabled()`。 | **按需**：需要语言服务器提供类型诊断、定义/引用或符号信息，而文本搜索不足以回答时查询。 |
+| `EnterWorktree` | 创建并进入会话隔离 worktree。 | `isWorktreeModeEnabled()` 当前恒为 true；实际调用仍要求用户明确提到 worktree，且当前环境必须是 Git 仓库或配置了 Worktree hooks。 | **按需**：仅当用户明确要求在 worktree 中工作，并且需要创建隔离工作目录时查询。 |
+| `ExitWorktree` | 离开由本会话创建的 worktree并保留或删除。 | 与 `EnterWorktree` 一同恒定注册；只对本会话通过 `EnterWorktree` 创建的 worktree 生效。 | **按需**：用户要求离开本会话创建的 worktree，并选择保留或删除该 worktree 时查询。 |
 | `ListPeers` | 列出 UDS Inbox 可通信进程。 | 构建包含 `UDS_INBOX`。 | **直接**。 |
 | `verify_plan_execution` | 核对计划步骤是否执行。 | `CLAUDE_CODE_VERIFY_PLAN === 'true'`。 | **直接**。 |
 | `REPL` | 在受控 VM 中执行代码并包装底层工具。 | `USER_TYPE === 'ant'` 且 REPL 模块存在；运行时还需 REPL 模式生效。 | **直接**；生效后替换一组底层原语。 |
 | `workflow` | 执行内置 Workflow 脚本。 | 构建包含 `WORKFLOW_SCRIPTS`。 | **直接**；子 Agent 默认禁止递归调用。 |
 | `Sleep` | 在主动/KAIROS 模式暂停并等待事件。 | 构建包含 `PROACTIVE` 或 `KAIROS`。 | **直接**。 |
-| `CronCreate` | 创建会话级或持久定时任务。 | 构建包含 `AGENT_TRIGGERS`；`CLAUDE_CODE_DISABLE_CRON` 未开启；`tengu_kairos_cron` kill-switch 为 true（默认 true）。 | **按需**。 |
-| `CronDelete` | 删除定时任务。 | 同 `CronCreate`。 | **按需**。 |
-| `CronList` | 列出定时任务。 | 同 `CronCreate`。 | **按需**。 |
-| `RemoteTrigger` | 创建或处理远程 Agent 触发器。 | 构建包含 `AGENT_TRIGGERS_REMOTE`，且 `tengu_surreal_dali` 为 true、策略 `allow_remote_sessions` 允许。实际调用还要求 Claude.ai OAuth 和组织 ID 可用。 | **按需**。 |
+| `CronCreate` | 创建会话级或持久定时任务。 | 构建包含 `AGENT_TRIGGERS`；`CLAUDE_CODE_DISABLE_CRON` 未开启；`tengu_kairos_cron` kill-switch 为 true（默认 true）。 | **按需**：用户要求按指定时间或周期自动执行提示词/任务时查询。 |
+| `CronDelete` | 删除定时任务。 | 同 `CronCreate`。 | **按需**：用户要求取消某个已存在的定时任务时查询。 |
+| `CronList` | 列出定时任务。 | 同 `CronCreate`。 | **按需**：用户要查看现有定时任务，或删除前需要确认任务 ID 时查询。 |
+| `RemoteTrigger` | 创建或处理远程 Agent 触发器。 | 构建包含 `AGENT_TRIGGERS_REMOTE`，且 `tengu_surreal_dali` 为 true、策略 `allow_remote_sessions` 允许。实际调用还要求 Claude.ai OAuth 和组织 ID 可用。 | **按需**：用户要求配置或处理可从远程事件启动 Agent 的触发器时查询。 |
 | `Monitor` | 实验性监控能力。 | 构建包含 `MONITOR_TOOL` 且模块导出真实工具；当前还原源码的 `MonitorTool` 为 `null`，因此实际不会注册。 | **直接**（存在真实工具时）。 |
 | `send_user_file` | 通过 KAIROS/Bridge 向用户发送文件。 | 构建包含 `KAIROS`，且模块导出真实工具并通过自身运行时条件；当前还原目录仅保留 `prompt.ts`，无法从本仓库进一步确认实现 gate。 | Bridge 已连接时由延迟判断明确强制**直接**；其余时机取决于真实工具定义。 |
 | `PushNotification` | 发送推送通知。 | 构建包含 `KAIROS` 或 `KAIROS_PUSH_NOTIFICATION`。 | **直接**。 |
@@ -535,9 +537,9 @@ MCP 工具默认均为**按需**：首次公布名称以及可用的轻量用途
 
 | 工具 | 启用条件 | 注入时机 |
 |---|---|---|
-| `ListMcpResourcesTool` | 至少一个已连接 MCP Server 声明 `capabilities.resources`；全局只追加一组资源辅助工具。 | **按需**。它虽然列在 `getAllBaseTools()`，但会被 `getTools()` 的 special-tools 过滤，随后仅由 MCP 连接流程动态加入。 |
-| `ReadMcpResourceTool` | 与 `ListMcpResourcesTool` 相同。 | **按需**。 |
-| `mcp__*` | 对应 MCP Server 已配置、连接成功并通过 `tools/list` 返回该工具，同时未被权限 deny。 | 默认**按需**；`alwaysLoad: true` 时**直接**。晚连接、断线重连或工具列表变化会通过 MCP/deferred-tools delta 附件更新模型可见名称。 |
+| `ListMcpResourcesTool` | 至少一个已连接 MCP Server 声明 `capabilities.resources`；全局只追加一组资源辅助工具。 | **按需**：任务需要发现已连接 MCP Server 提供了哪些可读资源时查询。它虽然列在 `getAllBaseTools()`，但会被 `getTools()` 的 special-tools 过滤，随后仅由 MCP 连接流程动态加入。 |
+| `ReadMcpResourceTool` | 与 `ListMcpResourcesTool` 相同。 | **按需**：已知或刚列出目标 MCP 资源，需要读取其内容时查询。 |
+| `mcp__*` | 对应 MCP Server 已配置、连接成功并通过 `tools/list` 返回该工具，同时未被权限 deny。 | 默认**按需**：当前任务与工具名称或轻量用途提示匹配、模型准备调用该 MCP 能力时查询；`alwaysLoad: true` 时**直接**。晚连接、断线重连或工具列表变化会通过 MCP/deferred-tools delta 附件更新模型可见名称。 |
 
 因此，更准确的数量表达是：**最多 51 个静态注册项，加上 N 个动态 MCP 工具，但每次请求只发送通过全部 gate 且当前需要的子集**。
 

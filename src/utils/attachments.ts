@@ -244,7 +244,9 @@ import {
   getAgentName,
   getAgentId,
   getTeamName,
+  isPlanModeRequired,
   isTeamLead,
+  isTeammate,
 } from './teammate.js'
 import { isInProcessTeammate } from './teammateContext.js'
 import { removeTeammateFromTeamFile } from './swarm/teamHelpers.js'
@@ -1210,8 +1212,16 @@ async function getPlanModeAttachments(
     }
   }
 
-  const planFilePath = getPlanFilePath(toolUseContext.agentId)
-  const existingPlan = getPlan(toolUseContext.agentId)
+  const isPlanApprovalTeammate = isTeammate() && isPlanModeRequired()
+  const isReadOnlySubAgent = !!toolUseContext.agentId && !isPlanApprovalTeammate
+  // Plan mode has a single parent-owned plan file for ordinary subagents. Team
+  // teammates that require leader approval still keep their own plan file.
+  const planFilePath = getPlanFilePath(
+    isPlanApprovalTeammate ? toolUseContext.agentId : undefined,
+  )
+  const existingPlan = getPlan(
+    isPlanApprovalTeammate ? toolUseContext.agentId : undefined,
+  )
 
   const attachments: Attachment[] = []
 
@@ -1236,7 +1246,7 @@ async function getPlanModeAttachments(
   attachments.push({
     type: 'plan_mode',
     reminderType,
-    isSubAgent: !!toolUseContext.agentId,
+    isSubAgent: isReadOnlySubAgent,
     planFilePath,
     planExists: existingPlan !== null,
   })
@@ -1265,8 +1275,12 @@ async function getPlanModeExitAttachment(
   // Clear the flag - this is a one-time notification
   setNeedsPlanModeExitAttachment(false)
 
-  const planFilePath = getPlanFilePath(toolUseContext.agentId)
-  const planExists = getPlan(toolUseContext.agentId) !== null
+  const isPlanApprovalTeammate = isTeammate() && isPlanModeRequired()
+  const planFilePath = getPlanFilePath(
+    isPlanApprovalTeammate ? toolUseContext.agentId : undefined,
+  )
+  const planExists =
+    getPlan(isPlanApprovalTeammate ? toolUseContext.agentId : undefined) !== null
 
   // Note: skill discovery does NOT fire on plan exit. By the time the plan is
   // written, it's too late — the model should have had relevant skills WHILE
