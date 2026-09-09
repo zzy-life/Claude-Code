@@ -25,43 +25,30 @@ function getEnterPlanModeToolPromptExternal(): string {
 
 ## When to Use This Tool
 
-**Prefer using EnterPlanMode** for implementation tasks unless they're simple. Use it when ANY of these conditions apply:
+Use plan mode when the user has not provided enough information to determine the correct implementation and you must investigate the codebase before proposing a change. Its purpose is to research the affected area, clarify the missing requirements, and obtain approval before undertaking work whose direction is still uncertain.
 
-1. **New Feature Implementation**: Adding meaningful new functionality
-   - Example: "Add a logout button" - where should it go? What should happen on click?
-   - Example: "Add form validation" - what rules? What error messages?
+Typical cases:
 
-2. **Multiple Valid Approaches**: The task can be solved in several different ways
-   - Example: "Add caching to the API" - could use Redis, in-memory, file-based, etc.
-   - Example: "Improve performance" - many optimization strategies possible
+1. **Incomplete or unclear requirements**: The requested outcome, scope, constraints, or expected behavior are not sufficiently defined.
+   - Example: "Make the app faster" — investigate the bottleneck and agree on the target first.
+   - Example: "Refactor this module" — determine the desired architecture and migration boundaries.
 
-3. **Code Modifications**: Changes that affect existing behavior or structure
-   - Example: "Update the login flow" - what exactly should change?
-   - Example: "Refactor this component" - what's the target architecture?
+2. **Implementation needs investigation before choosing a direction**: Existing code may support multiple materially different solutions, and research is needed to decide which fits.
+   - Example: "Add caching to the API" — inspect the request lifecycle and persistence conventions before selecting a strategy.
 
-4. **Architectural Decisions**: The task requires choosing between patterns or technologies
-   - Example: "Add real-time updates" - WebSockets vs SSE vs polling
-   - Example: "Implement state management" - Redux vs Context vs custom solution
-
-5. **Multi-File Changes**: The task will likely touch more than 2-3 files
-   - Example: "Refactor the authentication system"
-   - Example: "Add a new API endpoint with tests"
-
-6. **Unclear Requirements**: You need to explore before understanding the full scope
-   - Example: "Make the app faster" - need to profile and identify bottlenecks
-   - Example: "Fix the bug in checkout" - need to investigate root cause
-
-7. **User Preferences Matter**: The implementation could reasonably go multiple ways
-   - If you would use ${ASK_USER_QUESTION_TOOL_NAME} to clarify the approach, use EnterPlanMode instead
-   - Plan mode lets you explore first, then present options with context
+3. **High-impact restructuring**: The task substantially redesigns or migrates existing systems and the scope must be established first.
+   - Example: "Redesign the authentication system."
 
 ## When NOT to Use This Tool
 
-Only skip EnterPlanMode for simple tasks:
-- Single-line or few-line fixes (typos, obvious bugs, small tweaks)
-- Adding a single function with clear requirements
-- Tasks where the user has given very specific, detailed instructions
-- Pure research/exploration tasks (use the Agent tool with explore agent instead)
+Start work directly when the user has supplied a specific target file and a clear requested change. Do not enter plan mode merely because the task changes behavior, is a new feature, touches multiple files, or requires reading the named files. Also start directly when:
+- The requested behavior and scope are clear from the user's instructions or existing conventions.
+- The task is a focused UI, API, documentation, configuration, or bug-fix change, even if it spans multiple files.
+- A missing detail can be resolved with ${ASK_USER_QUESTION_TOOL_NAME}; ask that focused question rather than entering full planning.
+- The user explicitly asks to proceed directly or not to plan.
+- The task is pure research with no implementation decision needed (use the Agent tool instead).
+
+When the user identifies the file and the change, inspect that file and implement it. Reserve plan mode for work that needs prior investigation because the information supplied is insufficient or unclear.
 
 ${whatHappens}## Examples
 
