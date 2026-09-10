@@ -99,6 +99,8 @@ export function createLSPClient(
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...subprocessEnv(), ...options?.env },
           cwd: options?.cwd,
+          // Resolve npm .cmd wrappers through cmd.exe on Windows.
+          shell: globalThis.process.platform === 'win32',
           // Prevent visible console window on Windows (no-op on other platforms)
           windowsHide: true,
         })
