@@ -145,9 +145,7 @@ The ${AGENT_TOOL_NAME} tool launches specialized agents (subprocesses) that auto
 
 Use ${AGENT_TOOL_NAME} for bounded delegation. An agent performs an independent task and reports its result back to you. Multiple independent agents may run in parallel without creating a team.
 
-Use TeamCreate only when agents must coordinate persistently through shared tasks, direct messages, handoffs, or dynamic reassignment. Task size, complexity, and parallelism alone do not justify a team.
-
-A team requires user authorization. Unless the user explicitly requested a team, you may propose one through AskUserQuestion only once and only before substantive execution begins. After editing files, running implementation or test commands, starting tasks, or launching an agent, do not propose or create a team unless the user explicitly asks for one.
+Use TeamCreate only when agents must coordinate persistently through shared tasks, direct messages, handoffs, or dynamic reassignment. TeamCreate is available only after the user runs "/team"; that command is explicit authorization, so do not request separate confirmation. Task size, complexity, and parallelism alone do not justify a team.
 
 ${agentListSection}
 
@@ -187,7 +185,7 @@ When NOT to use the ${AGENT_TOOL_NAME} tool:
 - If the raw code is decision-critical context you must understand before editing it, read it directly instead of delegating that understanding
 - Other tasks that are not related to the agent descriptions above
 
-Read-only work does not require a team. Use TeamCreate only for authorized cross-agent coordination.
+Read-only work does not require a team. Use TeamCreate only when it is exposed by the user-enabled Team mode and cross-agent coordination is necessary.
 `
 
   // When listing via attachment, the "launch multiple agents" note is in the

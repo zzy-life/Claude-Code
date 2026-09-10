@@ -4,16 +4,11 @@ export function getPrompt(): string {
 
 ## Authorization Boundary
 
-A team is an opt-in, persistent coordination mechanism. Do NOT create one unless either:
-
-1. The user explicitly asks for a team, swarm, or coordinated group of agents; or
-2. Before substantive execution begins, you use AskUserQuestion to propose a team and the user explicitly selects the team option.
-
-You may proactively propose a team only once, at the beginning of the current task. Substantive execution begins when you edit or write files, run implementation or test commands, create and start tasks, or launch an Agent. After that point, do not propose or create a team unless the user explicitly asks for one.
+This tool is exposed only after the user runs "/team". Running that command is explicit authorization to create and use a team in the current session; do not ask for authorization again.
 
 ## When to Use
 
-After authorization, use a team only when the work requires persistent coordination between multiple agents, such as:
+Use a team when the work requires persistent coordination between multiple agents, such as:
 - Agents must communicate directly with each other
 - Agents share task ownership or need dynamic reassignment
 - Work must be handed off between agents across multiple turns
@@ -28,10 +23,6 @@ Do not propose or create a team merely because:
 - One or more independent Agent calls can report their results directly to you
 
 Use independent Agent calls by default. When uncertain, do not create a team.
-
-## Asking for Authorization
-
-Only ask when you have identified a concrete need for cross-agent coordination. Present independent agents as the recommended default and explain that a team adds shared tasks, direct messaging, and lifecycle management. Do not ask for routine, bounded, or merely parallel work.
 
 ## Sequencing Barrier
 
