@@ -6,6 +6,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  rm,
   stat,
   symlink,
   unlink,
@@ -272,6 +273,73 @@ async function writeAgentWorktreeMetadata(
   const path = agentWorktreeMetadataPath(repoRoot, slug)
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, JSON.stringify(metadata), 'utf-8')
+}
+
+async function isAgentWorktreeClean(worktreePath: string): Promise<boolean> {
+  const status = await execFileNoThrowWithCwd(
+    gitExe(),
+    [
+      '--no-optional-locks',
+      'status',
+      '--porcelain',
+      '--untracked-files=all',
+      '--',
+      '.',
+      ':(exclude).claude',
+    ],
+    { cwd: worktreePath },
+  )
+  return status.code === 0 && status.stdout.trim().length === 0
+}
+
+async function prepareAgentWorktreeRemoval(
+  worktreePath: string,
+): Promise<boolean> {
+  if (!(await isAgentWorktreeClean(worktreePath))) {
+    return false
+  }
+
+  const trackedClaudeFiles = await execFileNoThrowWithCwd(
+    gitExe(),
+    ['ls-files', '--', '.claude'],
+    { cwd: worktreePath },
+  )
+  if (trackedClaudeFiles.code !== 0) {
+    return false
+  }
+
+  // Agent runtime state is disposable and must not make an otherwise clean
+  // worktree look user-modified. This path is scoped to the Agent worktree.
+  try {
+    await rm(join(worktreePath, '.claude'), { recursive: true, force: true })
+  } catch {
+    return false
+  }
+
+  if (trackedClaudeFiles.stdout.trim().length > 0) {
+    const restore = await execFileNoThrowWithCwd(
+      gitExe(),
+      [
+        'restore',
+        '--source=HEAD',
+        '--staged',
+        '--worktree',
+        '--',
+        '.claude',
+      ],
+      { cwd: worktreePath },
+    )
+    if (restore.code !== 0) {
+      return false
+    }
+  }
+
+  const finalStatus = await execFileNoThrowWithCwd(
+    gitExe(),
+    ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=all'],
+    { cwd: worktreePath },
+  )
+  return finalStatus.code === 0 && finalStatus.stdout.trim().length === 0
 }
 
 // Env vars to prevent git/SSH from prompting for credentials (which hangs the CLI).
@@ -1196,6 +1264,13 @@ export async function removeAgentWorktree(
     return false
   }
 
+  if (!(await prepareAgentWorktreeRemoval(worktreePath))) {
+    logForDebugging(`Agent worktree changed before removal: ${worktreePath}`, {
+      level: 'warn',
+    })
+    return false
+  }
+
   // Run from the main repo root, not the worktree (which we're about to delete)
   const { code: removeCode, stderr: removeError } =
     await execFileNoThrowWithCwd(
@@ -1203,7 +1278,6 @@ export async function removeAgentWorktree(
       ['worktree', 'remove', worktreePath],
       { cwd: gitRoot },
     )
-
   if (removeCode !== 0) {
     logForDebugging(`Failed to remove agent worktree: ${removeError}`, {
       level: 'error',
@@ -1268,23 +1342,14 @@ async function removeLegacyAgentWorktree(
     return false
   }
   const branchRef = `refs/heads/${worktreeBranch}`
-  const [currentBranch, status, worktreeHead, branchTip, unretained] =
+  const [currentBranch, isClean, worktreeHead, branchTip, unretained] =
     await Promise.all([
       execFileNoThrowWithCwd(
         gitExe(),
         ['symbolic-ref', '--quiet', '--short', 'HEAD'],
         { cwd: worktreePath },
       ),
-      execFileNoThrowWithCwd(
-        gitExe(),
-        [
-          '--no-optional-locks',
-          'status',
-          '--porcelain',
-          '--untracked-files=all',
-        ],
-        { cwd: worktreePath },
-      ),
+      isAgentWorktreeClean(worktreePath),
       execFileNoThrowWithCwd(gitExe(), ['rev-parse', 'HEAD'], {
         cwd: worktreePath,
       }),
@@ -1302,8 +1367,7 @@ async function removeLegacyAgentWorktree(
   if (
     currentBranch.code !== 0 ||
     currentBranch.stdout.trim() !== worktreeBranch ||
-    status.code !== 0 ||
-    status.stdout.trim().length > 0 ||
+    !isClean ||
     worktreeHead.code !== 0 ||
     branchTip.code !== 0 ||
     unretained.code !== 0 ||
@@ -1311,6 +1375,10 @@ async function removeLegacyAgentWorktree(
     branchTip.stdout.trim() !== expectedTip ||
     unretained.stdout.trim().length > 0
   ) {
+    return false
+  }
+
+  if (!(await prepareAgentWorktreeRemoval(worktreePath))) {
     return false
   }
 
@@ -1352,22 +1420,13 @@ async function getSafeAgentWorktreeTip(
   }
   const agentRef = `refs/heads/${agentBranch}`
   const parentRef = parentBranch ? `refs/heads/${parentBranch}` : undefined
-  const [currentBranch, status, worktreeHead, agentTip] = await Promise.all([
+  const [currentBranch, isClean, worktreeHead, agentTip] = await Promise.all([
     execFileNoThrowWithCwd(
       gitExe(),
       ['symbolic-ref', '--quiet', '--short', 'HEAD'],
       { cwd: worktreePath },
     ),
-    execFileNoThrowWithCwd(
-      gitExe(),
-      [
-        '--no-optional-locks',
-        'status',
-        '--porcelain',
-        '--untracked-files=all',
-      ],
-      { cwd: worktreePath },
-    ),
+    isAgentWorktreeClean(worktreePath),
     execFileNoThrowWithCwd(gitExe(), ['rev-parse', 'HEAD'], {
       cwd: worktreePath,
     }),
@@ -1378,8 +1437,7 @@ async function getSafeAgentWorktreeTip(
   if (
     currentBranch.code !== 0 ||
     currentBranch.stdout.trim() !== agentBranch ||
-    status.code !== 0 ||
-    status.stdout.trim().length > 0 ||
+    !isClean ||
     worktreeHead.code !== 0 ||
     agentTip.code !== 0 ||
     !/^[0-9a-f]{40,64}$/.test(worktreeHead.stdout.trim()) ||
@@ -1495,7 +1553,7 @@ const EPHEMERAL_WORKTREE_PATTERNS = [
  * Safety:
  * - Only touches slugs matching ephemeral patterns (never user-named worktrees)
  * - Skips the current session's worktree
- * - Fail-closed: skips if git status fails or shows tracked/untracked changes
+ * - Ignores disposable `.claude/**` runtime state, but fails closed on changes elsewhere
  * - Uses persisted lineage metadata when present; invalid metadata always skips
  * - Legacy worktrees with no metadata require their entire history on remote refs
  * - Removes only when Agent commits are absent, absorbed by the parent branch
