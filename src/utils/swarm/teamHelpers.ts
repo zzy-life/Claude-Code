@@ -1,5 +1,6 @@
+import { randomBytes } from 'crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, readFile, rename, rm, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { z } from 'zod/v4'
 import { getSessionCreatedTeams } from '../../bootstrap/state.js'
@@ -9,6 +10,7 @@ import { errorMessage, getErrnoCode } from '../errors.js'
 import { execFileNoThrowWithCwd } from '../execFileNoThrow.js'
 import { gitExe } from '../git.js'
 import { lazySchema } from '../lazySchema.js'
+import * as lockfile from '../lockfile.js'
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { jsonParse, jsonStringify } from '../slowOperations.js'
 import { getTasksDir, notifyTasksUpdated } from '../tasks.js'
@@ -152,10 +154,9 @@ export async function readTeamFileAsync(
     return jsonParse(content) as TeamFile
   } catch (e) {
     if (getErrnoCode(e) === 'ENOENT') return null
-    logForDebugging(
-      `[TeammateTool] Failed to read team file for ${teamName}: ${errorMessage(e)}`,
+    throw new Error(
+      `Failed to read team file for ${teamName}: ${errorMessage(e)}`,
     )
-    return null
   }
 }
 
@@ -177,8 +178,70 @@ export async function writeTeamFileAsync(
   teamFile: TeamFile,
 ): Promise<void> {
   const teamDir = getTeamDir(teamName)
+  const teamFilePath = getTeamFilePath(teamName)
+  const tempPath = `${teamFilePath}.${randomBytes(8).toString('hex')}.tmp`
   await mkdir(teamDir, { recursive: true })
-  await writeFile(getTeamFilePath(teamName), jsonStringify(teamFile, null, 2))
+
+  try {
+    await writeFile(tempPath, jsonStringify(teamFile, null, 2), 'utf-8')
+    await rename(tempPath, teamFilePath)
+  } catch (error) {
+    try {
+      await unlink(tempPath)
+    } catch {
+      // The temporary file may not have been created or was already renamed.
+    }
+    throw error
+  }
+}
+
+const TEAM_FILE_LOCK_OPTIONS = {
+  retries: {
+    retries: 30,
+    minTimeout: 5,
+    maxTimeout: 100,
+  },
+}
+
+/**
+ * Applies an update to a team config while serializing concurrent writers.
+ * The config file itself is the lock target, so callers must create it first.
+ */
+export async function updateTeamFileAsync(
+  teamName: string,
+  updater: (teamFile: TeamFile) => void,
+): Promise<TeamFile | null> {
+  const teamFilePath = getTeamFilePath(teamName)
+  let release: (() => Promise<void>) | undefined
+
+  try {
+    release = await lockfile.lock(teamFilePath, TEAM_FILE_LOCK_OPTIONS)
+    const teamFile = await readTeamFileAsync(teamName)
+    if (!teamFile) {
+      return null
+    }
+
+    updater(teamFile)
+    await writeTeamFileAsync(teamName, teamFile)
+    return teamFile
+  } finally {
+    if (release) {
+      await release()
+    }
+  }
+}
+
+/**
+ * Adds a teammate without losing members added by concurrent spawn requests.
+ */
+export async function addTeamMemberAsync(
+  teamName: string,
+  member: TeamFile['members'][number],
+): Promise<boolean> {
+  const teamFile = await updateTeamFileAsync(teamName, current => {
+    current.members.push(member)
+  })
+  return teamFile !== null
 }
 
 /**
@@ -456,29 +519,37 @@ export async function setMemberActive(
   memberName: string,
   isActive: boolean,
 ): Promise<void> {
-  const teamFile = await readTeamFileAsync(teamName)
+  let memberFound = false
+  let changed = false
+  const teamFile = await updateTeamFileAsync(teamName, current => {
+    const member = current.members.find(m => m.name === memberName)
+    if (!member) {
+      return
+    }
+
+    memberFound = true
+    if (member.isActive !== isActive) {
+      member.isActive = isActive
+      changed = true
+    }
+  })
+
   if (!teamFile) {
     logForDebugging(
       `[TeammateTool] Cannot set member active: team ${teamName} not found`,
     )
     return
   }
-
-  const member = teamFile.members.find(m => m.name === memberName)
-  if (!member) {
+  if (!memberFound) {
     logForDebugging(
       `[TeammateTool] Cannot set member active: member ${memberName} not found in team ${teamName}`,
     )
     return
   }
-
-  // Only write if the value is actually changing
-  if (member.isActive === isActive) {
+  if (!changed) {
     return
   }
 
-  member.isActive = isActive
-  await writeTeamFileAsync(teamName, teamFile)
   logForDebugging(
     `[TeammateTool] Set member ${memberName} in team ${teamName} to ${isActive ? 'active' : 'idle'}`,
   )

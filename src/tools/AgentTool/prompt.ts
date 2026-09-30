@@ -145,7 +145,7 @@ The ${AGENT_TOOL_NAME} tool launches specialized agents (subprocesses) that auto
 
 Use ${AGENT_TOOL_NAME} for bounded delegation. An agent performs an independent task and reports its result back to you. Multiple independent agents may run in parallel without creating a team.
 
-Use TeamCreate only when agents must coordinate persistently through shared tasks, direct messages, handoffs, or dynamic reassignment. TeamCreate is available only after the user runs "/team"; that command is explicit authorization, so do not request separate confirmation. Task size, complexity, and parallelism alone do not justify a team.
+Use TeamCreate only when agents must coordinate persistently through shared tasks, direct messages, handoffs, or dynamic reassignment. Teams divide durable workstreams (for example frontend and backend), and each teammate owns its assigned workstream through investigation, implementation, and handoff; the lead coordinates rather than taking over assigned implementation. Use independent Agent calls for bounded read-only research, reviews, and one-shot tasks. TeamCreate is available only after the user runs "/team"; that command is explicit authorization, so do not request separate confirmation. Task size, complexity, and parallelism alone do not justify a team.
 
 ${agentListSection}
 

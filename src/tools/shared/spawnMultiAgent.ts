@@ -51,10 +51,10 @@ import {
 } from '../../utils/swarm/spawnInProcess.js'
 import { buildInheritedEnvVars } from '../../utils/swarm/spawnUtils.js'
 import {
+  addTeamMemberAsync,
   readTeamFileAsync,
   sanitizeAgentName,
   sanitizeName,
-  writeTeamFileAsync,
 } from '../../utils/swarm/teamHelpers.js'
 import {
   assignTeammateColor,
@@ -485,14 +485,8 @@ async function handleSpawnSplitPane(
     toolUseId: context.toolUseId,
   })
 
-  // Register agent in the team file
-  const teamFile = await readTeamFileAsync(teamName)
-  if (!teamFile) {
-    throw new Error(
-      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
-    )
-  }
-  teamFile.members.push({
+  // Register agent in the team file without overwriting concurrent spawns.
+  const added = await addTeamMemberAsync(teamName, {
     agentId: teammateId,
     name: sanitizedName,
     agentType: agent_type,
@@ -506,7 +500,11 @@ async function handleSpawnSplitPane(
     subscriptions: [],
     backendType: detectionResult.backend.type,
   })
-  await writeTeamFileAsync(teamName, teamFile)
+  if (!added) {
+    throw new Error(
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
+    )
+  }
 
   // Send initial instructions to teammate via mailbox
   // The teammate's inbox poller will pick this up and submit it as their first turn
@@ -699,14 +697,8 @@ async function handleSpawnSeparateWindow(
     toolUseId: context.toolUseId,
   })
 
-  // Register agent in the team file
-  const teamFile = await readTeamFileAsync(teamName)
-  if (!teamFile) {
-    throw new Error(
-      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
-    )
-  }
-  teamFile.members.push({
+  // Register agent in the team file without overwriting concurrent spawns.
+  const added = await addTeamMemberAsync(teamName, {
     agentId: teammateId,
     name: sanitizedName,
     agentType: agent_type,
@@ -720,7 +712,11 @@ async function handleSpawnSeparateWindow(
     subscriptions: [],
     backendType: 'tmux', // This handler always uses tmux directly
   })
-  await writeTeamFileAsync(teamName, teamFile)
+  if (!added) {
+    throw new Error(
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
+    )
+  }
 
   // Send initial instructions to teammate via mailbox
   // The teammate's inbox poller will pick this up and submit it as their first turn
@@ -985,14 +981,8 @@ async function handleSpawnInProcess(
     }
   })
 
-  // Register agent in the team file
-  const teamFile = await readTeamFileAsync(teamName)
-  if (!teamFile) {
-    throw new Error(
-      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
-    )
-  }
-  teamFile.members.push({
+  // Register agent in the team file without overwriting concurrent spawns.
+  const added = await addTeamMemberAsync(teamName, {
     agentId: teammateId,
     name: sanitizedName,
     agentType: agent_type,
@@ -1006,7 +996,11 @@ async function handleSpawnInProcess(
     subscriptions: [],
     backendType: 'in-process',
   })
-  await writeTeamFileAsync(teamName, teamFile)
+  if (!added) {
+    throw new Error(
+      `Team "${teamName}" does not exist. Verify team_name, or call TeamCreate successfully before starting a teammate.`,
+    )
+  }
 
   // Note: Do NOT send the prompt via mailbox for in-process teammates.
   // In-process teammates receive the prompt directly via startInProcessTeammate().

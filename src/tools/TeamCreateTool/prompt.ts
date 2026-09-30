@@ -9,10 +9,13 @@ This tool is exposed only after the user runs "/team". Running that command is e
 ## When to Use
 
 Use a team when the work requires persistent coordination between multiple agents, such as:
+- Distinct workstreams (for example frontend, backend, or infrastructure) need concurrent end-to-end delivery
 - Agents must communicate directly with each other
 - Agents share task ownership or need dynamic reassignment
 - Work must be handed off between agents across multiple turns
 - Dependencies between agents cannot be managed as independent, one-shot Agent calls
+
+A team is not a replacement for independent subagents. Create teammates to own a workstream through investigation, implementation, and handoff; use independent Agent calls for bounded read-only research, reviews, or one-shot tasks.
 
 ## When NOT to Use
 
@@ -39,12 +42,14 @@ export function getActiveTeamContract(): string {
 Follow this contract until the active team is deleted:
 
 1. Create shared work with TaskCreate, assign owners with TaskUpdate, and mark tasks completed as soon as they finish.
-2. Spawn teammates with Agent using \`team_name\` and \`name\`. Match \`subagent_type\` to the tools the work requires; never assign write work to a read-only agent.
-3. Communicate with teammates through SendMessage. Plain assistant text is not delivered to them, and incoming teammate messages arrive automatically without polling.
-4. Treat idle as waiting, not terminated. Idle teammates can receive more work or messages.
-5. Refer to teammates by name for messaging and task ownership. Use TaskList to coordinate available and blocked work.
-6. When work is complete, send each teammate a \`shutdown_request\`, wait for removal from the roster, then call TeamDelete. TeamDelete cannot remove a team while non-leader members remain registered.
-7. If team creation or teammate spawning fails, stop and report the original error. Do not retry TeamCreate or spawn replacement teammates automatically.
-8. Do not emit protocol JSON as assistant text; protocol responses require the corresponding tool call.
+2. Assign each teammate a durable, non-overlapping workstream (for example frontend or backend) and have that teammate carry it through investigation, implementation, and handoff. Do not create a team merely to parallelize read-only research.
+3. Spawn teammates with Agent using \`team_name\` and \`name\`. Match \`subagent_type\` to the tools the work requires; never assign write work to a read-only agent.
+4. The lead coordinates scope, dependencies, and integration. Do not take over implementation already assigned to an active teammate unless the teammate hands it back or the task is reassigned through the shared task list.
+5. Communicate with teammates through SendMessage. Plain assistant text is not delivered to them, and incoming teammate messages arrive automatically without polling.
+6. Treat idle as waiting, not terminated. Idle teammates can receive more work or messages.
+7. Refer to teammates by name for messaging and task ownership. Use TaskList to coordinate available and blocked work.
+8. When work is complete, send each teammate a \`shutdown_request\`, wait for removal from the roster, then call TeamDelete. TeamDelete cannot remove a team while non-leader members remain registered.
+9. If team creation or teammate spawning fails, stop and report the original error. Do not retry TeamCreate or spawn replacement teammates automatically.
+10. Do not emit protocol JSON as assistant text; protocol responses require the corresponding tool call.
 `.trim()
 }
