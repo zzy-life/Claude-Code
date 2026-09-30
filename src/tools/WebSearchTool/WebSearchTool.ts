@@ -28,11 +28,15 @@ const inputSchema = lazySchema(() =>
     allowed_domains: z
       .array(z.string())
       .optional()
-      .describe('Only include search results from these domains'),
+      .describe(
+        'Only include search results from these domains. Mutually exclusive with blocked_domains; omit blocked_domains when using this filter.',
+      ),
     blocked_domains: z
       .array(z.string())
       .optional()
-      .describe('Never include search results from these domains'),
+      .describe(
+        'Never include search results from these domains. Mutually exclusive with allowed_domains; omit allowed_domains when using this filter.',
+      ),
   }),
 )
 type InputSchema = ReturnType<typeof inputSchema>

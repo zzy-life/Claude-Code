@@ -24,7 +24,8 @@ CRITICAL REQUIREMENT - You MUST follow this:
     - [Source Title 2](https://example.com/2)
 
 Usage notes:
-  - Domain filtering is supported to include or block specific websites
+  - Domain filtering is supported to include or block specific websites.
+  - Use either allowed_domains or blocked_domains, never both. Omit the unused field instead of passing an empty array.
   - Web search is only available in the US
 
 IMPORTANT - Use the correct year in search queries:
