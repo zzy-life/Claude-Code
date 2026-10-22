@@ -14,7 +14,10 @@ import { readFileSyncWithMetadata } from '../../utils/fileRead.js'
 import { safeParseJSON } from '../../utils/json.js'
 import { lazySchema } from '../../utils/lazySchema.js'
 import { parseCellId } from '../../utils/notebook.js'
-import { checkWritePermissionForTool } from '../../utils/permissions/filesystem.js'
+import {
+  checkWritePermissionForTool,
+  getWorktreeWriteError,
+} from '../../utils/permissions/filesystem.js'
 import type { PermissionDecision } from '../../utils/permissions/PermissionResult.js'
 import { jsonParse, jsonStringify } from '../../utils/slowOperations.js'
 import { NOTEBOOK_EDIT_TOOL_NAME } from './constants.js'
@@ -180,6 +183,11 @@ export const NotebookEditTool = buildTool({
     const fullPath = isAbsolute(notebook_path)
       ? notebook_path
       : resolve(getCwd(), notebook_path)
+
+    const worktreeError = getWorktreeWriteError(fullPath)
+    if (worktreeError) {
+      return { result: false, message: worktreeError, errorCode: 11 }
+    }
 
     // SECURITY: Skip filesystem operations for UNC paths to prevent NTLM credential leaks.
     if (fullPath.startsWith('\\\\') || fullPath.startsWith('//')) {

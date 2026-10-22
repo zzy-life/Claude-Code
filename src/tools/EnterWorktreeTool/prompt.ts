@@ -21,6 +21,7 @@ export function getEnterWorktreeToolPrompt(): string {
 - In a git repository: creates a new git worktree inside \`.claude/worktrees/\` with a new branch based on HEAD
 - Outside a git repository: delegates to WorktreeCreate/WorktreeRemove hooks for VCS-agnostic isolation
 - Switches the session's working directory to the new worktree
+- After entering, read and edit project files under the returned worktree path. Do not reuse absolute paths or file contents from the original repository. Writes to the original repository are rejected by Edit, Write, and NotebookEdit while the worktree is active; exit the worktree first if you intend to edit the original repository.
 - Use ExitWorktree to leave the worktree mid-session (keep or remove). On session exit, if still in the worktree, the user will be prompted to keep or remove it
 
 ## Parameters

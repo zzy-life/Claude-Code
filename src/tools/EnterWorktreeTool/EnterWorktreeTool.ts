@@ -115,7 +115,7 @@ export const EnterWorktreeTool: Tool<InputSchema, Output> = buildTool({
       data: {
         worktreePath: worktreeSession.worktreePath,
         worktreeBranch: worktreeSession.worktreeBranch,
-        message: `Created worktree at ${worktreeSession.worktreePath}${branchInfo}. The session is now working in the worktree. Use ExitWorktree to leave mid-session, or exit the session to be prompted.`,
+        message: `Created worktree at ${worktreeSession.worktreePath}${branchInfo}. The session is now working in the worktree. Read and edit project files under this worktree path; do not reuse absolute paths or file contents from the original repository (${worktreeSession.originalCwd}). Edit, Write, and NotebookEdit reject writes to the original repository while this worktree is active. Use ExitWorktree to leave mid-session, or exit the session to be prompted.`,
       },
     }
   },

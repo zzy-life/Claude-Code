@@ -36,6 +36,7 @@ import { logError } from '../../utils/log.js'
 import { expandPath } from '../../utils/path.js'
 import {
   checkWritePermissionForTool,
+  getWorktreeWriteError,
   matchingRuleForInput,
 } from '../../utils/permissions/filesystem.js'
 import type { PermissionDecision } from '../../utils/permissions/PermissionResult.js'
@@ -152,6 +153,11 @@ export const FileWriteTool = buildTool({
   },
   async validateInput({ file_path, content }, toolUseContext: ToolUseContext) {
     const fullFilePath = expandPath(file_path)
+
+    const worktreeError = getWorktreeWriteError(fullFilePath)
+    if (worktreeError) {
+      return { result: false, message: worktreeError, errorCode: 4 }
+    }
 
     // Reject writes to team memory files that contain secrets
     const secretError = checkTeamMemSecrets(fullFilePath, content)

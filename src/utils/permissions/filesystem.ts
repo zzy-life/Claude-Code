@@ -40,6 +40,7 @@ import {
 import { containsVulnerableUncPath } from '../shell/readOnlyCommandValidation.js'
 import { getToolResultsDir } from '../toolResultStorage.js'
 import { windowsPathToPosixPath } from '../windowsPaths.js'
+import { getCurrentWorktreeSession } from '../worktree.js'
 import type {
   PermissionDecision,
   PermissionResult,
@@ -739,6 +740,26 @@ export function pathInWorkingPath(path: string, workingPath: string): boolean {
 
   // Path is inside (relative path that doesn't go up)
   return !posix.isAbsolute(relative)
+}
+
+/** Reject stale original-repository paths before tools read or write their contents. */
+export function getWorktreeWriteError(path: string): string | undefined {
+  const session = getCurrentWorktreeSession()
+  if (!session) return undefined
+
+  const absolutePath = expandPath(path)
+  if (
+    pathInWorkingPath(absolutePath, session.worktreePath) ||
+    !pathInWorkingPath(absolutePath, session.originalCwd)
+  ) {
+    return undefined
+  }
+
+  const worktreeFilePath = join(
+    session.worktreePath,
+    relativePath(expandPath(session.originalCwd), absolutePath),
+  )
+  return `Cannot write to the original repository while this session is working in worktree ${session.worktreePath}. Read and edit the worktree file instead: ${worktreeFilePath}. Do not reuse content read from the original repository. If you intend to edit the original repository, exit the worktree first.`
 }
 
 function rootPathForSource(source: PermissionRuleSource): string {
