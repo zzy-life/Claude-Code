@@ -1686,12 +1686,27 @@ function shouldExcludeFromPostCompactRestore(
     // If we can't get plan file path, continue with other checks
   }
 
-  // Exclude all types of claude.md files
+  // Exclude corresponding CLAUDE.md and AGENTS.md instruction files
   // TODO: Refactor to use isMemoryFilePath() from claudemd.ts for consistency
   // and to also match child directory memory files (.claude/rules/*.md, etc.)
   try {
     const normalizedMemoryPaths = new Set(
-      MEMORY_TYPE_VALUES.map(type => expandPath(getMemoryPath(type))),
+      MEMORY_TYPE_VALUES.flatMap(type => {
+        const memoryPath = expandPath(getMemoryPath(type))
+        // AutoMem/TeamMem keep their existing entrypoints; only instruction files have AGENTS counterparts.
+        if (
+          type === 'Managed' ||
+          type === 'User' ||
+          type === 'Project' ||
+          type === 'Local'
+        ) {
+          return [
+            memoryPath,
+            memoryPath.replace(/CLAUDE(\.local)?\.md$/, 'AGENTS$1.md'),
+          ]
+        }
+        return [memoryPath]
+      }),
     )
 
     if (normalizedMemoryPaths.has(normalizedFilename)) {

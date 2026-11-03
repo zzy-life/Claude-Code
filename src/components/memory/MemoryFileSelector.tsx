@@ -50,6 +50,8 @@ export function MemoryFileSelector(t0) {
   const existingMemoryFiles = use(getMemoryFiles());
   const userMemoryPath = join(getClaudeConfigHomeDir(), "CLAUDE.md");
   const projectMemoryPath = join(getOriginalCwd(), "CLAUDE.md");
+  const userAgentsMemoryPath = join(getClaudeConfigHomeDir(), "AGENTS.md");
+  const projectAgentsMemoryPath = join(getOriginalCwd(), "AGENTS.md");
   const hasUserMemory = existingMemoryFiles.some(f => f.path === userMemoryPath);
   const hasProjectMemory = existingMemoryFiles.some(f_0 => f_0.path === projectMemoryPath);
   const allMemoryFiles = [...existingMemoryFiles.filter(_temp).map(_temp2), ...(hasUserMemory ? [] : [{
@@ -73,9 +75,13 @@ export function MemoryFileSelector(t0) {
     let label;
     if (file.type === "User" && !file.isNested && file.path === userMemoryPath) {
       label = "User memory";
+    } else if (file.type === "User" && !file.isNested && file.path === userAgentsMemoryPath) {
+      label = "User memory (AGENTS.md)";
     } else {
       if (file.type === "Project" && !file.isNested && file.path === projectMemoryPath) {
         label = "Project memory";
+      } else if (file.type === "Project" && !file.isNested && file.path === projectAgentsMemoryPath) {
+        label = "Project memory (AGENTS.md)";
       } else {
         if (depth > 0) {
           label = `${indent}L ${displayPath}${existsLabel}`;
@@ -86,11 +92,13 @@ export function MemoryFileSelector(t0) {
     }
     let description;
     const isGit = projectIsInGitRepo(getOriginalCwd());
-    if (file.type === "User" && !file.isNested) {
+    if (file.type === "User" && !file.isNested && file.path === userAgentsMemoryPath) {
+      description = "Saved in ~/.claude/AGENTS.md";
+    } else if (file.type === "User" && !file.isNested) {
       description = "Saved in ~/.claude/CLAUDE.md";
     } else {
-      if (file.type === "Project" && !file.isNested && file.path === projectMemoryPath) {
-        description = `${isGit ? "Checked in at" : "Saved in"} ./CLAUDE.md`;
+      if (file.type === "Project" && !file.isNested && (file.path === projectMemoryPath || file.path === projectAgentsMemoryPath)) {
+        description = `${isGit ? "Checked in at" : "Saved in"} ./${file.path === projectAgentsMemoryPath ? "AGENTS.md" : "CLAUDE.md"}`;
       } else {
         if (file.parent) {
           description = "@-imported";
