@@ -308,8 +308,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       getMergedOpus1MOption(fastMode),
       getSonnet46Option(),
       getSonnet46_1MOption(),
-      getHaiku45Option(),
-      getHaiku45_1MOption(),
+      checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaiku45Option(),
     ]
   }
 
@@ -326,10 +325,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
         premiumOptions.push(getMaxSonnet46_1MOption())
       }
 
-      premiumOptions.push(MaxHaiku45Option)
-      if (checkHaiku1mAccess()) {
-        premiumOptions.push(getMaxHaiku45_1MOption())
-      }
+      premiumOptions.push(
+        checkHaiku1mAccess() ? getMaxHaiku45_1MOption() : MaxHaiku45Option,
+      )
       return premiumOptions
     }
 
@@ -348,10 +346,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
     }
 
-    standardOptions.push(MaxHaiku45Option)
-    if (checkHaiku1mAccess()) {
-      standardOptions.push(getMaxHaiku45_1MOption())
-    }
+    standardOptions.push(
+      checkHaiku1mAccess() ? getMaxHaiku45_1MOption() : MaxHaiku45Option,
+    )
     return standardOptions
   }
 
@@ -369,10 +366,10 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
         payg1POptions.push(getOpus46_1MOption(fastMode))
       }
     }
-    payg1POptions.push(getHaiku45Option())
-    if (checkHaiku1mAccess()) {
-      payg1POptions.push(getHaiku45_1MOption())
-    }
+    // Prefer a single Haiku entry, falling back when 1M context is unavailable.
+    payg1POptions.push(
+      checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaiku45Option(),
+    )
     return payg1POptions
   }
 
@@ -402,14 +399,10 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     }
   }
   const customHaiku = getCustomHaikuOption()
-  if (customHaiku !== undefined) {
-    payg3pOptions.push(customHaiku)
-  } else {
-    payg3pOptions.push(getHaikuOption())
-    if (checkHaiku1mAccess()) {
-      payg3pOptions.push(getHaiku45_1MOption())
-    }
-  }
+  payg3pOptions.push(
+    customHaiku ??
+      (checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaikuOption()),
+  )
   return payg3pOptions
 }
 
