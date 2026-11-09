@@ -11,7 +11,7 @@ import type { EffortLevel } from '../../utils/effort.js';
 import { isBilledAsExtraUsage } from '../../utils/extraUsage.js';
 import { clearFastModeCooldown, isFastModeAvailable, isFastModeEnabled, isFastModeSupportedByModel } from '../../utils/fastMode.js';
 import { MODEL_ALIASES } from '../../utils/model/aliases.js';
-import { checkOpus1mAccess, checkSonnet1mAccess } from '../../utils/model/check1mAccess.js';
+import { checkHaiku1mAccess, checkOpus1mAccess, checkSonnet1mAccess } from '../../utils/model/check1mAccess.js';
 import { getDefaultMainLoopModelSetting, isOpus1mMergeEnabled, renderDefaultModelSetting } from '../../utils/model/model.js';
 import { isModelAllowed } from '../../utils/model/modelAllowlist.js';
 import { validateModel } from '../../utils/model/validateModel.js';
@@ -162,6 +162,13 @@ function SetModelAndClose({
         return;
       }
 
+      if (model && isHaiku1mUnavailable(model)) {
+        onDone('Haiku 4.5 with 1M context is not available for your account.', {
+          display: 'system'
+        });
+        return;
+      }
+
       // Skip validation for default model
       if (!model) {
         setModel(null);
@@ -242,6 +249,10 @@ function isSonnet1mUnavailable(model: string): boolean {
   // Warn about Sonnet and Sonnet 4.6, but not Sonnet 4.5 since that had
   // a different access criteria.
   return !checkSonnet1mAccess() && (m.includes('sonnet[1m]') || m.includes('sonnet-4-6[1m]'));
+}
+function isHaiku1mUnavailable(model: string): boolean {
+  const m = model.toLowerCase();
+  return !checkHaiku1mAccess() && m.includes('haiku') && m.includes('[1m]');
 }
 function ShowModelAndClose(t0) {
   const {

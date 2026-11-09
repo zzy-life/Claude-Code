@@ -376,6 +376,8 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
       return 'Sonnet 3.5'
     case getModelStrings().haiku45:
       return 'Haiku 4.5'
+    case getModelStrings().haiku45 + '[1m]':
+      return 'Haiku 4.5 (1M context)'
     case getModelStrings().haiku35:
       return 'Haiku 3.5'
     default:
@@ -515,10 +517,8 @@ export function parseUserSpecifiedModel(
  * context window from 1M to 200K, which trips autocompact at 23% apparent usage
  * and surfaces "Context limit reached" even though nothing overflowed.
  *
- * We only carry [1m] when the target actually supports it (sonnet/opus). A skill
- * with `model: haiku` on a 1M session still downgrades — haiku has no 1M variant,
- * so the autocompact that follows is correct. Skills that already specify [1m]
- * are left untouched.
+ * Carry [1m] for supported Sonnet, Opus, and Haiku families. Skills that already
+ * specify [1m] are left untouched.
  */
 export function resolveSkillModelOverride(
   skillModel: string,
@@ -604,7 +604,7 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
     return 'Claude 3.5 Sonnet'
   }
   if (canonical.includes('claude-haiku-4-5')) {
-    return 'Haiku 4.5'
+    return has1m ? 'Haiku 4.5 (with 1M context)' : 'Haiku 4.5'
   }
   if (canonical.includes('claude-3-5-haiku')) {
     return 'Claude 3.5 Haiku'

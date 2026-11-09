@@ -57,6 +57,18 @@ export function checkOpus1mAccess(): boolean {
   return true
 }
 
+export function checkHaiku1mAccess(): boolean {
+  if (is1mContextDisabled()) {
+    return false
+  }
+
+  if (isClaudeAISubscriber()) {
+    return isExtraUsageEnabled()
+  }
+
+  return true
+}
+
 export function checkSonnet1mAccess(): boolean {
   if (is1mContextDisabled()) {
     return false

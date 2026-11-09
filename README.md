@@ -67,6 +67,8 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 cc proxy config set <代理地址> <你的密钥>
 ```
 
+`/model` 菜单同时提供普通 `Haiku` 和 `Haiku (1M context)`，也可以使用 `/model haiku[1m]` 显式选择 1M 上下文。该选项需要代理或模型端点支持，不代表官方 Haiku 4.5 已支持 1M。自动压缩仍受 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 限制：配置为 `258000` 时，通常约在 225,000 tokens 触发压缩；未配置该上限时，1M 选项通常约在 967,000 tokens 触发压缩（均按摘要预留 20,000 tokens、缓冲 13,000 tokens 计算）。
+
 该命令会将指定的 HTTP 或 HTTPS 代理地址写入 `ANTHROPIC_BASE_URL`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。它会保留 `~/.claude/settings.json` 中的其他配置，清除可能覆盖代理模型设置的 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 及 `ANTHROPIC_MODEL`。配置完成后重启 Claude Code 生效。
 
 代理接口返回与 Claude Code 用量接口一致的 `Utilization` 结构，额度数据位于 `seven_day.utilization` 和 `seven_day.resets_at`。示例响应：

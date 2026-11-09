@@ -13,7 +13,11 @@ import {
   formatModelPricing,
 } from '../modelCost.js'
 import { getSettings_DEPRECATED } from '../settings/settings.js'
-import { checkOpus1mAccess, checkSonnet1mAccess } from './check1mAccess.js'
+import {
+  checkHaiku1mAccess,
+  checkOpus1mAccess,
+  checkSonnet1mAccess,
+} from './check1mAccess.js'
 import { getAPIProvider } from './providers.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import {
@@ -189,6 +193,27 @@ function getHaiku45Option(): ModelOption {
   }
 }
 
+export function getHaiku45_1MOption(): ModelOption {
+  const is3P = getAPIProvider() !== 'firstParty'
+  return {
+    value: is3P ? getModelStrings().haiku45 + '[1m]' : 'haiku[1m]',
+    label: 'Haiku (1M context)',
+    description: `Haiku 4.5 for long sessions${is3P ? '' : ` · ${formatModelPricing(COST_HAIKU_45)}`}`,
+    descriptionForModel:
+      'Haiku 4.5 with 1M context window - for long sessions with large codebases',
+  }
+}
+
+export function getMaxHaiku45_1MOption(): ModelOption {
+  const is3P = getAPIProvider() !== 'firstParty'
+  const billingInfo = isClaudeAISubscriber() ? ' · Billed as extra usage' : ''
+  return {
+    value: 'haiku[1m]',
+    label: 'Haiku (1M context)',
+    description: `Haiku 4.5 with 1M context${billingInfo}${is3P ? '' : ` · ${formatModelPricing(COST_HAIKU_45)}`}`,
+  }
+}
+
 function getHaiku35Option(): ModelOption {
   const is3P = getAPIProvider() !== 'firstParty'
   return {
@@ -284,6 +309,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       getSonnet46Option(),
       getSonnet46_1MOption(),
       getHaiku45Option(),
+      getHaiku45_1MOption(),
     ]
   }
 
@@ -301,6 +327,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
 
       premiumOptions.push(MaxHaiku45Option)
+      if (checkHaiku1mAccess()) {
+        premiumOptions.push(getMaxHaiku45_1MOption())
+      }
       return premiumOptions
     }
 
@@ -320,6 +349,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     }
 
     standardOptions.push(MaxHaiku45Option)
+    if (checkHaiku1mAccess()) {
+      standardOptions.push(getMaxHaiku45_1MOption())
+    }
     return standardOptions
   }
 
@@ -338,6 +370,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
     }
     payg1POptions.push(getHaiku45Option())
+    if (checkHaiku1mAccess()) {
+      payg1POptions.push(getHaiku45_1MOption())
+    }
     return payg1POptions
   }
 
@@ -371,6 +406,9 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     payg3pOptions.push(customHaiku)
   } else {
     payg3pOptions.push(getHaikuOption())
+    if (checkHaiku1mAccess()) {
+      payg3pOptions.push(getHaiku45_1MOption())
+    }
   }
   return payg3pOptions
 }

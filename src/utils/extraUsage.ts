@@ -16,8 +16,9 @@ export function isBilledAsExtraUsage(
     .trim()
   const isOpus46 = m === 'opus' || m.includes('opus-4-6')
   const isSonnet46 = m === 'sonnet' || m.includes('sonnet-4-6')
+  const isHaiku45 = m === 'haiku' || m.includes('haiku-4-5')
 
   if (isOpus46 && isOpus1mMerged) return false
 
-  return isOpus46 || isSonnet46
+  return isOpus46 || isSonnet46 || isHaiku45
 }
