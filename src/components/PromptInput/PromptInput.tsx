@@ -12,8 +12,6 @@ import type { FooterItem } from 'src/state/AppStateStore.js';
 import { getCwd } from 'src/utils/cwd.js';
 import { isQueuedCommandEditable, popAllEditable } from 'src/utils/messageQueueManager.js';
 import stripAnsi from 'strip-ansi';
-import { companionReservedColumns } from '../../buddy/CompanionSprite.js';
-import { findBuddyTriggerPositions, useBuddyNotification } from '../../buddy/useBuddyNotification.js';
 import { FastModePicker } from '../../commands/fast/fast.js';
 import { isUltrareviewEnabled } from '../../commands/review/ultrareviewEnabled.js';
 import { getNativeCSIuTerminalDisplayName } from '../../commands/terminalSetup/terminalSetup.js';
@@ -303,14 +301,6 @@ function PromptInput({
   const viewingAgentTaskId = useAppState(s => s.viewingAgentTaskId);
   const viewSelectionMode = useAppState(s => s.viewSelectionMode);
   const showSpinnerTree = useAppState(s => s.expandedView) === 'teammates';
-  const {
-    companion: _companion,
-    companionMuted
-  } = feature('BUDDY') ? getGlobalConfig() : {
-    companion: undefined,
-    companionMuted: undefined
-  };
-  const companionFooterVisible = !!_companion && !companionMuted;
   // Brief mode: BriefSpinner/BriefIdleStatus own the 2-row footprint above
   // the input. Dropping marginTop here lets the spinner sit flush against
   // the input bar. viewingAgentTaskId mirrors the gate on both (Spinner.tsx,
@@ -447,14 +437,14 @@ function PromptInput({
   // ─── Footer pill navigation ─────────────────────────────────────────────
   // Which pills render below the input box. Order here IS the nav order
   // (down/right = forward, up/left = back). Selection lives in AppState so
-  // pills rendered outside PromptInput (CompanionSprite) can read focus.
+  // pills rendered outside PromptInput can read focus.
   const runningTaskCount = useMemo(() => count(Object.values(tasks), t => t.status === 'running'), [tasks]);
   // Panel shows retained-completed agents too (getVisibleAgentTasks), so the
   // pill must stay navigable whenever the panel has rows — not just when
   // something is running.
   const tasksFooterVisible = (runningTaskCount > 0 || "external" === 'ant' && coordinatorTaskCount > 0) && !shouldHideTasksFooter(tasks, showSpinnerTree);
   const teamsFooterVisible = cachedTeams.length > 0;
-  const footerItems = useMemo(() => [tasksFooterVisible && 'tasks', bagelFooterVisible && 'bagel', teamsFooterVisible && 'teams', bridgeFooterVisible && 'bridge', companionFooterVisible && 'companion'].filter(Boolean) as FooterItem[], [tasksFooterVisible, bagelFooterVisible, teamsFooterVisible, bridgeFooterVisible, companionFooterVisible]);
+  const footerItems = useMemo(() => [tasksFooterVisible && 'tasks', bagelFooterVisible && 'bagel', teamsFooterVisible && 'teams', bridgeFooterVisible && 'bridge'].filter(Boolean) as FooterItem[], [tasksFooterVisible, bagelFooterVisible, teamsFooterVisible, bridgeFooterVisible]);
 
   // Effective selection: null if the selected pill stopped rendering (bridge
   // disconnected, task finished). The derivation makes the UI correct
@@ -518,7 +508,6 @@ function PromptInput({
   const ultraplanTriggers = useMemo(() => feature('ULTRAPLAN') && !ultraplanSessionUrl && !ultraplanLaunching ? findUltraplanTriggerPositions(displayedValue) : [], [displayedValue, ultraplanSessionUrl, ultraplanLaunching]);
   const ultrareviewTriggers = useMemo(() => isUltrareviewEnabled() ? findUltrareviewTriggerPositions(displayedValue) : [], [displayedValue]);
   const btwTriggers = useMemo(() => findBtwTriggerPositions(displayedValue), [displayedValue]);
-  const buddyTriggers = useMemo(() => findBuddyTriggerPositions(displayedValue), [displayedValue]);
   const slashCommandTriggers = useMemo(() => {
     const positions = findSlashCommandPositions(displayedValue);
     // Only highlight valid commands
@@ -721,20 +710,8 @@ function PromptInput({
       }
     }
 
-    // Rainbow for /buddy
-    for (const trigger of buddyTriggers) {
-      for (let i = trigger.start; i < trigger.end; i++) {
-        highlights.push({
-          start: i,
-          end: i + 1,
-          color: getRainbowColor(i - trigger.start),
-          shimmerColor: getRainbowColor(i - trigger.start, true),
-          priority: 10
-        });
-      }
-    }
     return highlights;
-  }, [isSearchingHistory, historyQuery, historyMatch, historyFailedMatch, cursorOffset, btwTriggers, imageRefPositions, memberMentionHighlights, slashCommandTriggers, tokenBudgetTriggers, slackChannelTriggers, displayedValue, voiceInterimRange, thinkTriggers, ultraplanTriggers, ultrareviewTriggers, buddyTriggers]);
+  }, [isSearchingHistory, historyQuery, historyMatch, historyFailedMatch, cursorOffset, btwTriggers, imageRefPositions, memberMentionHighlights, slashCommandTriggers, tokenBudgetTriggers, slackChannelTriggers, displayedValue, voiceInterimRange, thinkTriggers, ultraplanTriggers, ultrareviewTriggers]);
   const {
     addNotification,
     removeNotification
@@ -1781,12 +1758,6 @@ function PromptInput({
         return;
       }
       switch (footerItemSelected) {
-        case 'companion':
-          if (feature('BUDDY')) {
-            selectFooterItem(null);
-            void onSubmit('/buddy');
-          }
-          break;
         case 'tasks':
           if (isTeammateMode) {
             // Enter switches to the selected agent's view
@@ -1965,15 +1936,11 @@ function PromptInput({
       timeoutMs: 12_000
     });
   }, [effortNotificationText, addNotification, removeNotification]);
-  useBuddyNotification();
-  const companionSpeaking = feature('BUDDY') ?
-  // biome-ignore lint/correctness/useHookAtTopLevel: feature() is a compile-time constant
-  useAppState(s => s.companionReaction !== undefined) : false;
   const {
     columns,
     rows
   } = useTerminalSize();
-  const textInputColumns = columns - 3 - companionReservedColumns(columns, companionSpeaking);
+  const textInputColumns = columns - 3;
 
   // POC: click-to-position-cursor. Mouse tracking is only enabled inside
   // <AlternateScreen>, so this is dormant in the normal main-screen REPL.

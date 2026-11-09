@@ -165,30 +165,13 @@ bun run version
 
 ---
 
-## 从源码中发现的 7 大隐藏功能
+## 从源码中发现的 6 大隐藏功能
 
 通过阅读还原后的 1,987 个 TypeScript 源文件，我们发现了大量未公开的隐藏功能。这些功能通过**编译开关**（`feature()`）和**用户类型**（`USER_TYPE`）进行门控，外部发布版中大部分被裁剪。
 
 ---
 
-### 1. [BUDDY — AI 电子宠物](docs/01-buddy.md)
-
-> 源码位置：`src/buddy/` · [查看完整分析 →](docs/01-buddy.md)
-
-终端里的拓麻歌子！一个完整的虚拟宠物系统。
-
-- **18 种物种**：鸭子、鹅、猫、龙、章鱼、猫头鹰、企鹅、乌龟、蜗牛、幽灵、六角恐龙、水豚、仙人掌、机器人、兔子、蘑菇、果冻、胖猫
-- **5 级稀有度**：普通(60%) → 非凡(25%) → 稀有(10%) → 史诗(4%) → 传说(1%)
-- **1% 闪光概率**：独立于稀有度，任何宠物都有 1% 概率成为闪光个体
-- **确定性生成**：使用账号 UUID + 固定盐值 `'friend-2026-401'` 经 FNV-1a 哈希 → Mulberry32 PRNG，每人只会得到一只固定的宠物，改配置也没用
-- **外观系统**：6 种眼睛样式 + 8 种帽子（皇冠、巫师帽、光环等），common 稀有度没有帽子
-- **交互**：`/buddy pet` 抚摸（爱心动画）、`/buddy hatch` 孵化、`/buddy card` 查看卡片
-- **动画**：500ms 帧率的 ASCII 精灵动画，气泡对话，窄终端自动退化为表情文字脸（如 `=·ω·=`）
-- **编译开关**：`feature('BUDDY')`
-
----
-
-### 2. [KAIROS — 永不关机的 Claude](docs/02-kairos.md)
+### 1. [KAIROS — 永不关机的 Claude](docs/02-kairos.md)
 
 > 源码位置：`src/assistant/`、`src/proactive/`、`src/services/autoDream/` · [查看完整分析 →](docs/02-kairos.md)
 
@@ -205,7 +188,7 @@ bun run version
 
 ---
 
-### 3. [ULTRAPLAN — 云端深度规划](docs/03-ultraplan.md)
+### 2. [ULTRAPLAN — 云端深度规划](docs/03-ultraplan.md)
 
 > 源码位置：`src/commands/ultraplan.tsx`、`src/utils/ultraplan/` · [查看完整分析 →](docs/03-ultraplan.md)
 
@@ -220,7 +203,7 @@ bun run version
 
 ---
 
-### 4. [Coordinator — 多 Agent 编排模式](docs/04-coordinator.md)
+### 3. [Coordinator — 多 Agent 编排模式](docs/04-coordinator.md)
 
 > 源码位置：`src/coordinator/` · [查看完整分析 →](docs/04-coordinator.md)
 
@@ -235,20 +218,17 @@ bun run version
 
 ---
 
-### 5. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
+### 4. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
 
 > 源码位置：`src/commands.ts`、`src/main.tsx` · [查看完整分析 →](docs/05-hidden-commands.md)
 
 隐藏命令、内部命令、编译开关、隐藏 CLI 参数及环境变量统一维护在该文档中。README 的[斜杠命令清单](#斜杠命令清单)仅提供按使用场景分类的速查说明，避免维护两份重复表格。
 
-常见受限能力包括远程控制、持久助手、语音、工作流、宠物和云端深度规划；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
+常见受限能力包括远程控制、持久助手、语音、工作流和云端深度规划；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
 
 ---
 
-
----
-
-### 6. [Bridge — 远程遥控终端](docs/06-bridge.md)
+### 5. [Bridge — 远程遥控终端](docs/06-bridge.md)
 
 > 源码位置：`src/bridge/`（33 个文件） · [查看完整分析 →](docs/06-bridge.md)
 
@@ -263,7 +243,7 @@ bun run version
 
 ---
 
-### 7. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
+### 6. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
 
 外部发布版是**阉割版**。Anthropic 通过三层门控控制功能。[查看完整分析 →](docs/07-feature-gates.md)
 
@@ -272,11 +252,10 @@ bun run version
 构建时决定代码包含/排除，以下是完整列表：
 
 <details>
-<summary>点击展开全部 50 个编译开关</summary>
+<summary>点击展开编译开关列表</summary>
 
 | 开关 | 说明 |
 |------|------|
-| `BUDDY` | 宠物伴侣系统 |
 | `KAIROS` | 持久助手模式 |
 | `KAIROS_BRIEF` | 简报模式 |
 | `KAIROS_CHANNELS` | 通道通知 |
@@ -385,7 +364,6 @@ src/                    # 核心源码（1,987 个 TS/TSX）
 ├── services/           # API / MCP / analytics / autoDream
 ├── components/         # 148 个终端 UI 组件（React + Ink）
 ├── hooks/              # 87 个自定义 Hooks
-├── buddy/              # 宠物伴侣系统
 ├── assistant/          # KAIROS 助手模式
 ├── coordinator/        # 多 Agent 协调器
 ├── bridge/             # 远程控制桥接（31 文件）
@@ -693,7 +671,6 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | `/think-back`、`/thinkback-play` | 查看或播放 Claude Code 的年度使用回顾；仅在活动开启期间可用。 |
 | `/web-setup` | 在 Claude 网页端连接 GitHub 并完成 Claude Code 的 Web 使用设置；仅部分 Claude.ai 账户和策略允许时可用。 |
 | `/fork` | 将当前任务分叉为独立的子 Agent 会话，用于并行处理；未启用该功能时它只是 `/branch` 的别名。 |
-| `/buddy` | 在终端中启用可互动的 AI 宠物功能；属于实验功能，默认构建通常不提供。 |
 | `/proactive` | 让助手在空闲期间自主检查待办、继续合适的工作；需启用持久助手/主动模式实验。 |
 | `/brief` | 切换为更精简的回答风格；需启用 KAIROS 助手实验且账户具备资格。 |
 | `/assistant` | 开启可跨会话持续工作的持久助手模式；属于 KAIROS 实验功能。 |
@@ -730,7 +707,7 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | 远程与后台会话 | `useRemoteSession`、`useSSHSession`、`useDirectConnect`、`LocalMainSessionTask`、`useSessionBackgrounding` | 提供远程/SSH/直连会话能力，并支持将主会话转入后台。 |
 | 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置和动态实验配置，采集诊断/会话追踪并维护活动状态。 |
 | 条件加载模块 | `useVoiceIntegration`、`useFrustrationDetection`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
-| 其他界面能力 | `Spinner`、`TaskListV2`、`CompanionSprite`、`DevBar` | 显示加载状态、任务列表、助手形象及开发栏。 |
+| 其他界面能力 | `Spinner`、`TaskListV2`、`DevBar` | 显示加载状态、任务列表及开发栏。 |
 
 
 

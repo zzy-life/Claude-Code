@@ -36,11 +36,6 @@ type Props = {
   /** Content rendered inside the ScrollBox after messages — user can scroll
    *  up to see context while it's showing (used by PermissionRequest). */
   overlay?: ReactNode;
-  /** Absolute-positioned content anchored at the bottom-right of the
-   *  ScrollBox area, floating over scrollback. Rendered inside the flexGrow
-   *  region (not the bottom slot) so the overflowY:hidden cap doesn't clip
-   *  it. Fullscreen only — used for the companion speech bubble. */
-  bottomFloat?: ReactNode;
   /** Slash-command dialog content. Rendered in an absolute-positioned
    *  bottom-anchored pane (▔ divider, paddingX=2) that paints over the
    *  ScrollBox AND bottom slot. Provides ModalContext so Pane/Dialog inside
@@ -273,7 +268,6 @@ export function FullscreenLayout(t0) {
     scrollable,
     bottom,
     overlay,
-    bottomFloat,
     modal,
     modalScrollRef,
     scrollRef,
@@ -379,20 +373,11 @@ export function FullscreenLayout(t0) {
     } else {
       t12 = $[21];
     }
-    let t13;
-    if ($[22] !== bottomFloat) {
-      t13 = bottomFloat != null && <Box position="absolute" bottom={0} right={0} opaque={true}>{bottomFloat}</Box>;
-      $[22] = bottomFloat;
-      $[23] = t13;
-    } else {
-      t13 = $[23];
-    }
     let t14;
-    if ($[24] !== t11 || $[25] !== t12 || $[26] !== t13 || $[27] !== t8) {
-      t14 = <Box flexGrow={1} flexDirection="column" overflow="hidden">{t8}{t11}{t12}{t13}</Box>;
+    if ($[24] !== t11 || $[25] !== t12 || $[27] !== t8) {
+      t14 = <Box flexGrow={1} flexDirection="column" overflow="hidden">{t8}{t11}{t12}</Box>;
       $[24] = t11;
       $[25] = t12;
-      $[26] = t13;
       $[27] = t8;
       $[28] = t14;
     } else {

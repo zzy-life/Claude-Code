@@ -7,7 +7,6 @@ src/                    # 核心源码（1,987 个 TS/TSX）
 ├── services/           # API / MCP / analytics / autoDream
 ├── components/         # 148 个终端 UI 组件（React + Ink）
 ├── hooks/              # 87 个自定义 Hooks
-├── buddy/              # 宠物伴侣系统
 ├── assistant/          # KAIROS 助手模式
 ├── coordinator/        # 多 Agent 协调器
 ├── bridge/             # 远程控制桥接（31 文件）

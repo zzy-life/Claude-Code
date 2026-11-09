@@ -31,7 +31,6 @@
 
 | 开关 | 说明 | 状态 |
 |------|------|------|
-| `BUDDY` | 宠物伴侣系统 | 外部版未启用 |
 | `KAIROS` | 持久助手模式 | 外部版未启用 |
 | `KAIROS_BRIEF` | 简报模式 | 外部版未启用 |
 | `KAIROS_CHANNELS` | 通道通知 | 外部版未启用 |
@@ -195,7 +194,7 @@ Claude Code 的功能分层非常清晰：
 
 被 feature() 裁剪掉的
 ═══════════════════════════════
-  BUDDY、KAIROS、ULTRAPLAN、
+  KAIROS、ULTRAPLAN、
   BRIDGE、COORDINATOR、VOICE...
 
 被 USER_TYPE 锁住的

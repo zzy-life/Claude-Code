@@ -12,7 +12,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 
 | 命令 | 编译开关 | 功能与额外限制 |
 |------|---------|------|
-| `/buddy` | `BUDDY` | 终端 AI 宠物功能。 |
 | `/proactive` | `PROACTIVE` / `KAIROS` | 空闲时主动检查并继续合适的工作。 |
 | `/assistant` | `KAIROS` | 跨会话持续运行的持久助手模式。 |
 | `/brief` | `KAIROS` / `KAIROS_BRIEF` | 精简输出模式；还需服务端允许且账户具备资格。 |

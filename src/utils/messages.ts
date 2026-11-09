@@ -21,7 +21,6 @@ import {
 } from 'src/services/analytics/index.js'
 import { sanitizeToolNameForAnalytics } from 'src/services/analytics/metadata.js'
 import type { AgentId } from 'src/types/ids.js'
-import { companionIntroText } from '../buddy/prompt.js'
 import { NO_CONTENT_MESSAGE } from '../constants/messages.js'
 import { OUTPUT_STYLE_CONFIG } from '../constants/outputStyles.js'
 import { isAutoMemoryEnabled } from '../memdir/paths.js'
@@ -4229,14 +4228,6 @@ You have exited auto mode. The user may now want to interact more directly. You 
         createUserMessage({ content: parts.join('\n\n'), isMeta: true }),
       ])
     }
-    case 'companion_intro': {
-      return wrapMessagesInSystemReminder([
-        createUserMessage({
-          content: companionIntroText(attachment.name, attachment.species),
-          isMeta: true,
-        }),
-      ])
-    }
     case 'verify_plan_reminder': {
       // Dead code elimination: CLAUDE_CODE_VERIFY_PLAN='false' in external builds, so === 'true' check allows Bun to eliminate the string
       /* eslint-disable-next-line custom-rules/no-process-env-top-level */
@@ -4271,6 +4262,7 @@ You have exited auto mode. The user may now want to interact more directly. You 
     'todo',
     'task_progress', // removed in PR #19337
     'ultramemory', // removed in PR #23596
+    'companion_intro',
   ]
   if (LEGACY_ATTACHMENT_TYPES.includes((attachment as { type: string }).type)) {
     return []
