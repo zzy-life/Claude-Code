@@ -29,12 +29,12 @@ export function modelSupportsEffort(model: string): boolean {
   if (supported3P !== undefined) {
     return supported3P
   }
-  // Supported by a subset of Claude 4 models
-  if (m.includes('opus-4-6') || m.includes('sonnet-4-6')) {
+  // Haiku effort is forwarded to the upstream provider, which must support it.
+  if (m.includes('opus-4-6') || m.includes('sonnet-4-6') || m.includes('haiku')) {
     return true
   }
-  // Exclude any other known legacy models (haiku, older opus/sonnet variants)
-  if (m.includes('haiku') || m.includes('sonnet') || m.includes('opus')) {
+  // Exclude older opus/sonnet variants.
+  if (m.includes('sonnet') || m.includes('opus')) {
     return false
   }
 
