@@ -167,7 +167,7 @@ bun run version
 
 ---
 
-## 从源码中发现的 6 大隐藏功能
+## 从源码中发现的 5 大隐藏功能
 
 通过阅读还原后的 1,987 个 TypeScript 源文件，我们发现了大量未公开的隐藏功能。这些功能通过**编译开关**（`feature()`）和**用户类型**（`USER_TYPE`）进行门控，外部发布版中大部分被裁剪。
 
@@ -190,22 +190,7 @@ bun run version
 
 ---
 
-### 2. [ULTRAPLAN — 云端深度规划](docs/03-ultraplan.md)
-
-> 源码位置：`src/commands/ultraplan.tsx`、`src/utils/ultraplan/` · [查看完整分析 →](docs/03-ultraplan.md)
-
-把难题甩给云端 Opus 独立研究最长 30 分钟。
-
-- **流程**：`/ultraplan <prompt>` → 创建远程 CCR 会话 → Opus 模型独立研究 → 后台轮询等待（30 分钟超时）→ 浏览器查看/修改方案 → 批准执行或传送回本地
-- **关键词触发**：消息中包含 "ultraplan" 自动触发，智能排除引号/路径/标识符中的误触发
-- **传送（Teleport）**：`src/utils/teleport.tsx` 实现本地 ↔ 远程会话传输，支持 Git Bundle 打包代码上下文
-- **完全内部限定**：`isEnabled: () => "external" === 'ant'`，外部版永远不可用
-- **编译开关**：`feature('ULTRAPLAN')`
-- **远程开关**：`tengu_ultraplan_model`（控制使用的模型）
-
----
-
-### 3. [Coordinator — 多 Agent 编排模式](docs/04-coordinator.md)
+### 2. [Coordinator — 多 Agent 编排模式](docs/04-coordinator.md)
 
 > 源码位置：`src/coordinator/` · [查看完整分析 →](docs/04-coordinator.md)
 
@@ -220,17 +205,17 @@ bun run version
 
 ---
 
-### 4. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
+### 3. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
 
 > 源码位置：`src/commands.ts`、`src/main.tsx` · [查看完整分析 →](docs/05-hidden-commands.md)
 
 隐藏命令、内部命令、编译开关、隐藏 CLI 参数及环境变量统一维护在该文档中。README 的[斜杠命令清单](#斜杠命令清单)仅提供按使用场景分类的速查说明，避免维护两份重复表格。
 
-常见受限能力包括远程控制、持久助手、语音、工作流和云端深度规划；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
+常见受限能力包括远程控制、持久助手、语音和工作流；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
 
 ---
 
-### 5. [Bridge — 远程遥控终端](docs/06-bridge.md)
+### 4. [Bridge — 远程遥控终端](docs/06-bridge.md)
 
 > 源码位置：`src/bridge/`（33 个文件） · [查看完整分析 →](docs/06-bridge.md)
 
@@ -245,7 +230,7 @@ bun run version
 
 ---
 
-### 6. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
+### 5. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
 
 外部发布版是**阉割版**。Anthropic 通过三层门控控制功能。[查看完整分析 →](docs/07-feature-gates.md)
 
@@ -262,7 +247,6 @@ bun run version
 | `KAIROS_BRIEF` | 简报模式 |
 | `KAIROS_CHANNELS` | 通道通知 |
 | `KAIROS_GITHUB_WEBHOOKS` | GitHub Webhook |
-| `ULTRAPLAN` | 云端深度规划 |
 | `COORDINATOR_MODE` | 多 Agent 编排 |
 | `BRIDGE_MODE` | 远程控制桥接 |
 | `VOICE_MODE` | 语音交互 |
@@ -322,7 +306,6 @@ bun run version
 | `tengu_kairos` | KAIROS 助手模式开关 |
 | `tengu_onyx_plover` | 自动做梦阈值（间隔/会话数） |
 | `tengu_cobalt_frost` | 语音识别（Nova 3）开关 |
-| `tengu_ultraplan_model` | Ultraplan 使用的模型 |
 | `tengu_ant_model_override` | 内部用户模型覆盖 |
 | `tengu_session_memory` | 会话记忆功能 |
 | `tengu_max_version_config` | 自动更新 Kill Switch |
@@ -682,7 +665,6 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | `/workflows` | 管理可复用的工作流脚本：把一组预定义步骤保存为命令，以便重复执行开发流程；仅启用工作流实验时可用。 |
 | `/torch` | Anthropic 内部代号功能；源码未提供面向外部用户的稳定用途说明，默认不可用。 |
 | `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
-| `/ultraplan` | 将复杂问题交给云端进行较长时间的独立研究和方案规划；当前外部构建已强制禁用。 |
 
 内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/break-cache`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
 

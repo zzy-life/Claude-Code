@@ -35,7 +35,6 @@
 | `KAIROS_BRIEF` | 简报模式 | 外部版未启用 |
 | `KAIROS_CHANNELS` | 通道通知 | 外部版未启用 |
 | `KAIROS_GITHUB_WEBHOOKS` | GitHub Webhook | 外部版未启用 |
-| `ULTRAPLAN` | 云端深度规划 | 外部版未启用 |
 | `COORDINATOR_MODE` | 多 Agent 编排 | 外部版未启用 |
 | `BRIDGE_MODE` | 远程控制桥接 | 外部版未启用 |
 | `VOICE_MODE` | 语音交互 | 外部版未启用 |
@@ -156,7 +155,6 @@
 | `tengu_kairos` | KAIROS 助手模式总开关 |
 | `tengu_onyx_plover` | AutoDream 阈值（整合间隔/会话数） |
 | `tengu_cobalt_frost` | 语音识别（Nova 3）开关 |
-| `tengu_ultraplan_model` | Ultraplan 使用的模型 |
 | `tengu_ant_model_override` | 内部用户模型覆盖 |
 | `tengu_session_memory` | 会话记忆功能 |
 | `tengu_sm_config` | 会话记忆配置 |
@@ -194,7 +192,7 @@ Claude Code 的功能分层非常清晰：
 
 被 feature() 裁剪掉的
 ═══════════════════════════════
-  KAIROS、ULTRAPLAN、
+  KAIROS、
   BRIDGE、COORDINATOR、VOICE...
 
 被 USER_TYPE 锁住的

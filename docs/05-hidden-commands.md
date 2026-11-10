@@ -23,7 +23,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `/workflows` | `WORKFLOW_SCRIPTS` | 将预定义的多步骤开发流程保存、管理并重复执行。 |
 | `/torch` | `TORCH` | 内部代号功能；源码未提供面向外部的稳定用途。 |
 | `/web-setup` | `CCR_REMOTE_SETUP` | 在 Claude 网页端连接 GitHub 并设置 Claude Code；还需 Claude.ai 登录、服务端开关及远程会话策略许可。 |
-| `/ultraplan` | `ULTRAPLAN` | 云端长时间独立研究与规划；当前外部构建的 `isEnabled` 固定为 `false`。 |
 | `/force-snip` | `HISTORY_SNIP` | 强制截断历史；即使开关启用，仍仅限内部构建。 |
 
 ---
@@ -59,7 +58,7 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `/agents-platform` | 智能体平台入口；当前还原开发构建标注为不可用。 |
 | `/autofix-pr` | 自动修复 Pull Request。 |
 
-`/force-snip`、`/ultraplan`、`/subscribe-pr` 还分别受 `HISTORY_SNIP`、`ULTRAPLAN`、`KAIROS_GITHUB_WEBHOOKS` 等开关约束；即使进入内部构建也未必可用。`/files` 与 `/tag` 属于常规注册表中的受限命令，不属于 `INTERNAL_ONLY_COMMANDS`。
+`/force-snip`、`/subscribe-pr` 还分别受 `HISTORY_SNIP`、`KAIROS_GITHUB_WEBHOOKS` 等开关约束；即使进入内部构建也未必可用。`/files` 与 `/tag` 属于常规注册表中的受限命令，不属于 `INTERNAL_ONLY_COMMANDS`。
 
 ---
 
@@ -177,7 +176,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 |----------|------|
 | `CLAUDE_INTERNAL_FC_OVERRIDES` | GrowthBook 功能覆盖 JSON |
 | `CLAUDE_CODE_GB_BASE_URL` | GrowthBook API URL 覆盖 |
-| `ULTRAPLAN_PROMPT_FILE` | Ultraplan 提示文件覆盖 |
 | `MAX_THINKING_TOKENS` | 最大思考 token 数 |
 | `SESSION_INGRESS_URL` | 会话入口 URL |
 | `IS_DEMO` | 演示模式 |
