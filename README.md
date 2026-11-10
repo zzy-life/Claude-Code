@@ -11,44 +11,27 @@
 
 ---
 
-## 快速开始
+## 阅读导航
 
-### 安装 Bun
+- **普通用户**：查看[普通用户指南](#普通用户指南)，了解安装、代理配置、模型选择、文件引用和斜杠命令。
+- **开发者**：查看[开发者指南](#开发者指南)，了解源码运行、依赖维护、代理接口和内部实现。
 
-项目建议使用 Bun 1.3.5，并需要 Node.js ≥ 20.19。
+## 普通用户指南
 
-```bash
-npm install -g bun@1.3.5
-```
+### 安装与启动
 
-Windows PowerShell：
-
-```powershell
-iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
-```
-
-### 终端用户使用
+需要 Node.js ≥ 20.19；使用 npm 安装发布包，无需安装 Bun 或下载源码。
 
 ```bash
 npm install -g @zzy1998/claude-code
-cc
+ccli
 ```
 
-> Linux 上如需避免 `cc` 与 C 编译器命令冲突，请使用兼容命令 `ccli`。
+<a id="codex-claude-proxy-剩余额度提示"></a>
 
-### 本地安装并运行
+### 代理配置与额度提示
 
-```bash
-bun ci            # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 20.19）
-bun run dev       # 启动 CLI
-bun run version   # 验证版本
-```
-
-> 日常安装请使用 `bun ci`，不要使用普通 `bun install`，避免依赖重新解析后发生版本漂移。
-
-### Codex Claude Proxy 剩余额度提示
-
-当通过 Codex Claude Proxy 调用模型时，CLI 会在每轮对话结束后请求代理的 `GET /v1/usage`，并在输入框左下角显示：
+当通过 Codex Claude Proxy 调用模型时，CLI 会在每轮对话结束后查询代理额度，并在输入框左下角显示：
 
 ```text
 ? for shortcuts · quota 85% · ctx 123k/160k
@@ -64,48 +47,188 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 也可以使用一条命令写入代理所需的用户级配置：
 
 ```powershell
-cc proxy config set <代理地址> <你的密钥>
+ccli proxy config set <代理地址> <你的密钥>
 ```
-
-`/model` 菜单同时提供普通 `Haiku` 和 `Haiku (1M context)`，也可以使用 `/model haiku[1m]` 显式选择 1M 上下文。该选项需要代理或模型端点支持，不代表官方 Haiku 4.5 已支持 1M。自动压缩仍受 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 限制：配置为 `258000` 时，通常约在 225,000 tokens 触发压缩；未配置该上限时，1M 选项通常约在 967,000 tokens 触发压缩（均按摘要预留 20,000 tokens、缓冲 13,000 tokens 计算）。
 
 该命令会将指定的 HTTP 或 HTTPS 代理地址写入 `ANTHROPIC_BASE_URL`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。它会保留 `~/.claude/settings.json` 中的其他配置，清除可能覆盖代理模型设置的 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 及 `ANTHROPIC_MODEL`。配置完成后重启 Claude Code 生效。
 
-代理接口返回与 Claude Code 用量接口一致的 `Utilization` 结构，额度数据位于 `seven_day.utilization` 和 `seven_day.resets_at`。示例响应：
+每轮对话结束后，额度右侧还会显示当前会话的上下文占用和可用窗口，例如 `ctx 123k/160k`；分母复用自动压缩的有效窗口计算，会应用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 并扣除摘要预留 token。未配置上述环境变量、代理不支持用量查询或请求失败时，CLI 不显示额度提示，不影响正常对话。
+
+### 模型与上下文
+
+`/model` 菜单同时提供普通 `Haiku` 和 `Haiku (1M context)`，也可以使用 `/model haiku[1m]` 显式选择 1M 上下文。该选项需要代理或模型端点支持，不代表官方 Haiku 4.5 已支持 1M。自动压缩仍受 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 限制：配置为 `258000` 时，通常约在 225,000 tokens 触发压缩；未配置该上限时，1M 选项通常约在 967,000 tokens 触发压缩（均按摘要预留 20,000 tokens、缓冲 13,000 tokens 计算）。
+
+### VS Code 终端标题与会话名称
+
+如果 VS Code 集成终端的标签只显示 `bun` 等进程名，可能是终端标签配置没有使用程序设置的标题。可以按 `Ctrl+Shift+P`，选择“首选项：打开用户设置(JSON)”，将下面的配置合并到现有的设置对象中（不要覆盖整个文件）：
 
 ```json
 {
-  "five_hour": null,
-  "seven_day": {
-    "utilization": 15,
-    "resets_at": "2026-07-20T00:00:00.000Z"
-  },
-  "seven_day_oauth_apps": null,
-  "seven_day_opus": null,
-  "seven_day_sonnet": null,
-  "extra_usage": null
+  "terminal.integrated.tabs.title": "${sequence}"
 }
 ```
 
-`seven_day.utilization` 表示本周已使用百分比；CLI 将其换算为剩余百分比显示。每轮对话结束后，额度右侧还会显示当前会话的上下文占用和可用窗口，例如 `ctx 123k/160k`；分母复用自动压缩的有效窗口计算，会应用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 并扣除摘要预留 token。未配置上述环境变量、代理不支持该接口或请求失败时，CLI 不显示额度提示，不影响正常对话。
+`${sequence}` 表示显示程序通过终端转义序列设置的标题。此用户级配置会影响其他 VS Code 集成终端，Claude Code 不会自动修改它。
 
+配置后重新打开集成终端，启动 Claude Code 并发送一条正常任务消息，等待 AI 生成标题。如果仍没有变化，请检查是否手动重命名了终端，或设置了 `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` 禁用标题更新。
 
+终端标签标题与 `/resume` 中的历史会话名称是两个显示位置：
 
+- 新会话首次发送正常任务消息时，会异步调用 Haiku 生成标题；成功后同时用于终端标签，并保存到会话供 `/resume` 显示，不额外增加模型请求。
+- 即使终端没有展示程序设置的标题，也不影响生成成功的标题保存到会话。
+- 用户指定的会话名称始终优先，不会被自动标题覆盖。执行 `/rename 自定义名称` 可直接命名，执行不带参数的 `/rename` 可根据当前对话调用 AI 生成并保存名称。
+- 恢复旧会话不会自动补生成标题。设置 `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` 禁用标题时，也会保留原有行为，不触发上述首次消息的自动标题生成与保存。
 
-### npm 全局安装
+### 输入框文件引用
 
-```powershell
-npm install -g @zzy1998/claude-code
-cc
+在普通 Prompt 模式中，使用 `@` 引用项目文件或目录。`@` 必须位于输入行开头，或紧跟在空格、换行等空白字符之后；不要与前面的文字直接相连。
+
+```text
+请帮我阅读 @src/hooks/useTypeahead.tsx
+请查看 @package.json
 ```
 
-> Linux 上如需避免 `cc` 与 C 编译器命令冲突，请使用兼容命令 `ccli`。
+以下写法不会触发文件补全：
+
+```text
+请查看@src/index.ts
+```
+
+输入 `@` 后会自动显示候选项；可继续输入文件名前缀，或使用方向键和 `Tab` 选择。
+
+### 斜杠命令清单
+
+命令注册以 `src/commands.ts` 为准；`src/commands/` 的文件数量不等于当前构建中可输入的命令数量。下面按**常用**、**高级与集成**、**受限/实验/内部**三组列出，并保留实际命令名及别名。部分命令会受登录状态、套餐、平台、环境变量或编译开关限制。
+
+#### 一、用户常用
+
+| 命令（含别名） | 用途 |
+|---|---|
+| `/help` | 显示帮助与可用命令。 |
+| `/clear`、`/reset`、`/new` | 清除对话历史并释放上下文。 |
+| `/compact [指令]` | 压缩历史对话，并保留摘要。 |
+| `/context` | 查看当前上下文占用；交互模式显示彩色网格。 |
+| `/model` | 切换当前会话模型。 |
+| `/effort` | 设置模型的 effort 等级。 |
+| `/plan` | 进入计划模式或查看当前会话计划。 |
+| `/status` | 查看 Claude Code 状态。 |
+| `/cost` | 显示当前会话的成本与时长。 |
+| `/diff` | 查看未提交改动及本轮差异。 |
+| `/copy` | 复制最近一条消息内容。 |
+| `/rename` | 重命名当前会话。 |
+| `/resume`、`/continue` | 恢复之前的会话。 |
+| `/rewind`、`/checkpoint` | 将代码和/或对话回退到先前状态。 |
+| `/branch` | 从当前节点创建会话分支；未启用 `FORK_SUBAGENT` 时，`/fork` 是其别名。 |
+| `/exit`、`/quit` | 退出 REPL。 |
+| `/feedback`、`/bug` | 提交 Claude Code 反馈。 |
+| `/theme` | 切换终端主题。 |
+| `/vim` | 切换 Vim 或普通编辑模式。 |
+| `/color` | 设置当前会话提示栏颜色。 |
+| `/btw` | 在不打断主任务的情况下发起简短的旁路提问。 |
+| `/stats` | 查看 Claude Code 用量统计与活动情况。 |
+| `/release-notes` | 查看发行说明。 |
+| `/stickers` | 查看贴纸订购信息。 |
+
+#### 二、高级与集成
+
+| 命令（含别名） | 用途 |
+|---|---|
+| `/add-dir <path>` | 将目录添加到工作区。 |
+| `/agents` | 管理 Agent 配置。 |
+| `/mcp` | 管理 MCP 服务器。 |
+| `/plugin`、`/plugins`、`/marketplace` | 管理插件与插件市场。 |
+| `/reload-plugins` | 使本会话加载待应用的插件改动。 |
+| `/skills` | 列出可用的 Skills。 |
+| `/hooks` | 查看工具事件 Hook 配置。 |
+| `/permissions`、`/allowed-tools` | 管理工具允许/拒绝规则。 |
+| `/config`、`/settings` | 打开配置面板。 |
+| `/keybindings` | 管理快捷键配置。 |
+| `/ide` | 管理 IDE 集成并查看其状态。 |
+| `/init` | 初始化项目级配置和指导文件。 |
+| `/doctor` | 诊断安装与配置问题。 |
+| `/memory` | 编辑 Claude 记忆文件。 |
+| `/export` | 将当前会话导出至文件或剪贴板。 |
+| `/pr-comments` | 获取 GitHub Pull Request 评论。 |
+| `/review` | 审查 Pull Request。 |
+| `/security-review` | 对当前分支的待处理改动执行安全审查。 |
+| `/tasks`、`/bashes` | 查看和管理后台任务。 |
+| `/team [on\|off\|status]` | 开启、关闭或查看当前会话的 Team 模式；开启即代表授权，并直接注入 `TeamCreate`、`TeamDelete`，不经过 `ToolSearch`。 |
+| `/mobile`、`/ios`、`/android` | 显示 Claude 移动端下载二维码。 |
+| `/install-github-app` | 为仓库配置 Claude GitHub Actions。 |
+| `/install-slack-app` | 安装 Claude Slack App。 |
+| `/login`、`/logout` | 登录或登出 Anthropic 账户。 |
+| `/usage` | 显示 Claude.ai 套餐用量限制；仅 Claude.ai OAuth 订阅者可见。通过自定义 `ANTHROPIC_BASE_URL` 的代理、Bedrock、Vertex、Foundry 或普通 API Key 使用时，该命令会被隐藏；支持用量查询的代理仍可在输入框 footer 显示额度提示。 |
+| `/upgrade` | 升级至 Max；受账户资格限制。 |
+| `/output-style` | 已弃用；请改用 `/config` 调整输出样式。 |
+| `/statusline` | 配置状态栏显示。 |
+| `/terminal-setup` | 执行终端设置/安装引导。 |
+
+#### 三、受限、实验或内部命令
+
+| 命令 | 用途与限制 |
+|---|---|
+| `/advisor` | 选择辅助顾问模型：它可在主模型之外协助回答或分析；仅账户具备该实验资格时显示。 |
+| `/files` | 列出本次会话已加入上下文、可供模型参考的文件；仅内部构建可用。 |
+| `/remote-control`、`/rc` | 让 Claude 网页端或移动端连接并操作当前本地终端；当前构建需启用远程控制功能。 |
+| `/session`、`/remote` | 生成远程会话链接和二维码，用其他设备继续或查看当前会话；仅远程会话模式可用。 |
+| `/desktop`、`/app` | 把当前会话转交到 Claude Desktop 应用继续处理；仅部分平台和订阅账户可用。 |
+| `/chrome` | 连接、设置或管理 Claude in Chrome 浏览器扩展（Beta）；需满足登录和会话条件。 |
+| `/extra-usage` | 在套餐额度耗尽后，设置是否允许按额外用量继续使用；仅符合资格的账户可用。 |
+| `/privacy-settings` | 查看或修改数据使用、隐私相关偏好；仅消费者订阅账户可用。 |
+| `/remote-env` | 为可传送到远程端的会话选择默认运行环境，例如远程开发环境。 |
+| `/sandbox` | 启用或关闭命令执行沙箱，以限制工具可访问的系统资源。 |
+| `/passes` | 向他人赠送或分享限时免费使用资格；仅活动符合条件的账户可见。 |
+| `/ultrareview` | 将当前分支交给 Web 端进行更深入、耗时更长的缺陷审查；实验性功能。 |
+| `/think-back`、`/thinkback-play` | 查看或播放 Claude Code 的年度使用回顾；仅在活动开启期间可用。 |
+| `/web-setup` | 在 Claude 网页端连接 GitHub 并完成 Claude Code 的 Web 使用设置；仅部分 Claude.ai 账户和策略允许时可用。 |
+| `/fork` | 将当前任务分叉为独立的子 Agent 会话，用于并行处理；未启用该功能时它只是 `/branch` 的别名。 |
+| `/proactive` | 让助手在空闲期间自主检查待办、继续合适的工作；需启用持久助手/主动模式实验。 |
+| `/brief` | 切换为更精简的回答风格；需启用 KAIROS 助手实验且账户具备资格。 |
+| `/assistant` | 开启可跨会话持续工作的持久助手模式；属于 KAIROS 实验功能。 |
+| `/remote-control-server` | 在本机启动远程控制服务端，供其他 Claude 客户端连接；仅内部/实验构建可用。 |
+| `/voice` | 用语音输入与 Claude 交互；需语音实验、订阅资格和服务端开关均已启用。 |
+| `/peers` | 管理本地 Claude 进程之间的消息收件箱和协作通信；仅实验构建可用。 |
+| `/workflows` | 管理可复用的工作流脚本：把一组预定义步骤保存为命令，以便重复执行开发流程；仅启用工作流实验时可用。 |
+| `/torch` | Anthropic 内部代号功能；源码未提供面向外部用户的稳定用途说明，默认不可用。 |
+| `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
+
+---
+
+## 开发者指南
+
+<a id="本地安装并运行"></a>
+
+### 源码本地运行
+
+项目建议使用 Bun 1.3.5，并需要 Node.js ≥ 20.19。
+
+#### 安装 Bun
+
+```bash
+npm install -g bun@1.3.5
+```
+
+Windows PowerShell：
+
+```powershell
+iex "& {$(irm https://bun.com/install.ps1)} -Version 1.3.5"
+```
+
+#### 安装依赖并启动
+
+```bash
+bun ci            # 安装依赖（需要 Bun ≥ 1.3.5、Node.js ≥ 20.19）
+bun run dev       # 启动 CLI
+bun run version   # 验证版本
+```
+
+> 日常安装请使用 `bun ci`，不要使用普通 `bun install`，避免依赖重新解析后发生版本漂移。
 
 ### 更新/安装依赖
 
 不要直接执行：
 
-​```bash
+```bash
 bun add xxx
 ```
 
@@ -165,15 +288,55 @@ bun run version
 - `bun ci`：用于日常安装和验证，会严格按照 `bun.lock` 安装。
 - `bun install --lockfile-only`：用于手动修改 `package.json` 后同步 `bun.lock`，不会安装依赖。
 
----
+### 代理用量接口
 
-## 从源码中发现的 5 大隐藏功能
+当通过 Codex Claude Proxy 调用模型时，CLI 会在每轮对话结束后请求代理的 `GET /v1/usage`。连接和鉴权使用普通用户指南中所列的现有环境变量。
+
+代理接口返回与 Claude Code 用量接口一致的 `Utilization` 结构，额度数据位于 `seven_day.utilization` 和 `seven_day.resets_at`。示例响应：
+
+```json
+{
+  "five_hour": null,
+  "seven_day": {
+    "utilization": 15,
+    "resets_at": "2026-07-20T00:00:00.000Z"
+  },
+  "seven_day_oauth_apps": null,
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "extra_usage": null
+}
+```
+
+`seven_day.utilization` 表示本周已使用百分比；CLI 将其换算为剩余百分比显示。未配置上述环境变量、代理不支持该接口或请求失败时，CLI 不显示额度提示，不影响正常对话。
+
+### 项目结构
+
+```
+src/                    # 核心源码（1,987 个 TS/TSX）
+├── tools/              # 最多 51 个静态内置工具（实际数量受运行条件影响）
+├── commands/           # 87 个斜杠命令
+├── services/           # API / MCP / analytics / autoDream
+├── components/         # 148 个终端 UI 组件（React + Ink）
+├── hooks/              # 87 个自定义 Hooks
+├── assistant/          # KAIROS 助手模式
+├── coordinator/        # 多 Agent 协调器
+├── bridge/             # 远程控制桥接（31 文件）
+├── proactive/          # 主动模式
+├── vim/                # Vim 模式引擎
+├── voice/              # 语音交互
+└── ...
+shims/                  # 原生模块兼容替代
+vendor/                 # 原生绑定源码
+```
+
+### 从源码中发现的 5 大隐藏功能
 
 通过阅读还原后的 1,987 个 TypeScript 源文件，我们发现了大量未公开的隐藏功能。这些功能通过**编译开关**（`feature()`）和**用户类型**（`USER_TYPE`）进行门控，外部发布版中大部分被裁剪。
 
 ---
 
-### 1. [KAIROS — 永不关机的 Claude](docs/02-kairos.md)
+#### 1. [KAIROS — 永不关机的 Claude](docs/02-kairos.md)
 
 > 源码位置：`src/assistant/`、`src/proactive/`、`src/services/autoDream/` · [查看完整分析 →](docs/02-kairos.md)
 
@@ -190,7 +353,7 @@ bun run version
 
 ---
 
-### 2. [Coordinator — 多 Agent 编排模式](docs/04-coordinator.md)
+#### 2. [Coordinator — 多 Agent 编排模式](docs/04-coordinator.md)
 
 > 源码位置：`src/coordinator/` · [查看完整分析 →](docs/04-coordinator.md)
 
@@ -205,7 +368,7 @@ bun run version
 
 ---
 
-### 3. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
+#### 3. [隐藏命令 & 秘密开关](docs/05-hidden-commands.md)
 
 > 源码位置：`src/commands.ts`、`src/main.tsx` · [查看完整分析 →](docs/05-hidden-commands.md)
 
@@ -213,9 +376,11 @@ bun run version
 
 常见受限能力包括远程控制、持久助手、语音和工作流；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
 
+内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/break-cache`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
+
 ---
 
-### 4. [Bridge — 远程遥控终端](docs/06-bridge.md)
+#### 4. [Bridge — 远程遥控终端](docs/06-bridge.md)
 
 > 源码位置：`src/bridge/`（33 个文件） · [查看完整分析 →](docs/06-bridge.md)
 
@@ -230,11 +395,11 @@ bun run version
 
 ---
 
-### 5. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
+#### 5. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
 
 外部发布版是**阉割版**。Anthropic 通过三层门控控制功能。[查看完整分析 →](docs/07-feature-gates.md)
 
-#### 第一层：编译时开关（`feature()`，约 50 个）
+##### 第一层：编译时开关（`feature()`，约 50 个）
 
 构建时决定代码包含/排除，以下是完整列表：
 
@@ -294,12 +459,12 @@ bun run version
 
 </details>
 
-#### 第二层：用户类型（`USER_TYPE`）
+##### 第二层：用户类型（`USER_TYPE`）
 
 - **`ant`**（Anthropic 内部）— 解锁全部功能、20 分钟 GrowthBook 刷新、调试工具、200+ 处专属检查
 - **`external`**（外部用户）— 裁剪版，6 小时 GrowthBook 刷新
 
-#### 第三层：GrowthBook 远程 A/B 测试
+##### 第三层：GrowthBook 远程 A/B 测试
 
 | 开关 | 控制内容 |
 |------|---------|
@@ -315,7 +480,7 @@ bun run version
 
 ---
 
-## 隐藏环境变量速查
+### 隐藏环境变量速查
 
 <details>
 <summary>点击展开完整环境变量列表</summary>
@@ -340,33 +505,11 @@ bun run version
 
 ---
 
-## 项目结构
-
-```
-src/                    # 核心源码（1,987 个 TS/TSX）
-├── tools/              # 最多 51 个静态内置工具（实际数量受运行条件影响）
-├── commands/           # 87 个斜杠命令
-├── services/           # API / MCP / analytics / autoDream
-├── components/         # 148 个终端 UI 组件（React + Ink）
-├── hooks/              # 87 个自定义 Hooks
-├── assistant/          # KAIROS 助手模式
-├── coordinator/        # 多 Agent 协调器
-├── bridge/             # 远程控制桥接（31 文件）
-├── proactive/          # 主动模式
-├── vim/                # Vim 模式引擎
-├── voice/              # 语音交互
-└── ...
-shims/                  # 原生模块兼容替代
-vendor/                 # 原生绑定源码
-```
-
----
-
-## 工具清单与注入机制
+### 工具清单与注入机制
 
 工具注册以 `src/tools.ts` 的 `getAllBaseTools()` 为准。当前源码最多注册 **51 个静态内置工具**，MCP Server 还可动态提供任意数量的工具；“源码中存在”“进入候选池”“本次请求发送给模型”是三个不同阶段，不能直接用源码目录数量推断模型实际可见的工具数。
 
-### 工具如何进入模型上下文
+#### 工具如何进入模型上下文
 
 1. **构建期裁剪**：`feature('...')` 决定某些模块是否被打包；未编入当前构建的工具不可能在运行时启用。
 2. **候选池注册**：`getAllBaseTools()` 根据构建特性、`USER_TYPE` 和环境变量组成静态候选池。
@@ -378,7 +521,7 @@ vendor/                 # 原生绑定源码
 
 `description()` 主要用于 UI、工具选择器或摘要；模型在 API 工具定义中读到的长说明来自 `prompt()`。
 
-### 所有会话都会经过的通用限制
+#### 所有会话都会经过的通用限制
 
 | 限制 | 实际行为 |
 |---|---|
@@ -394,7 +537,7 @@ vendor/                 # 原生绑定源码
 
 缓存测试结论：在当前代理链路中，首次加载延迟工具会使请求工具数增加并造成一次 Prompt Cache 未命中；工具列表稳定后随即恢复命中。因此延迟工具系统不会持续破坏缓存，但首次加载每种新工具可能产生一次缓存失效。此现象属于当前代理对 `defer_loading`/`tool_reference` 的实际处理结果，不应直接等同于 Anthropic 原生 API 的行为。
 
-### ToolSearch 模式与实际启用条件
+#### ToolSearch 模式与实际启用条件
 
 `ToolSearch` 的模式由环境变量 `ENABLE_TOOL_SEARCH`（注意末尾为 `H`）决定；`standard` 仅是“传统直接注入”的内部模式名，不会把 `ToolSearch`、`tool_reference` 或 `defer_loading` 发送至 API。
 
@@ -413,7 +556,7 @@ vendor/                 # 原生绑定源码
 
 当 ToolSearch 开启时，MCP 工具默认延迟，内置工具仅在 `shouldDefer: true` 时延迟；`alwaysLoad: true` 的 MCP 工具、ToolSearch 自身，以及运行时强制直出的通信类工具例外。模型通过 ToolSearch 获得 `tool_reference` 后，已发现的工具才会在后续请求携带完整定义。
 
-### 基础注册工具
+#### 基础注册工具
 
 基础注册工具由 `getAllBaseTools()` 无条件加入候选池；通过运行模式、权限和 Agent 类型过滤后，直接以完整 Schema 发送。它们不依赖 ToolSearch，ToolSearch 开关只会影响下节中声明 `shouldDefer: true` 的工具以及 MCP 工具。
 
@@ -427,11 +570,11 @@ vendor/                 # 原生绑定源码
 
 `Glob` 和 `Grep` 也直接注入，但仅在 `hasEmbeddedSearchTools()` 为 false 时注册；含内嵌 `bfs` 搜索能力的构建不注册这两个专用工具。
 
-### 延迟注册工具
+#### 延迟注册工具
 
 延迟注册工具先满足自身的条件才进入候选池，随后分为两类：**条件注册**工具受运行时、会话或构建条件控制，但一旦进入候选池便直接注入；**ToolSearch 注册**工具在本次请求启用 ToolSearch 时延迟加载，关闭时直接注入。
 
-#### 条件注册（直接注入）
+##### 条件注册（直接注入）
 
 | 工具 | 注册条件 | 作用与注入说明 |
 |---|---|---|
@@ -443,7 +586,7 @@ vendor/                 # 原生绑定源码
 
 `TodoWrite` 与 Task V2 互斥：交互式会话默认启用 Task V2；非交互式默认回退到 `TodoWrite`，除非设置 truthy 的 `CLAUDE_CODE_ENABLE_TASKS`。
 
-#### ToolSearch 注册（开启时延迟，关闭时直接）
+##### ToolSearch 注册（开启时延迟，关闭时直接）
 
 下列内置工具声明了 `shouldDefer: true`。它们先按各自注册条件进入候选池；若本次请求实际启用 ToolSearch，则仅公布轻量用途并按需发现；若关闭，则与基础工具一样直接发送完整 Schema。
 
@@ -460,7 +603,7 @@ vendor/                 # 原生绑定源码
 | `TaskCreate`、`TaskGet`、`TaskUpdate`、`TaskList` | `isTodoV2Enabled()` 为 true。 | 创建、查询、更新和列出结构化任务。 |
 | `EnterWorktree`、`ExitWorktree` | `isWorktreeModeEnabled()` 为 true；实际调用还要求本会话已创建 worktree 等前置条件。 | 用户明确要求创建、进入或离开 worktree。 |
 
-### 编译注册工具
+#### 编译注册工具
 
 以下工具受 `feature('...')`、构建产物、内部用户身份或平台限制。它们是否被打包和注册先于上述基础/延迟分类；满足构建及运行时条件后，再按工具本身的 ToolSearch 属性决定直接或延迟注入。
 
@@ -481,7 +624,7 @@ MCP 工具不属于静态内置注册：连接成功后由 `tools/list` 动态�
 
 两者解决的问题层级不同：`TodoWrite` 是由单个 Agent 整体重写的一张轻量会话清单；Task V2 将每项工作保存为带唯一 ID 的独立任务，可单独查询和更新，并支持负责人、阻塞依赖、metadata、磁盘持久化及 Team 共享。保留两套主要是为了让非交互式 CLI 和 SDK 继续兼容旧工具名及输入 Schema，同时让交互式会话和多 Agent 协作使用能力更完整的新任务系统。
 
-#### TodoWrite 与 Task V2 的使用场景
+##### TodoWrite 与 Task V2 的使用场景
 
 | 场景 | 使用的工具 | 原因 |
 |---|---|---|
@@ -496,7 +639,7 @@ MCP 工具不属于静态内置注册：连接成功后由 `tools/list` 动态�
 
 选择原则：**由运行模式决定默认工具，不需要人为同时选择**。模型应在当前会话提供的工具中使用对应的一套；只有非交互式调用方确实需要 Task V2 能力时，才设置 `CLAUDE_CODE_ENABLE_TASKS=1`。`TodoWrite` 每次调用会替换完整数组，更适合单 Agent；Task V2 按任务 ID 增量修改，更适合持久化和协作，但一次完整操作通常需要多次工具调用。
 
-### Team 工具（当前实现）
+#### Team 工具（当前实现）
 
 Team 不再受实验功能开关限制，但 `TeamCreate` 和 `TeamDelete` 默认不进入工具池，也不会通过 `ToolSearch` 公布或加载。执行 `/team`（等价于 `/team on`）代表用户明确授权在当前会话使用 Team，并将这两个 Team 专属工具的完整说明及 Schema 直接提供给模型；`/team off` 将它们移出工具池，`/team status` 查看状态，`/clear` 会关闭该会话模式。`Agent`、`SendMessage` 和 Task V2 等原有基础工具的注册与延迟策略不受 `/team` 影响。普通、独立的并行调查仍应优先使用多个一次性 `Agent`，不能仅因任务较大就创建 Team。
 
@@ -509,7 +652,7 @@ Team 不再受实验功能开关限制，但 `TeamCreate` 和 `TeamDelete` 默�
 
 Team 下的 Task ID 解析顺序为：`CLAUDE_CODE_TASK_LIST_ID` → 进程内队友所属 Team → `CLAUDE_CODE_TEAM_NAME` → lead 当前 Team → 当前 Session。因而 lead 与队友默认共享同一任务表。
 
-### MCP 工具与资源辅助工具
+#### MCP 工具与资源辅助工具
 
 MCP Server 连接成功后，通过 `tools/list` 返回的工具动态加入工具池，通常命名为：
 
@@ -527,7 +670,7 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 
 因此，更准确的数量表达是：**最多 51 个静态注册项，加上 N 个动态 MCP 工具，但每次请求只发送通过全部 gate 且当前需要的子集**。
 
-### 主会话与子 Agent 的注入差异
+#### 主会话与子 Agent 的注入差异
 
 - 主 REPL：`useMergedTools()` → `assembleToolPool()` → `mergeAndFilterTools()` → `queryModel()` → `toolToAPISchema()` → API `tools`。
 - 普通同步子 Agent：重新组装 worker 工具池；默认移除 `TaskOutput`、计划模式工具、`AskUserQuestion`、`TaskStop`，外部构建还会移除递归 `Agent`。
@@ -551,124 +694,7 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 
 ---
 
-## 输入框文件引用
-
-在普通 Prompt 模式中，使用 `@` 引用项目文件或目录。`@` 必须位于输入行开头，或紧跟在空格、换行等空白字符之后；不要与前面的文字直接相连。
-
-```text
-请帮我阅读 @src/hooks/useTypeahead.tsx
-请查看 @package.json
-```
-
-以下写法不会触发文件补全：
-
-```text
-请查看@src/index.ts
-```
-
-输入 `@` 后会自动显示候选项；可继续输入文件名前缀，或使用方向键和 `Tab` 选择。
-
----
-
-## 斜杠命令清单
-
-命令注册以 `src/commands.ts` 为准；`src/commands/` 的文件数量不等于当前构建中可输入的命令数量。下面按**常用**、**高级与集成**、**受限/实验/内部**三组列出，并保留实际命令名及别名。部分命令会受登录状态、套餐、平台、环境变量或编译开关限制。
-
-### 一、用户常用
-
-| 命令（含别名） | 用途 |
-|---|---|
-| `/help` | 显示帮助与可用命令。 |
-| `/clear`、`/reset`、`/new` | 清除对话历史并释放上下文。 |
-| `/compact [指令]` | 压缩历史对话，并保留摘要。 |
-| `/context` | 查看当前上下文占用；交互模式显示彩色网格。 |
-| `/model` | 切换当前会话模型。 |
-| `/effort` | 设置模型的 effort 等级。 |
-| `/plan` | 进入计划模式或查看当前会话计划。 |
-| `/status` | 查看 Claude Code 状态。 |
-| `/cost` | 显示当前会话的成本与时长。 |
-| `/diff` | 查看未提交改动及本轮差异。 |
-| `/copy` | 复制最近一条消息内容。 |
-| `/rename` | 重命名当前会话。 |
-| `/resume`、`/continue` | 恢复之前的会话。 |
-| `/rewind`、`/checkpoint` | 将代码和/或对话回退到先前状态。 |
-| `/branch` | 从当前节点创建会话分支；未启用 `FORK_SUBAGENT` 时，`/fork` 是其别名。 |
-| `/exit`、`/quit` | 退出 REPL。 |
-| `/feedback`、`/bug` | 提交 Claude Code 反馈。 |
-| `/theme` | 切换终端主题。 |
-| `/vim` | 切换 Vim 或普通编辑模式。 |
-| `/color` | 设置当前会话提示栏颜色。 |
-| `/btw` | 在不打断主任务的情况下发起简短的旁路提问。 |
-| `/stats` | 查看 Claude Code 用量统计与活动情况。 |
-| `/release-notes` | 查看发行说明。 |
-| `/stickers` | 查看贴纸订购信息。 |
-
-### 二、高级与集成
-
-| 命令（含别名） | 用途 |
-|---|---|
-| `/add-dir <path>` | 将目录添加到工作区。 |
-| `/agents` | 管理 Agent 配置。 |
-| `/mcp` | 管理 MCP 服务器。 |
-| `/plugin`、`/plugins`、`/marketplace` | 管理插件与插件市场。 |
-| `/reload-plugins` | 使本会话加载待应用的插件改动。 |
-| `/skills` | 列出可用的 Skills。 |
-| `/hooks` | 查看工具事件 Hook 配置。 |
-| `/permissions`、`/allowed-tools` | 管理工具允许/拒绝规则。 |
-| `/config`、`/settings` | 打开配置面板。 |
-| `/keybindings` | 管理快捷键配置。 |
-| `/ide` | 管理 IDE 集成并查看其状态。 |
-| `/init` | 初始化项目级配置和指导文件。 |
-| `/doctor` | 诊断安装与配置问题。 |
-| `/memory` | 编辑 Claude 记忆文件。 |
-| `/export` | 将当前会话导出至文件或剪贴板。 |
-| `/pr-comments` | 获取 GitHub Pull Request 评论。 |
-| `/review` | 审查 Pull Request。 |
-| `/security-review` | 对当前分支的待处理改动执行安全审查。 |
-| `/tasks`、`/bashes` | 查看和管理后台任务。 |
-| `/team [on\|off\|status]` | 开启、关闭或查看当前会话的 Team 模式；开启即代表授权，并直接注入 `TeamCreate`、`TeamDelete`，不经过 `ToolSearch`。 |
-| `/mobile`、`/ios`、`/android` | 显示 Claude 移动端下载二维码。 |
-| `/install-github-app` | 为仓库配置 Claude GitHub Actions。 |
-| `/install-slack-app` | 安装 Claude Slack App。 |
-| `/login`、`/logout` | 登录或登出 Anthropic 账户。 |
-| `/usage` | 显示 Claude.ai 套餐用量限制；仅 Claude.ai OAuth 订阅者可见。通过自定义 `ANTHROPIC_BASE_URL` 的代理、Bedrock、Vertex、Foundry 或普通 API Key 使用时，该命令会被隐藏；支持 `GET /v1/usage` 的代理仍可在输入框 footer 显示额度提示。 |
-| `/upgrade` | 升级至 Max；受账户资格限制。 |
-| `/output-style` | 已弃用；请改用 `/config` 调整输出样式。 |
-| `/statusline` | 配置状态栏显示。 |
-| `/terminal-setup` | 执行终端设置/安装引导。 |
-
-### 三、受限、实验或内部命令
-
-| 命令 | 用途与限制 |
-|---|---|
-| `/advisor` | 选择辅助顾问模型：它可在主模型之外协助回答或分析；仅账户具备该实验资格时显示。 |
-| `/files` | 列出本次会话已加入上下文、可供模型参考的文件；仅内部构建可用。 |
-| `/remote-control`、`/rc` | 让 Claude 网页端或移动端连接并操作当前本地终端；当前构建需启用远程控制功能。 |
-| `/session`、`/remote` | 生成远程会话链接和二维码，用其他设备继续或查看当前会话；仅远程会话模式可用。 |
-| `/desktop`、`/app` | 把当前会话转交到 Claude Desktop 应用继续处理；仅部分平台和订阅账户可用。 |
-| `/chrome` | 连接、设置或管理 Claude in Chrome 浏览器扩展（Beta）；需满足登录和会话条件。 |
-| `/extra-usage` | 在套餐额度耗尽后，设置是否允许按额外用量继续使用；仅符合资格的账户可用。 |
-| `/privacy-settings` | 查看或修改数据使用、隐私相关偏好；仅消费者订阅账户可用。 |
-| `/remote-env` | 为可传送到远程端的会话选择默认运行环境，例如远程开发环境。 |
-| `/sandbox` | 启用或关闭命令执行沙箱，以限制工具可访问的系统资源。 |
-| `/passes` | 向他人赠送或分享限时免费使用资格；仅活动符合条件的账户可见。 |
-| `/ultrareview` | 将当前分支交给 Web 端进行更深入、耗时更长的缺陷审查；实验性功能。 |
-| `/think-back`、`/thinkback-play` | 查看或播放 Claude Code 的年度使用回顾；仅在活动开启期间可用。 |
-| `/web-setup` | 在 Claude 网页端连接 GitHub 并完成 Claude Code 的 Web 使用设置；仅部分 Claude.ai 账户和策略允许时可用。 |
-| `/fork` | 将当前任务分叉为独立的子 Agent 会话，用于并行处理；未启用该功能时它只是 `/branch` 的别名。 |
-| `/proactive` | 让助手在空闲期间自主检查待办、继续合适的工作；需启用持久助手/主动模式实验。 |
-| `/brief` | 切换为更精简的回答风格；需启用 KAIROS 助手实验且账户具备资格。 |
-| `/assistant` | 开启可跨会话持续工作的持久助手模式；属于 KAIROS 实验功能。 |
-| `/remote-control-server` | 在本机启动远程控制服务端，供其他 Claude 客户端连接；仅内部/实验构建可用。 |
-| `/voice` | 用语音输入与 Claude 交互；需语音实验、订阅资格和服务端开关均已启用。 |
-| `/peers` | 管理本地 Claude 进程之间的消息收件箱和协作通信；仅实验构建可用。 |
-| `/workflows` | 管理可复用的工作流脚本：把一组预定义步骤保存为命令，以便重复执行开发流程；仅启用工作流实验时可用。 |
-| `/torch` | Anthropic 内部代号功能；源码未提供面向外部用户的稳定用途说明，默认不可用。 |
-| `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
-
-内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/break-cache`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
-
-## REPL 模块说明
+### REPL 模块说明
 
 `src/screens/REPL.tsx` 是 CLI 的主交互界面，负责会话状态、用户输入、模型查询、工具权限、消息显示及各类终端弹窗。导入较多，按职责可归纳如下：
 
@@ -692,9 +718,6 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置和动态实验配置，采集诊断/会话追踪并维护活动状态。 |
 | 条件加载模块 | `useVoiceIntegration`、`useFrustrationDetection`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
 | 其他界面能力 | `Spinner`、`TaskListV2`、`DevBar` | 显示加载状态、任务列表及开发栏。 |
-
-
-
 
 ## 数据来源
 
