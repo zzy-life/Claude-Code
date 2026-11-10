@@ -1167,6 +1167,13 @@ export function REPL({
   // on resume (initialMessages present) so we don't re-title a resumed
   // session from mid-conversation context.
   const haikuTitleAttemptedRef = useRef((initialMessages?.length ?? 0) > 0);
+  const haikuTitleSessionIdRef = useRef(getSessionId());
+  // /clear 保留 REPL 实例；按真实会话 ID 重置，避免沿用旧标题和生成标记。
+  if (haikuTitleSessionIdRef.current !== getSessionId()) {
+    haikuTitleSessionIdRef.current = getSessionId();
+    haikuTitleAttemptedRef.current = false;
+    setHaikuTitle(undefined);
+  }
   const agentTitle = mainThreadAgentDefinition?.agentType;
   const terminalTitle = sessionTitle ?? agentTitle ?? haikuTitle ?? 'Claude Code';
   const isWaitingForApproval = toolUseConfirmQueue.length > 0 || promptQueue.length > 0 || pendingWorkerRequest || pendingSandboxRequest;
@@ -1855,6 +1862,10 @@ export function REPL({
       // a different project (cross-worktree, /branch); null derives from
       // current originalCwd.
       switchSession(asSessionId(sessionId), log.fullPath ? dirname(log.fullPath) : null);
+      // 恢复历史会话时同步对齐标题归属，不从对话中途重新生成标题。
+      haikuTitleSessionIdRef.current = getSessionId();
+      haikuTitleAttemptedRef.current = true;
+      setHaikuTitle(undefined);
       // Rename asciicast recording to match the resumed session ID
       const {
         renameRecordingForSession
@@ -1869,11 +1880,6 @@ export function REPL({
       // cached name and write it to the wrong transcript on first message.
       clearSessionMetadata();
       restoreSessionMetadata(log);
-      // Resumed sessions shouldn't re-title from mid-conversation context
-      // (same reasoning as the useRef seed), and the previous session's
-      // Haiku title shouldn't carry over.
-      haikuTitleAttemptedRef.current = true;
-      setHaikuTitle(undefined);
 
       // Exit any worktree a prior /resume entered, then cd into the one
       // this session was in. Without the exit, resuming from worktree B
