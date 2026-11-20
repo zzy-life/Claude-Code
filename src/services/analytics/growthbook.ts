@@ -20,10 +20,7 @@ import {
   type GitHubActionsMetadata,
   getUserForGrowthBook,
 } from '../../utils/user.js'
-import {
-  is1PEventLoggingEnabled,
-  logGrowthBookExperimentTo1P,
-} from './firstPartyEventLogger.js'
+import { isAnalyticsDisabled } from './config.js'
 
 /**
  * User attributes sent to GrowthBook for targeting.
@@ -66,27 +63,9 @@ let currentExitHandler: (() => void) | null = null
 // This allows us to detect when we need to recreate with fresh auth headers
 let clientCreatedWithAuth = false
 
-// Store experiment data from payload for logging exposures later
-type StoredExperimentData = {
-  experimentId: string
-  variationId: number
-  inExperiment?: boolean
-  hashAttribute?: string
-  hashValue?: string
-}
-const experimentDataByFeature = new Map<string, StoredExperimentData>()
-
 // Cache for remote eval feature values - workaround for SDK not respecting remoteEval response
 // The SDK's setForcedFeatures also doesn't work reliably with remoteEval
 const remoteEvalFeatureValues = new Map<string, unknown>()
-
-// Track features accessed before init that need exposure logging
-const pendingExposures = new Set<string>()
-
-// Track features that have already had their exposure logged this session (dedup)
-// This prevents firing duplicate exposure events when getFeatureValue_CACHED_MAY_BE_STALE
-// is called repeatedly in hot paths (e.g., isAutoMemoryEnabled in render loops)
-const loggedExposures = new Set<string>()
 
 // Track re-initialization promise for security gate checks
 // When GrowthBook is re-initializing (e.g., after auth change), security gate checks
@@ -94,12 +73,7 @@ const loggedExposures = new Set<string>()
 let reinitializingPromise: Promise<unknown> | null = null
 
 // Listeners notified when GrowthBook feature values refresh (initial init or
-// periodic refresh). Use for systems that bake feature values into long-lived
-// objects at construction time (e.g. firstPartyEventLogger reads
-// tengu_1p_event_batch_config once and builds a LoggerProvider with it) and
-// need to rebuild when config changes. Per-call readers like
-// getEventSamplingConfig / isSinkKilled don't need this — they're already
-// reactive.
+// periodic refresh). Systems with long-lived state can react to config changes.
 //
 // NOT cleared by resetGrowthBook — subscribers register once (typically in
 // init.ts) and must survive auth-change resets.
@@ -290,30 +264,6 @@ export function clearGrowthBookConfigOverrides(): void {
 }
 
 /**
- * Log experiment exposure for a feature if it has experiment data.
- * Deduplicates within a session - each feature is logged at most once.
- */
-function logExposureForFeature(feature: string): void {
-  // Skip if already logged this session (dedup)
-  if (loggedExposures.has(feature)) {
-    return
-  }
-
-  const expData = experimentDataByFeature.get(feature)
-  if (expData) {
-    loggedExposures.add(feature)
-    logGrowthBookExperimentTo1P({
-      experimentId: expData.experimentId,
-      variationId: expData.variationId,
-      userAttributes: getUserAttributes(),
-      experimentMetadata: {
-        feature_id: feature,
-      },
-    })
-  }
-}
-
-/**
  * Process a remote eval payload from the GrowthBook server and populate
  * local caches. Called after both initial client.init() and after
  * client.refreshFeatures() so that _BLOCKS_ON_INIT callers see fresh values
@@ -339,10 +289,6 @@ async function processRemoteEvalPayload(
     return false
   }
 
-  // Clear before rebuild so features removed between refreshes don't
-  // leave stale ghost entries that short-circuit getFeatureValueInternal.
-  experimentDataByFeature.clear()
-
   const transformedFeatures: Record<string, MalformedFeatureDefinition> = {}
   for (const [key, feature] of Object.entries(payload.features)) {
     const f = feature as MalformedFeatureDefinition
@@ -353,20 +299,6 @@ async function processRemoteEvalPayload(
       }
     } else {
       transformedFeatures[key] = f
-    }
-
-    // Store experiment data for later logging when feature is accessed
-    if (f.source === 'experiment' && f.experimentResult) {
-      const expResult = f.experimentResult as {
-        variationId?: number
-      }
-      const exp = f.experiment as { key?: string } | undefined
-      if (exp?.key && expResult.variationId !== undefined) {
-        experimentDataByFeature.set(key, {
-          experimentId: exp.key,
-          variationId: expResult.variationId,
-        })
-      }
     }
   }
   // Re-set the payload with transformed features
@@ -420,8 +352,8 @@ function syncRemoteEvalToDisk(): void {
  * Check if GrowthBook operations should be enabled
  */
 function isGrowthBookEnabled(): boolean {
-  // GrowthBook depends on 1P event logging.
-  return is1PEventLoggingEnabled()
+  // Keep feature configuration available without the removed event logger.
+  return !isAnalyticsDisabled()
 }
 
 /**
@@ -578,10 +510,6 @@ const getGrowthBookClient = memoize(
         if (client !== thisClient) return
 
         if (hadFeatures) {
-          for (const feature of pendingExposures) {
-            logExposureForFeature(feature)
-          }
-          pendingExposures.clear()
           syncRemoteEvalToDisk()
           // Notify subscribers: remoteEvalFeatureValues is populated and
           // disk is freshly synced. _CACHED_MAY_BE_STALE reads memory first
@@ -670,7 +598,6 @@ export const initializeGrowthBook = memoize(
 async function getFeatureValueInternal<T>(
   feature: string,
   defaultValue: T,
-  logExposure: boolean,
 ): Promise<T> {
   // Check env var overrides first (for eval harnesses)
   const overrides = getEnvOverrides()
@@ -699,11 +626,6 @@ async function getFeatureValueInternal<T>(
     result = growthBookClient.getFeatureValue(feature, defaultValue) as T
   }
 
-  // Log experiment exposure using stored experiment data
-  if (logExposure) {
-    logExposureForFeature(feature)
-  }
-
   if (process.env.USER_TYPE === 'ant') {
     logForDebugging(
       `GrowthBook: getFeatureValue("${feature}") = ${jsonStringify(result)}`,
@@ -720,7 +642,7 @@ export async function getFeatureValue_DEPRECATED<T>(
   feature: string,
   defaultValue: T,
 ): Promise<T> {
-  return getFeatureValueInternal(feature, defaultValue, true)
+  return getFeatureValueInternal(feature, defaultValue)
 }
 
 /**
@@ -747,13 +669,6 @@ export function getFeatureValue_CACHED_MAY_BE_STALE<T>(
 
   if (!isGrowthBookEnabled()) {
     return defaultValue
-  }
-
-  // Log experiment exposure if data is available, otherwise defer until after init
-  if (experimentDataByFeature.has(feature)) {
-    logExposureForFeature(feature)
-  } else {
-    pendingExposures.add(feature)
   }
 
   // In-memory payload is authoritative once processRemoteEvalPayload has run.
@@ -816,13 +731,6 @@ export function checkStatsigFeatureGate_CACHED_MAY_BE_STALE(
 
   if (!isGrowthBookEnabled()) {
     return false
-  }
-
-  // Log experiment exposure if data is available, otherwise defer until after init
-  if (experimentDataByFeature.has(gate)) {
-    logExposureForFeature(gate)
-  } else {
-    pendingExposures.add(gate)
   }
 
   // Return cached value immediately from disk
@@ -921,17 +829,11 @@ export async function checkGate_CACHED_OR_BLOCKING(
   // Fast path: disk cache already says true — trust it
   const cached = getGlobalConfig().cachedGrowthBookFeatures?.[gate]
   if (cached === true) {
-    // Log experiment exposure if data is available, otherwise defer
-    if (experimentDataByFeature.has(gate)) {
-      logExposureForFeature(gate)
-    } else {
-      pendingExposures.add(gate)
-    }
     return true
   }
 
   // Slow path: disk says false/missing — may be stale, fetch fresh
-  return getFeatureValueInternal(gate, false, true)
+  return getFeatureValueInternal(gate, false)
 }
 
 /**
@@ -999,9 +901,6 @@ export function resetGrowthBook(): void {
   client = null
   clientCreatedWithAuth = false
   reinitializingPromise = null
-  experimentDataByFeature.clear()
-  pendingExposures.clear()
-  loggedExposures.clear()
   remoteEvalFeatureValues.clear()
   getGrowthBookClient.cache?.clear?.()
   initializeGrowthBook.cache?.clear?.()

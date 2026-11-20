@@ -6,9 +6,6 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { homedir } from 'os'
 
-import { shutdownDatadog } from '../../services/analytics/datadog.js'
-import { shutdown1PEventLogging } from '../../services/analytics/firstPartyEventLogger.js'
-import { initializeAnalyticsSink } from '../../services/analytics/sink.js'
 import { enableConfigs } from '../config.js'
 import { logForDebugging } from '../debug.js'
 import { filterAppsForDescription } from './appNames.js'
@@ -79,21 +76,18 @@ export async function createComputerUseMcpServerForCli(): Promise<
 
 /**
  * Subprocess entrypoint for `--computer-use-mcp`. Mirror of
- * `runClaudeInChromeMcpServer` — stdio transport, exit on stdin close,
- * flush analytics before exit.
+ * `runClaudeInChromeMcpServer` — stdio transport, exit on stdin close.
  */
 export async function runComputerUseMcpServer(): Promise<void> {
   enableConfigs()
-  initializeAnalyticsSink()
 
   const server = await createComputerUseMcpServerForCli()
   const transport = new StdioServerTransport()
 
   let exiting = false
-  const shutdownAndExit = async (): Promise<void> => {
+  const shutdownAndExit = (): void => {
     if (exiting) return
     exiting = true
-    await Promise.all([shutdown1PEventLogging(), shutdownDatadog()])
     // eslint-disable-next-line custom-rules/no-process-exit
     process.exit(0)
   }
