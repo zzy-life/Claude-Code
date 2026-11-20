@@ -53,19 +53,20 @@ function isModernWindowsTerminal(): boolean {
 }
 
 /**
- * Returns the ANSI escape sequence to clear the terminal including scrollback.
- * Automatically detects terminal capabilities.
+ * Returns the ANSI escape sequence to clear the terminal.
+ * Explicit clears include scrollback by default; automatic redraws can preserve it.
  */
-export function getClearTerminalSequence(): string {
+export function getClearTerminalSequence(clearScrollback = true): string {
+  const scrollback = clearScrollback ? ERASE_SCROLLBACK : ''
   if (process.platform === 'win32') {
     if (isModernWindowsTerminal()) {
-      return ERASE_SCREEN + ERASE_SCROLLBACK + CURSOR_HOME
+      return ERASE_SCREEN + scrollback + CURSOR_HOME
     } else {
       // Legacy Windows console - can't clear scrollback
       return ERASE_SCREEN + CURSOR_HOME_WINDOWS
     }
   }
-  return ERASE_SCREEN + ERASE_SCROLLBACK + CURSOR_HOME
+  return ERASE_SCREEN + scrollback + CURSOR_HOME
 }
 
 /**

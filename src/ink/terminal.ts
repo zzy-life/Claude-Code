@@ -220,7 +220,9 @@ export function writeDiffToTerminal(
         }
         break
       case 'clearTerminal':
-        buffer += getClearTerminalSequence()
+        // 自动重绘只清可见画面；清除历史会破坏网页终端的滚动位置。
+        // 显式清屏仍使用 clearTerminal.ts 默认的清历史行为。
+        buffer += getClearTerminalSequence(false)
         break
       case 'cursorHide':
         buffer += HIDE_CURSOR
