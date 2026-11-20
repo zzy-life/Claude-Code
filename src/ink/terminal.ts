@@ -197,10 +197,14 @@ export function writeDiffToTerminal(
     return
   }
 
-  // BSU/ESU wrapping is opt-out to keep main-screen behavior unchanged.
-  // Callers pass skipSyncMarkers=true when the terminal doesn't support
-  // DEC 2026 (e.g. tmux) AND the cost matters (high-frequency alt-screen).
-  const useSync = !skipSyncMarkers
+  // 未识别的网页终端不能假定支持 DEC 2026。整屏重画仍保留清屏，
+  // 但 xterm.js 的清屏不能放进同步输出块，以免重置用户的滚动位置。
+  // 不过滤 ESC[2J：全量重画依赖它清除旧权限框和空白区域的残留。
+  const clearsTerminal = diff.some(patch => patch.type === 'clearTerminal')
+  const useSync =
+    SYNC_OUTPUT_SUPPORTED &&
+    !skipSyncMarkers &&
+    !(clearsTerminal && isXtermJs())
 
   // Buffer all writes into a single string to avoid multiple write calls
   let buffer = useSync ? BSU : ''
