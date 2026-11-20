@@ -180,7 +180,6 @@ ccli proxy config set <代理地址> <你的密钥>
 | `/passes` | 向他人赠送或分享限时免费使用资格；仅活动符合条件的账户可见。 |
 | `/ultrareview` | 将当前分支交给 Web 端进行更深入、耗时更长的缺陷审查；实验性功能。 |
 | `/think-back`、`/thinkback-play` | 查看或播放 Claude Code 的年度使用回顾；仅在活动开启期间可用。 |
-| `/web-setup` | 在 Claude 网页端连接 GitHub 并完成 Claude Code 的 Web 使用设置；仅部分 Claude.ai 账户和策略允许时可用。 |
 | `/fork` | 将当前任务分叉为独立的子 Agent 会话，用于并行处理；未启用该功能时它只是 `/branch` 的别名。 |
 | `/proactive` | 让助手在空闲期间自主检查待办、继续合适的工作；需启用持久助手/主动模式实验。 |
 | `/brief` | 切换为更精简的回答风格；需启用 KAIROS 助手实验且账户具备资格。 |
@@ -376,7 +375,7 @@ vendor/                 # 原生绑定源码
 
 常见受限能力包括远程控制、持久助手、语音和工作流；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
 
-内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/break-cache`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
+内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
 
 ---
 
@@ -395,11 +394,11 @@ vendor/                 # 原生绑定源码
 
 ---
 
-#### 5. [50 个编译开关 + 远程门控](docs/07-feature-gates.md)
+#### 5. [编译开关 + 远程门控](docs/07-feature-gates.md)
 
 外部发布版是**阉割版**。Anthropic 通过三层门控控制功能。[查看完整分析 →](docs/07-feature-gates.md)
 
-##### 第一层：编译时开关（`feature()`，约 50 个）
+##### 第一层：编译时开关（`feature()`）
 
 构建时决定代码包含/排除，以下是完整列表：
 
@@ -427,20 +426,16 @@ vendor/                 # 原生绑定源码
 | `BASH_CLASSIFIER` | Bash 命令分类器 |
 | `BG_SESSIONS` | 后台会话 |
 | `CACHED_MICROCOMPACT` | 缓存微压缩 |
-| `CCR_REMOTE_SETUP` | Web 远程设置 |
 | `CHICAGO_MCP` | MCP 扩展（Computer Use） |
 | `COMMIT_ATTRIBUTION` | 提交归属标注 |
 | `CONNECTOR_TEXT` | 连接器文本 |
 | `CONTEXT_COLLAPSE` | 上下文折叠 |
-| `COWORKER_TYPE_TELEMETRY` | 协作者遥测 |
-| `DOWNLOAD_USER_SETTINGS` | 下载用户设置 |
 | `EXPERIMENTAL_SKILL_SEARCH` | 实验性技能搜索 |
 | `EXTRACT_MEMORIES` | 自动提取记忆 |
 | `FILE_PERSISTENCE` | 文件持久化 |
 | `HARD_FAIL` | 硬失败模式 |
 | `LODESTONE` | Lodestone 功能 |
 | `MCP_SKILLS` | MCP 技能系统 |
-| `MEMORY_SHAPE_TELEMETRY` | 记忆形状遥测 |
 | `MESSAGE_ACTIONS` | 消息操作 |
 | `NATIVE_CLIENT_ATTESTATION` | 客户端证明 |
 | `PROMPT_CACHE_BREAK_DETECTION` | 缓存中断检测 |
@@ -454,8 +449,6 @@ vendor/                 # 原生绑定源码
 | `TOKEN_BUDGET` | Token 预算 |
 | `TRANSCRIPT_CLASSIFIER` | 转录分类器 |
 | `UNATTENDED_RETRY` | 无人值守重试 |
-| `UPLOAD_USER_SETTINGS` | 上传用户设置 |
-| `BREAK_CACHE_COMMAND` | 缓存清除注入 |
 
 </details>
 

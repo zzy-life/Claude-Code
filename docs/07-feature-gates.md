@@ -23,7 +23,7 @@
 
 ---
 
-## 第一层：编译时开关（约 50 个）
+## 第一层：编译时开关
 
 通过 `feature()` 函数（来自 `bun:bundle`）实现。构建时决定代码包含或排除，未包含的代码被 DCE（Dead Code Elimination）完全移除。
 
@@ -53,7 +53,6 @@
 | `HISTORY_SNIP` | 历史截断 |
 | `BG_SESSIONS` | 后台会话管理 |
 | `HARD_FAIL` | 硬失败模式 |
-| `CCR_REMOTE_SETUP` | Web 远程设置 |
 | `CHICAGO_MCP` | MCP 扩展（Computer Use） |
 
 ### 优化与实验开关
@@ -85,8 +84,6 @@
 | 开关 | 说明 |
 |------|------|
 | `EXTRACT_MEMORIES` | 自动提取记忆 |
-| `MEMORY_SHAPE_TELEMETRY` | 记忆形状遥测 |
-| `COWORKER_TYPE_TELEMETRY` | 协作者类型遥测 |
 | `SLOW_OPERATION_LOGGING` | 慢操作日志 |
 | `PROMPT_CACHE_BREAK_DETECTION` | 缓存中断检测 |
 | `COMMIT_ATTRIBUTION` | 提交归属标注 |
@@ -101,9 +98,6 @@
 | `TEMPLATES` | 模板/工作分类器 |
 | `TEAMMEM` | 团队记忆同步 |
 | `FILE_PERSISTENCE` | 文件持久化 |
-| `DOWNLOAD_USER_SETTINGS` | 下载用户设置 |
-| `UPLOAD_USER_SETTINGS` | 上传用户设置 |
-| `BREAK_CACHE_COMMAND` | 缓存清除注入 |
 | `AGENT_TRIGGERS` | Cron 触发器系统 |
 | `IS_LIBC_GLIBC` | glibc 检测 |
 | `IS_LIBC_MUSL` | musl 检测 |

@@ -429,7 +429,6 @@ export type EnvContext = {
   isLocalAgentMode: boolean
   isConductor: boolean
   remoteEnvironmentType?: string
-  coworkerType?: string
   claudeCodeContainerId?: string
   claudeCodeRemoteSessionId?: string
   tags?: string
@@ -599,12 +598,6 @@ const buildEnvContext = memoize(async (): Promise<EnvContext> => {
     ...(process.env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE && {
       remoteEnvironmentType: process.env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE,
     }),
-    // Gated by feature flag to prevent leaking "coworkerType" string in external builds
-    ...(feature('COWORKER_TYPE_TELEMETRY')
-      ? process.env.CLAUDE_CODE_COWORKER_TYPE
-        ? { coworkerType: process.env.CLAUDE_CODE_COWORKER_TYPE }
-        : {}
-      : {}),
     ...(process.env.CLAUDE_CODE_CONTAINER_ID && {
       claudeCodeContainerId: process.env.CLAUDE_CODE_CONTAINER_ID,
     }),
@@ -812,7 +805,7 @@ export function to1PEventFormat(
   // IMPORTANT: env is typed as the proto-generated EnvironmentMetadata so that
   // adding a field here that the proto doesn't define is a compile error. The
   // generated toJSON() serializer silently drops unknown keys — a hand-written
-  // parallel type previously let #11318, #13924, #19448, and coworker_type all
+  // parallel type previously let #11318, #13924, and #19448 all
   // ship fields that never reached BQ.
   // Adding a field? Update the monorepo proto first (go/cc-logging):
   //   event_schemas/.../claude_code/v1/claude_code_internal_event.proto
@@ -842,9 +835,6 @@ export function to1PEventFormat(
   // Add optional env fields
   if (envContext.remoteEnvironmentType) {
     env.remote_environment_type = envContext.remoteEnvironmentType
-  }
-  if (feature('COWORKER_TYPE_TELEMETRY') && envContext.coworkerType) {
-    env.coworker_type = envContext.coworkerType
   }
   if (envContext.claudeCodeContainerId) {
     env.claude_code_container_id = envContext.claudeCodeContainerId

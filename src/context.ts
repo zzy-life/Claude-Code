@@ -1,4 +1,3 @@
-import { feature } from 'bun:bundle'
 import memoize from 'lodash-es/memoize.js'
 import {
   getAdditionalDirectoriesForClaudeMd,
@@ -18,20 +17,6 @@ import { shouldIncludeGitInstructions } from './utils/gitSettings.js'
 import { logError } from './utils/log.js'
 
 const MAX_STATUS_CHARS = 2000
-
-// System prompt injection for cache breaking (ant-only, ephemeral debugging state)
-let systemPromptInjection: string | null = null
-
-export function getSystemPromptInjection(): string | null {
-  return systemPromptInjection
-}
-
-export function setSystemPromptInjection(value: string | null): void {
-  systemPromptInjection = value
-  // Clear context caches immediately when injection changes
-  getUserContext.cache.clear?.()
-  getSystemContext.cache.clear?.()
-}
 
 export const getGitStatus = memoize(async (): Promise<string | null> => {
   if (process.env.NODE_ENV === 'test') {
@@ -127,24 +112,13 @@ export const getSystemContext = memoize(
         ? null
         : await getGitStatus()
 
-    // Include system prompt injection if set (for cache breaking, ant-only)
-    const injection = feature('BREAK_CACHE_COMMAND')
-      ? getSystemPromptInjection()
-      : null
-
     logForDiagnosticsNoPII('info', 'system_context_completed', {
       duration_ms: Date.now() - startTime,
       has_git_status: gitStatus !== null,
-      has_injection: injection !== null,
     })
 
     return {
       ...(gitStatus && { gitStatus }),
-      ...(feature('BREAK_CACHE_COMMAND') && injection
-        ? {
-            cacheBreaker: `[CACHE_BREAKER: ${injection}]`,
-          }
-        : {}),
     }
   },
 )

@@ -22,7 +22,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `/peers` | `UDS_INBOX` | 本地 Claude 进程之间的收件箱与协作通信。 |
 | `/workflows` | `WORKFLOW_SCRIPTS` | 将预定义的多步骤开发流程保存、管理并重复执行。 |
 | `/torch` | `TORCH` | 内部代号功能；源码未提供面向外部的稳定用途。 |
-| `/web-setup` | `CCR_REMOTE_SETUP` | 在 Claude 网页端连接 GitHub 并设置 Claude Code；还需 Claude.ai 登录、服务端开关及远程会话策略许可。 |
 | `/force-snip` | `HISTORY_SNIP` | 强制截断历史；即使开关启用，仍仅限内部构建。 |
 
 ---
@@ -34,7 +33,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | 命令 | 功能 |
 |------|------|
 | `/backfill-sessions` | 回填历史会话数据。 |
-| `/break-cache` | 强制打破提示缓存。 |
 | `/bughunter` | 内部 Bug 诊断工具。 |
 | `/commit` | 创建 Git 提交。 |
 | `/commit-push-pr` | 执行内部提交、推送和创建 Pull Request 工作流。 |

@@ -158,7 +158,7 @@ export async function checkGithubAppInstalled(
 }
 
 /**
- * Checks if the user has synced their GitHub credentials via /web-setup
+ * Checks if the user has synced their GitHub credentials with the remote service
  * @returns true if GitHub token is synced, false otherwise
  */
 export async function checkGithubTokenSynced(): Promise<boolean> {
@@ -181,7 +181,7 @@ export async function checkGithubTokenSynced(): Promise<boolean> {
       'x-organization-uuid': orgUUID,
     }
 
-    logForDebugging('Checking if GitHub token is synced via web-setup')
+    logForDebugging('Checking if GitHub token is synced with the remote service')
 
     const response = await axios.get(url, {
       headers,
@@ -215,7 +215,7 @@ type RepoAccessMethod = 'github-app' | 'token-sync' | 'none'
 /**
  * Tiered check for whether a GitHub repo is accessible for remote operations.
  * 1. GitHub App installed on the repo
- * 2. GitHub token synced via /web-setup
+ * 2. GitHub token synced with the remote service
  * 3. Neither — caller should prompt user to set up access
  */
 export async function checkRepoForRemoteAccess(
