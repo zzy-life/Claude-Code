@@ -1,3 +1,0 @@
-# Verify
-
-Restored placeholder content.

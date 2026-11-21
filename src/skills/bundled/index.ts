@@ -10,7 +10,6 @@ import { registerSimplifySkill } from './simplify.js'
 import { registerSkillifySkill } from './skillify.js'
 import { registerStuckSkill } from './stuck.js'
 import { registerUpdateConfigSkill } from './updateConfig.js'
-import { registerVerifySkill } from './verify.js'
 
 /**
  * Initialize all bundled skills.
@@ -24,7 +23,6 @@ import { registerVerifySkill } from './verify.js'
 export function initBundledSkills(): void {
   registerUpdateConfigSkill()
   registerKeybindingsSkill()
-  registerVerifySkill()
   registerDebugSkill()
   registerLoremIpsumSkill()
   registerSkillifySkill()

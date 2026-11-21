@@ -82,7 +82,7 @@ export async function resolveGitDir(
 /**
  * Validate that a ref/branch name read from .git/ is safe to use in path
  * joins, as git positional arguments, and when interpolated into shell
- * commands (commit-push-pr skill interpolates the branch into shell).
+ * commands.
  * An attacker who controls .git/HEAD or a loose ref file could otherwise
  * embed path traversal (`..`), argument injection (leading `-`), or shell
  * metacharacters — .git/HEAD is a plain text file that can be written

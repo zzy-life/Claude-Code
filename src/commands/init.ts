@@ -157,7 +157,7 @@ Skills add capabilities Claude can use on demand without bloating every session.
 
 **First, consume \`skill\` entries from the Phase 3 preference queue.** Each queued skill preference becomes a SKILL.md tailored to what the user described. For each:
 - Name it from the preference (e.g., "verify-deep", "session-report", "deploy-sandbox")
-- Write the body using the user's own words from the interview plus whatever Phase 2 found (test commands, report format, deploy target). If the preference maps to an existing bundled skill (e.g., \`/verify\`), write a project skill that adds the user's specific constraints on top — tell the user the bundled one still exists and theirs is additive.
+- Write the body using the user's own words from the interview plus whatever Phase 2 found (test commands, report format, deploy target). If the preference maps to an existing bundled skill (e.g., \`/simplify\`), write a project skill that adds the user's specific constraints on top — tell the user the bundled one still exists and theirs is additive.
 - Ask a quick follow-up if the preference is underspecified (e.g., "which test command should verify-deep run?")
 
 **Then suggest additional skills** beyond the queue when you find:
