@@ -39,12 +39,7 @@ import {
   setMeterProvider,
   setTracerProvider,
 } from 'src/bootstrap/state.js'
-import {
-  getOtelHeadersFromHelper,
-  getSubscriptionType,
-  is1PApiCustomer,
-  isClaudeAISubscriber,
-} from 'src/utils/auth.js'
+import { getOtelHeadersFromHelper } from 'src/utils/auth.js'
 import { getPlatform, getWslVersion } from 'src/utils/platform.js'
 
 import { getCACertificates } from '../caCerts.js'
@@ -58,7 +53,6 @@ import { getSettings_DEPRECATED } from '../settings/settings.js'
 import { jsonStringify } from '../slowOperations.js'
 import { profileCheckpoint } from '../startupProfiler.js'
 import { isBetaTracingEnabled } from './betaSessionTracing.js'
-import { BigQueryMetricsExporter } from './bigqueryExporter.js'
 import { ClaudeCodeDiagLogger } from './logger.js'
 import { initializePerfettoTracing } from './perfettoTracing.js'
 import {
@@ -325,27 +319,6 @@ export function isTelemetryEnabled() {
   return isEnvTruthy(process.env.CLAUDE_CODE_ENABLE_TELEMETRY)
 }
 
-function getBigQueryExportingReader() {
-  const bigqueryExporter = new BigQueryMetricsExporter()
-  return new PeriodicExportingMetricReader({
-    exporter: bigqueryExporter,
-    exportIntervalMillis: 5 * 60 * 1000, // 5mins for BigQuery metrics exporter to reduce load
-  })
-}
-
-function isBigQueryMetricsEnabled() {
-  // BigQuery metrics are enabled for:
-  // 1. API customers (excluding Claude.ai subscribers and Bedrock/Vertex)
-  // 2. Claude for Enterprise (C4E) users
-  // 3. Claude for Teams users
-  const subscriptionType = getSubscriptionType()
-  const isC4EOrTeamUser =
-    isClaudeAISubscriber() &&
-    (subscriptionType === 'enterprise' || subscriptionType === 'team')
-
-  return is1PApiCustomer() || isC4EOrTeamUser
-}
-
 /**
  * Initialize beta tracing - a separate code path for detailed debugging.
  * Uses BETA_TRACING_ENDPOINT instead of OTEL_EXPORTER_OTLP_ENDPOINT.
@@ -461,11 +434,6 @@ export async function initializeTelemetry() {
   )
   if (telemetryEnabled) {
     readers.push(...(await getOtlpReaders()))
-  }
-
-  // Add BigQuery exporter (for API customers, C4E users, and internal users)
-  if (isBigQueryMetricsEnabled()) {
-    readers.push(getBigQueryExportingReader())
   }
 
   // Create base resource with service attributes
@@ -694,7 +662,7 @@ Current timeout: ${timeoutMs}ms
     }
   }
 
-  // Always register shutdown (internal metrics are always enabled)
+  // Flush configured telemetry providers during shutdown.
   registerCleanup(shutdownTelemetry)
 
   return meterProvider.getMeter('com.anthropic.claude_code', MACRO.VERSION)

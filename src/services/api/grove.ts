@@ -85,36 +85,6 @@ export const getGroveSettings = memoize(
 )
 
 /**
- * Mark that the Grove notice has been viewed by the user
- */
-export async function markGroveNoticeViewed(): Promise<void> {
-  try {
-    await withOAuth401Retry(() => {
-      const authHeaders = getAuthHeaders()
-      if (authHeaders.error) {
-        throw new Error(`Failed to get auth headers: ${authHeaders.error}`)
-      }
-      return axios.post(
-        `${getOauthConfig().BASE_API_URL}/api/oauth/account/grove_notice_viewed`,
-        {},
-        {
-          headers: {
-            ...authHeaders.headers,
-            'User-Agent': getClaudeCodeUserAgent(),
-          },
-        },
-      )
-    })
-    // This mutates grove_notice_viewed_at server-side — Grove.tsx:87 reads it
-    // to decide whether to show the dialog. Without invalidation a same-session
-    // remount would read stale viewed_at:null and re-show the dialog.
-    getGroveSettings.cache.clear?.()
-  } catch (err) {
-    logError(err)
-  }
-}
-
-/**
  * Update Grove settings for the user account
  */
 export async function updateGroveSettings(
@@ -345,7 +315,6 @@ export async function checkGroveForNonInteractive(): Promise<void> {
       writeToStderr(
         '\nAn update to our Consumer Terms and Privacy Policy will take effect on October 8, 2025. Run `claude` to review the updated terms.\n\n',
       )
-      await markGroveNoticeViewed()
     } else {
       // Grace period has ended - show error message and exit
       writeToStderr(

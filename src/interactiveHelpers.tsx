@@ -12,7 +12,6 @@ import { isSynchronizedOutputSupported } from './ink/terminal.js';
 import type { RenderOptions, Root, TextProps } from './ink.js';
 import { KeybindingSetup } from './keybindings/KeybindingProviderSetup.js';
 import { startDeferredPrefetches } from './main.js';
-import { checkGate_CACHED_OR_BLOCKING, initializeGrowthBook, resetGrowthBook } from './services/analytics/growthbook.js';
 import { isQualifiedForGrove } from './services/api/grove.js';
 import { handleMcpjsonServerApprovals } from './services/mcpServerApproval.js';
 import { AppStateProvider } from './state/AppState.js';
@@ -139,14 +138,7 @@ export async function showSetupScreens(root: Root, permissionMode: PermissionMod
     }
 
     // Signal that trust has been verified for this session.
-    // GrowthBook checks this to decide whether to include auth headers.
     setSessionTrustAccepted(true);
-
-    // Reset and reinitialize GrowthBook after trust is established.
-    // Defense for login/logout: clears any prior client so the next init
-    // picks up fresh auth headers.
-    resetGrowthBook();
-    void initializeGrowthBook();
 
     // Now that trust is established, prefetch system context if it wasn't already
     void getSystemContext();
@@ -238,17 +230,6 @@ export async function showSetupScreens(root: Root, permissionMode: PermissionMod
   // is NOT bypassed — gateChannelServer() still runs; this flag only exists
   // to sidestep the --channels approved-server allowlist.
   if (feature('KAIROS') || feature('KAIROS_CHANNELS')) {
-    // gateChannelServer and ChannelsNotice read tengu_harbor after this
-    // function returns. A cold disk cache (fresh install, or first run after
-    // the flag was added server-side) defaults to false and silently drops
-    // channel notifications for the whole session — gh#37026.
-    // checkGate_CACHED_OR_BLOCKING returns immediately if disk already says
-    // true; only blocks on a cold/stale-false cache (awaits the same memoized
-    // initializeGrowthBook promise fired earlier). Also warms the
-    // isChannelsEnabled() check in the dev-channels dialog below.
-    if (getAllowedChannels().length > 0 || (devChannels?.length ?? 0) > 0) {
-      await checkGate_CACHED_OR_BLOCKING('tengu_harbor');
-    }
     if (devChannels && devChannels.length > 0) {
       const [{
         isChannelsEnabled

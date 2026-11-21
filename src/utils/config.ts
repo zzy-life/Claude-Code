@@ -270,9 +270,6 @@ export type GlobalConfig = {
     lastShownTime?: number
   }
 
-  // Transcript share prompt tracking ("Don't ask again")
-  transcriptShareDismissed?: boolean
-
   // Memory usage tracking
   memoryUsageCount: number // Number of times user has added to memory
 
@@ -432,19 +429,8 @@ export type GlobalConfig = {
   // Sonnet 4.5 → 4.6 migration (pro/max/team premium)
   sonnet45To46MigrationTimestamp?: number
 
-  // Cached statsig gate values
-  cachedStatsigGates: {
-    [gateName: string]: boolean
-  }
-
-  // Cached statsig dynamic configs
-  cachedDynamicConfigs?: { [configName: string]: unknown }
-
-  // Cached GrowthBook feature values
-  cachedGrowthBookFeatures?: { [featureName: string]: unknown }
-
-  // Local GrowthBook overrides (ant-only, set via /config Gates tab).
-  // Checked after env-var overrides but before the real resolved value.
+  // Local feature overrides (ant-only, set via /config Gates tab).
+  // Environment overrides take precedence; otherwise use call-site defaults.
   growthBookOverrides?: { [featureName: string]: unknown }
 
   // Emergency tip tracking - stores the last shown tip to prevent re-showing
@@ -555,13 +541,6 @@ export type GlobalConfig = {
   // Additional model options for the model picker (fetched during bootstrap).
   additionalModelOptionsCache?: ModelOption[]
 
-  // Disk cache for /api/claude_code/organizations/metrics_enabled.
-  // Org-level settings change rarely; persisting across processes avoids a
-  // cold API call on every `claude -p` invocation.
-  metricsStatusCache?: {
-    enabled: boolean
-    timestamp: number
-  }
 
   // Version of the last-applied migration set. When equal to
   // CURRENT_MIGRATION_VERSION, runMigrations() skips all sync migrations
@@ -606,9 +585,6 @@ function createDefaultGlobalConfig(): GlobalConfig {
     autoInstallIdeExtension: true,
     fileCheckpointingEnabled: true,
     terminalProgressBarEnabled: true,
-    cachedStatsigGates: {},
-    cachedDynamicConfigs: {},
-    cachedGrowthBookFeatures: {},
     respectGitignore: true,
     copyFullResponse: false,
   }

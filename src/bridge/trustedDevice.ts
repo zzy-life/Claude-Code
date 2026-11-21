@@ -97,9 +97,6 @@ export function clearTrustedDeviceToken(): void {
  */
 export async function enrollTrustedDevice(): Promise<void> {
   try {
-    // checkGate_CACHED_OR_BLOCKING awaits any in-flight GrowthBook re-init
-    // (triggered by refreshGrowthBookAfterAuthChange in login.tsx) before
-    // reading the gate, so we get the post-refresh value.
     if (!(await checkGate_CACHED_OR_BLOCKING(TRUSTED_DEVICE_GATE))) {
       logForDebugging(
         `[trusted-device] Gate ${TRUSTED_DEVICE_GATE} is off, skipping enrollment`,

@@ -33,7 +33,6 @@ import { init, initializeTelemetryAfterTrust } from './entrypoints/init.js';
 import { addToHistory } from './history.js';
 import type { Root } from './ink.js';
 import { launchRepl } from './replLauncher.js';
-import { hasGrowthBookEnvOverride, initializeGrowthBook, refreshGrowthBookAfterAuthChange } from './services/analytics/growthbook.js';
 import { fetchBootstrapData } from './services/api/bootstrap.js';
 import { type DownloadResult, downloadSessionFiles, type FilesApiConfig, parseFileSpecs } from './services/api/filesApi.js';
 import { prefetchPassesEligibility } from './services/api/referral.js';
@@ -1995,22 +1994,6 @@ async function run(): Promise<CommanderCommand> {
       cacheSessionTitle(sessionNameArg);
     }
 
-    // Ant model aliases (capybara-fast etc.) resolve via the
-    // tengu_ant_model_override GrowthBook flag. _CACHED_MAY_BE_STALE reads
-    // disk synchronously; disk is populated by a fire-and-forget write. On a
-    // cold cache, parseUserSpecifiedModel returns the unresolved alias, the
-    // API 404s, and -p exits before the async write lands — crashloop on
-    // fresh pods. Awaiting init here populates the in-memory payload map that
-    // _CACHED_MAY_BE_STALE now checks first. Gated so the warm path stays
-    // non-blocking:
-    //  - explicit model via --model or ANTHROPIC_MODEL (both feed alias resolution)
-    //  - no env override (which short-circuits _CACHED_MAY_BE_STALE before disk)
-    //  - flag absent from disk (== null also catches pre-#22279 poisoned null)
-    const explicitModel = options.model || process.env.ANTHROPIC_MODEL;
-    if ("external" === 'ant' && explicitModel && explicitModel !== 'default' && !hasGrowthBookEnvOverride('tengu_ant_model_override') && getGlobalConfig().cachedGrowthBookFeatures?.['tengu_ant_model_override'] == null) {
-      await initializeGrowthBook();
-    }
-
     // Special case the default model with the null keyword
     // NOTE: Model resolution happens after setup() to ensure trust is established before AWS auth
     const userSpecifiedModel = options.model === 'default' ? getDefaultMainLoopModel() : options.model;
@@ -2278,15 +2261,10 @@ async function run(): Promise<CommanderCommand> {
         // Keep in sync with the post-login logic in src/commands/login.tsx
         void refreshRemoteManagedSettings();
         void refreshPolicyLimits();
-        // Clear user data cache BEFORE GrowthBook refresh so it picks up fresh credentials
+        // Clear cached user data after switching credentials.
         resetUserCache();
-        // Refresh GrowthBook after login to get updated feature flags (e.g., for claude.ai MCPs)
-        refreshGrowthBookAfterAuthChange();
         // Clear any stale trusted device token then enroll for Remote Control.
-        // Both self-gate on tengu_sessions_elevated_auth_enforcement internally
-        // — enrollTrustedDevice() via checkGate_CACHED_OR_BLOCKING (awaits
-        // the GrowthBook reinit above), clearTrustedDeviceToken() via the
-        // sync cached check (acceptable since clear is idempotent).
+        // Both self-gate on the local trusted-device feature setting.
         void import('./bridge/trustedDevice.js').then(m => {
           m.clearTrustedDeviceToken();
           return m.enrollTrustedDevice();

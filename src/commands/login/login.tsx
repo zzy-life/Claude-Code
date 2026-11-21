@@ -9,7 +9,6 @@ import { ConsoleOAuthFlow } from '../../components/ConsoleOAuthFlow.js';
 import { Dialog } from '../../components/design-system/Dialog.js';
 import { useMainLoopModel } from '../../hooks/useMainLoopModel.js';
 import { Text } from '../../ink.js';
-import { refreshGrowthBookAfterAuthChange } from '../../services/analytics/growthbook.js';
 import { refreshPolicyLimits } from '../../services/policyLimits/index.js';
 import { refreshRemoteManagedSettings } from '../../services/remoteManagedSettings/index.js';
 import type { LocalJSXCommandOnDone } from '../../types/command.js';
@@ -30,10 +29,8 @@ export async function call(onDone: LocalJSXCommandOnDone, context: LocalJSXComma
       void refreshRemoteManagedSettings();
       // Refresh policy limits after login (non-blocking)
       void refreshPolicyLimits();
-      // Clear user data cache BEFORE GrowthBook refresh so it picks up fresh credentials
+      // Clear cached user data after switching credentials.
       resetUserCache();
-      // Refresh GrowthBook after login to get updated feature flags (e.g., for claude.ai MCPs)
-      refreshGrowthBookAfterAuthChange();
       // Clear any stale trusted device token from a previous account before
       // re-enrolling — prevents sending the old token on bridge calls while
       // the async enrollTrustedDevice() is in-flight.

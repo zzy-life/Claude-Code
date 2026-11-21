@@ -117,15 +117,8 @@ const envLessBridgeConfigSchema = lazySchema(() =>
 )
 
 /**
- * Fetch the env-less bridge timing config from GrowthBook. Read once per
- * initEnvLessBridgeCore call — config is fixed for the lifetime of a bridge
- * session.
- *
- * Uses the blocking getter (not _CACHED_MAY_BE_STALE) because /remote-control
- * runs well after GrowthBook init — initializeGrowthBook() resolves instantly,
- * so there's no startup penalty, and we get the fresh in-memory remoteEval
- * value instead of the stale-on-first-read disk cache. The _DEPRECATED suffix
- * warns against startup-path usage, which this isn't.
+ * Read local timing overrides or defaults once per initEnvLessBridgeCore call.
+ * Config is fixed for the lifetime of a bridge session.
  */
 export async function getEnvLessBridgeConfig(): Promise<EnvLessBridgeConfig> {
   const raw = await getFeatureValue_DEPRECATED<unknown>(

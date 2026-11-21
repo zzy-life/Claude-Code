@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { clearTrustedDeviceTokenCache } from '../../bridge/trustedDevice.js';
 import { Text } from '../../ink.js';
-import { refreshGrowthBookAfterAuthChange } from '../../services/analytics/growthbook.js';
 import { getGroveNoticeConfig, getGroveSettings } from '../../services/api/grove.js';
 import { clearPolicyLimitsCache } from '../../services/policyLimits/index.js';
 // flushTelemetry is loaded lazily to avoid pulling in ~1.1MB of OpenTelemetry at startup
@@ -55,9 +54,8 @@ export async function clearAuthRelatedCaches(): Promise<void> {
   clearBetasCaches();
   clearToolSchemaCache();
 
-  // Clear user data cache BEFORE GrowthBook refresh so it picks up fresh credentials
+  // Clear cached user data after switching credentials.
   resetUserCache();
-  refreshGrowthBookAfterAuthChange();
 
   // Clear Grove config cache
   getGroveNoticeConfig.cache?.clear?.();
