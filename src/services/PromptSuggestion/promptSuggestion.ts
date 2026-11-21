@@ -238,10 +238,11 @@ export function getParentCacheSuppressReason(
   // The fork re-processes the parent's output (never cached) plus its own prompt.
   const outputTokens = usage.output_tokens ?? 0
 
-  return inputTokens + cacheWriteTokens + outputTokens >
-    MAX_PARENT_UNCACHED_TOKENS
-    ? 'cache_cold'
-    : null
+  const uncachedTokens = inputTokens + cacheWriteTokens + outputTokens
+  if (uncachedTokens > MAX_PARENT_UNCACHED_TOKENS) {
+    return 'cache_cold'
+  }
+  return null
 }
 
 const SUGGESTION_PROMPT = `[SUGGESTION MODE: Suggest what the user might naturally type next into Claude Code.]
@@ -386,6 +387,9 @@ export function shouldFilterSuggestion(
       'too_few_words',
       () => {
         if (wordCount >= 2) return false
+        // Chinese does not separate words with spaces. Keep the other length
+        // and formatting filters, but do not reject Han text as one English word.
+        if (/\p{Script=Han}/u.test(suggestion)) return false
         // Allow slash commands — these are valid user commands
         if (suggestion.startsWith('/')) return false
         // Allow common single-word inputs that are valid user commands
