@@ -1,4 +1,5 @@
 {
+  "bundleDependencies": false,
   "name": "@zzy1998/claude-code",
   "version": "999.0.17",
   "description": "Restored Claude Code source tree reconstructed from source maps.",
@@ -34,8 +35,9 @@
     "dev": "bun run ./src/dev-entry.ts",
     "start": "bun run ./src/dev-entry.ts",
     "version": "bun run ./src/dev-entry.ts --version",
-    "publish:test": "npm publish --dry-run && npm publish --tag beta",
-    "publish:release": "npm publish --dry-run && npm publish --tag latest"
+    "publish:test": "npm publish --dry-run && npm publish --tag beta && npm run pack:offline",
+    "publish:release": "npm publish --dry-run && npm publish --tag latest && npm run pack:offline",
+    "pack:offline": "node ./pack-offline.mjs"
   },
   "allowScripts": {
     "@alcalzone/ansi-tokenize": true,
