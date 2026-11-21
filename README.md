@@ -426,7 +426,6 @@ vendor/                 # 原生绑定源码
 | `BASH_CLASSIFIER` | Bash 命令分类器 |
 | `BG_SESSIONS` | 后台会话 |
 | `CACHED_MICROCOMPACT` | 缓存微压缩 |
-| `CHICAGO_MCP` | MCP 扩展（Computer Use） |
 | `COMMIT_ATTRIBUTION` | 提交归属标注 |
 | `CONNECTOR_TEXT` | 连接器文本 |
 | `CONTEXT_COLLAPSE` | 上下文折叠 |

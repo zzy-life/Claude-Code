@@ -53,7 +53,6 @@
 | `HISTORY_SNIP` | 历史截断 |
 | `BG_SESSIONS` | 后台会话管理 |
 | `HARD_FAIL` | 硬失败模式 |
-| `CHICAGO_MCP` | MCP 扩展（Computer Use） |
 
 ### 优化与实验开关
 

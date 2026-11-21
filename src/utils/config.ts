@@ -120,8 +120,6 @@ export type ProjectConfig = {
   enableAllProjectMcpServers?: boolean
   // List of disabled MCP servers (all scopes) - used for enable/disable toggle
   disabledMcpServers?: string[]
-  // Opt-in list for built-in MCP servers that default to disabled
-  enabledMcpServers?: string[]
   // Worktree session management
   activeWorktreeSession?: {
     originalCwd: string

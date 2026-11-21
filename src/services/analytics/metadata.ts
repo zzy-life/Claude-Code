@@ -113,28 +113,6 @@ export function isAnalyticsToolDetailsLoggingEnabled(
 }
 
 /**
- * Built-in first-party MCP servers whose names are fixed reserved strings,
- * not user-configured — so logging them is not PII. Checked in addition to
- * isAnalyticsToolDetailsLoggingEnabled's transport/URL gates, which a stdio
- * built-in would otherwise fail.
- *
- * Feature-gated so the set is empty when the feature is off: the name
- * reservation (main.tsx, config.ts addMcpServer) is itself feature-gated, so
- * a user-configured 'computer-use' is possible in builds without the feature.
- */
-/* eslint-disable @typescript-eslint/no-require-imports */
-const BUILTIN_MCP_SERVER_NAMES: ReadonlySet<string> = new Set(
-  feature('CHICAGO_MCP')
-    ? [
-        (
-          require('../../utils/computerUse/common.js') as typeof import('../../utils/computerUse/common.js')
-        ).COMPUTER_USE_MCP_SERVER_NAME,
-      ]
-    : [],
-)
-/* eslint-enable @typescript-eslint/no-require-imports */
-
-/**
  * Spreadable helper for logEvent payloads — returns {mcpServerName, mcpToolName}
  * if the gate passes, empty object otherwise. Consolidates the identical IIFE
  * pattern at each tengu_tool_use_* call site.
@@ -152,7 +130,6 @@ export function mcpToolDetailsForAnalytics(
     return {}
   }
   if (
-    !BUILTIN_MCP_SERVER_NAMES.has(details.serverName) &&
     !isAnalyticsToolDetailsLoggingEnabled(mcpServerType, mcpServerBaseUrl)
   ) {
     return {}

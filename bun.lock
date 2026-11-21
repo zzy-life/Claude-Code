@@ -7,9 +7,6 @@
       "dependencies": {
         "@alcalzone/ansi-tokenize": "https://repo.huaweicloud.com/repository/npm/@alcalzone/ansi-tokenize/-/ansi-tokenize-0.3.0.tgz",
         "@ant/claude-for-chrome-mcp": "file:./shims/ant-claude-for-chrome-mcp",
-        "@ant/computer-use-input": "file:./shims/ant-computer-use-input",
-        "@ant/computer-use-mcp": "file:./shims/ant-computer-use-mcp",
-        "@ant/computer-use-swift": "file:./shims/ant-computer-use-swift",
         "@anthropic-ai/claude-agent-sdk": "https://repo.huaweicloud.com/repository/npm/@anthropic-ai/claude-agent-sdk/-/claude-agent-sdk-0.2.88.tgz",
         "@anthropic-ai/mcpb": "https://repo.huaweicloud.com/repository/npm/@anthropic-ai/mcpb/-/mcpb-2.1.2.tgz",
         "@anthropic-ai/sandbox-runtime": "https://repo.huaweicloud.com/repository/npm/@anthropic-ai/sandbox-runtime/-/sandbox-runtime-0.0.44.tgz",
@@ -86,12 +83,6 @@
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@https://repo.huaweicloud.com/repository/npm/@alcalzone/ansi-tokenize/-/ansi-tokenize-0.3.0.tgz", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }],
 
     "@ant/claude-for-chrome-mcp": ["@ant/claude-for-chrome-mcp@file:shims/ant-claude-for-chrome-mcp", {}],
-
-    "@ant/computer-use-input": ["@ant/computer-use-input@file:shims/ant-computer-use-input", {}],
-
-    "@ant/computer-use-mcp": ["@ant/computer-use-mcp@file:shims/ant-computer-use-mcp", {}],
-
-    "@ant/computer-use-swift": ["@ant/computer-use-swift@file:shims/ant-computer-use-swift", {}],
 
     "@anthropic-ai/claude-agent-sdk": ["@anthropic-ai/claude-agent-sdk@https://repo.huaweicloud.com/repository/npm/@anthropic-ai/claude-agent-sdk/-/claude-agent-sdk-0.2.88.tgz", { "dependencies": { "@anthropic-ai/sdk": "^0.74.0", "@modelcontextprotocol/sdk": "^1.27.1" }, "optionalDependencies": { "@img/sharp-darwin-arm64": "^0.34.2", "@img/sharp-darwin-x64": "^0.34.2", "@img/sharp-linux-arm": "^0.34.2", "@img/sharp-linux-arm64": "^0.34.2", "@img/sharp-linux-x64": "^0.34.2", "@img/sharp-linuxmusl-arm64": "^0.34.2", "@img/sharp-linuxmusl-x64": "^0.34.2", "@img/sharp-win32-arm64": "^0.34.2", "@img/sharp-win32-x64": "^0.34.2" }, "peerDependencies": { "zod": "^4.0.0" } }],
 
