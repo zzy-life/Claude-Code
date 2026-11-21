@@ -2458,7 +2458,6 @@ export async function generateUsageReport(): Promise<{
   insights: InsightResults
   htmlPath: string
   data: AggregatedData
-  facets: Map<string, SessionFacets>
 }> {
   // Phase 1: Lite scan — filesystem metadata only (no JSONL parsing)
   const allScannedSessions = await scanAllSessions()
@@ -2666,7 +2665,6 @@ export async function generateUsageReport(): Promise<{
     insights,
     htmlPath,
     data: aggregated,
-    facets: substantiveFacets,
   }
 }
 
@@ -2731,7 +2729,7 @@ ${data.date_range.start} to ${data.date_range.end}
 
     const userSummary = `${header}${summaryText}
 
-Your full shareable insights report is ready: ${reportUrl}`
+Your full local insights report is ready: ${reportUrl}`
 
     // Return prompt for Claude to respond to
     return [
@@ -2752,7 +2750,7 @@ ${userSummary}
 Now output the following message exactly:
 
 <message>
-Your shareable insights report is ready:
+Your local insights report is ready:
 ${reportUrl}
 
 Want to dig into any section or try one of the suggestions?

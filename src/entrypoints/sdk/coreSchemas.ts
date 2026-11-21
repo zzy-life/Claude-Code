@@ -1597,7 +1597,7 @@ export const SDKLocalCommandOutputMessageSchema = lazySchema(() =>
       session_id: z.string(),
     })
     .describe(
-      'Output from a local slash command (e.g. /voice, /cost). Displayed as assistant-style text in the transcript.',
+      'Output from a local slash command (e.g. /voice, /files). Displayed as assistant-style text in the transcript.',
     ),
 )
 

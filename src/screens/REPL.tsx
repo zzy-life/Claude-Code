@@ -211,8 +211,6 @@ import { EffortCallout, shouldShowEffortCallout } from '../components/EffortCall
 import type { EffortValue } from '../utils/effort.js';
 import { RemoteCallout } from '../components/RemoteCallout.js';
 /* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-const AntModelSwitchCallout = "external" === 'ant' ? require('../components/AntModelSwitchCallout.js').AntModelSwitchCallout : null;
-const shouldShowAntModelSwitch = "external" === 'ant' ? require('../components/AntModelSwitchCallout.js').shouldShowModelSwitchCallout : (): boolean => false;
 const UndercoverAutoCallout = "external" === 'ant' ? require('../components/UndercoverAutoCallout.js').UndercoverAutoCallout : null;
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import { activityManager } from '../utils/activityManager.js';
@@ -759,13 +757,6 @@ export function REPL({
   const [ideToInstallExtension, setIDEToInstallExtension] = useState<IdeType | null>(null);
   const [ideInstallationStatus, setIDEInstallationStatus] = useState<IDEExtensionInstallationStatus | null>(null);
   const [showIdeOnboarding, setShowIdeOnboarding] = useState(false);
-  // Dead code elimination: model switch callout state (ant-only)
-  const [showModelSwitchCallout, setShowModelSwitchCallout] = useState(() => {
-    if ("external" === 'ant') {
-      return shouldShowAntModelSwitch();
-    }
-    return false;
-  });
   const [showEffortCallout, setShowEffortCallout] = useState(() => shouldShowEffortCallout(mainLoopModel));
   const showRemoteCallout = useAppState(s => s.showRemoteCallout);
   const [showDesktopUpsellStartup, setShowDesktopUpsellStartup] = useState(() => shouldShowDesktopUpsellStartup());
@@ -2009,7 +2000,7 @@ export function REPL({
   // Permission and interactive dialogs can show even when toolJSX is set,
   // as long as shouldContinueAnimation is true. This prevents deadlocks when
   // agents set background hints while waiting for user interaction.
-  function getFocusedInputDialog(): 'message-selector' | 'sandbox-permission' | 'tool-permission' | 'prompt' | 'worker-sandbox-permission' | 'elicitation' | 'cost' | 'idle-return' | 'init-onboarding' | 'ide-onboarding' | 'model-switch' | 'undercover-callout' | 'effort-callout' | 'remote-callout' | 'lsp-recommendation' | 'plugin-hint' | 'desktop-upsell' | undefined {
+  function getFocusedInputDialog(): 'message-selector' | 'sandbox-permission' | 'tool-permission' | 'prompt' | 'worker-sandbox-permission' | 'elicitation' | 'cost' | 'idle-return' | 'init-onboarding' | 'ide-onboarding' | 'undercover-callout' | 'effort-callout' | 'remote-callout' | 'lsp-recommendation' | 'plugin-hint' | 'desktop-upsell' | undefined {
     // Exit states always take precedence
     if (isExiting || exitFlow) return undefined;
 
@@ -2032,9 +2023,6 @@ export function REPL({
 
     // Onboarding dialogs (special conditions)
     if (allowDialogsWithAnimation && showIdeOnboarding) return 'ide-onboarding';
-
-    // Model switch callout (ant-only, eliminated from external builds)
-    if ("external" === 'ant' && allowDialogsWithAnimation && showModelSwitchCallout) return 'model-switch';
 
     // Undercover auto-enable explainer (ant-only, eliminated from external builds)
     if ("external" === 'ant' && allowDialogsWithAnimation && showUndercoverCallout) return 'undercover-callout';
@@ -4748,16 +4736,6 @@ export function REPL({
             });
           }} />}
                 {focusedInputDialog === 'ide-onboarding' && <IdeOnboardingDialog onDone={() => setShowIdeOnboarding(false)} installationStatus={ideInstallationStatus} />}
-                {"external" === 'ant' && focusedInputDialog === 'model-switch' && AntModelSwitchCallout && <AntModelSwitchCallout onDone={(selection: string, modelAlias?: string) => {
-            setShowModelSwitchCallout(false);
-            if (selection === 'switch' && modelAlias) {
-              setAppState(prev => ({
-                ...prev,
-                mainLoopModel: modelAlias,
-                mainLoopModelForSession: null
-              }));
-            }
-          }} />}
                 {"external" === 'ant' && focusedInputDialog === 'undercover-callout' && UndercoverAutoCallout && <UndercoverAutoCallout onDone={() => setShowUndercoverCallout(false)} />}
                 {focusedInputDialog === 'effort-callout' && <EffortCallout model={mainLoopModel} onDone={selection => {
             setShowEffortCallout(false);

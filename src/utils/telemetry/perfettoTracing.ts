@@ -8,7 +8,7 @@
  *
  * The trace file includes:
  * - Agent hierarchy (parent-child relationships in a swarm)
- * - API requests with TTFT, TTLT, prompt length, cache stats, msg ID, speculative flag
+ * - API requests with TTFT, TTLT, prompt length, cache stats, msg ID
  * - Tool executions with name, duration, and token usage
  * - User input waiting time
  *
@@ -426,7 +426,6 @@ export function startLLMRequestPerfettoSpan(args: {
   model: string
   promptTokens?: number
   messageId?: string
-  isSpeculative?: boolean
   querySource?: string
 }): string {
   if (!isEnabled) return ''
@@ -443,7 +442,6 @@ export function startLLMRequestPerfettoSpan(args: {
       model: args.model,
       prompt_tokens: args.promptTokens,
       message_id: args.messageId,
-      is_speculative: args.isSpeculative ?? false,
       query_source: args.querySource,
     },
   })

@@ -17,7 +17,6 @@ import { countConcurrentSessions } from '../../utils/concurrentSessions.js'
 import { getGlobalConfig } from '../../utils/config.js'
 import {
   getEffortEnvOverride,
-  modelSupportsEffort,
 } from '../../utils/effort.js'
 import { env } from '../../utils/env.js'
 import { cacheKeys } from '../../utils/fileStateCache.js'
@@ -32,7 +31,6 @@ import {
   isWindsurfInstalled,
 } from '../../utils/ide.js'
 import {
-  getMainLoopModel,
   getUserSpecifiedModelSetting,
 } from '../../utils/model/model.js'
 import { getPlatform } from '../../utils/platform.js'
@@ -527,7 +525,6 @@ const externalTips: Tip[] = [
     cooldownSessions: 3,
     isRelevant: async () => {
       if (!is1PApiCustomer()) return false
-      if (!modelSupportsEffort(getMainLoopModel())) return false
       if (getSettingsForSource('policySettings')?.effortLevel !== undefined) {
         return false
       }

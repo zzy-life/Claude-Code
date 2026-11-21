@@ -166,7 +166,7 @@ import { CHROME_TOOL_SEARCH_INSTRUCTIONS } from 'src/utils/claudeInChrome/prompt
 import { getMaxThinkingTokensForModel } from 'src/utils/context.js'
 import { logForDebugging } from 'src/utils/debug.js'
 import { logForDiagnosticsNoPII } from 'src/utils/diagLogs.js'
-import { type EffortValue, modelSupportsEffort } from 'src/utils/effort.js'
+import { type EffortValue } from 'src/utils/effort.js'
 import {
   isFastModeAvailable,
   isFastModeCooldown,
@@ -443,9 +443,8 @@ function configureEffortParams(
   outputConfig: BetaOutputConfig,
   extraBodyParams: Record<string, unknown>,
   betas: string[],
-  model: string,
 ): void {
-  if (!modelSupportsEffort(model) || 'effort' in outputConfig) {
+  if ('effort' in outputConfig) {
     return
   }
 
@@ -1572,7 +1571,6 @@ async function* queryModel(
       outputConfig,
       extraBodyParams,
       betasParams,
-      options.model,
     )
 
     configureTaskBudgetParams(

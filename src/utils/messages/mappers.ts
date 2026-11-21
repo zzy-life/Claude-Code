@@ -181,7 +181,7 @@ export function toSDKMessages(messages: Message[]): SDKMessage[] {
 }
 
 /**
- * Converts local command output (e.g. /voice, /cost) to a well-formed
+ * Converts local command output (e.g. /voice, /files) to a well-formed
  * SDKAssistantMessage so downstream consumers (mobile apps, session-ingress
  * v1alpha→v1beta converter) can parse it without schema changes.
  *
@@ -191,7 +191,7 @@ export function toSDKMessages(messages: Message[]): SDKMessage[] {
  *   - api-go session-ingress convertSystemEvent (only init/compact_boundary)
  * See: https://anthropic.sentry.io/issues/7266299248/ (Android)
  *
- * Strips ANSI (e.g. chalk.dim() in /cost) then unwraps the XML wrapper tags.
+ * Strips ANSI styling then unwraps the XML wrapper tags.
  */
 export function localCommandOutputToSDKAssistantMessage(
   rawContent: string,

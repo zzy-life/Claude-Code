@@ -268,8 +268,6 @@ import {
 } from 'src/utils/model/model.js'
 import { getModelOptions } from 'src/utils/model/modelOptions.js'
 import {
-  modelSupportsEffort,
-  modelSupportsMaxEffort,
   EFFORT_LEVELS,
   resolveAppliedEffort,
 } from 'src/utils/effort.js'
@@ -1177,7 +1175,6 @@ function runHeadlessStreaming(
       modelId === 'default'
         ? getDefaultMainLoopModel()
         : parseUserSpecifiedModel(modelId)
-    const hasEffort = modelSupportsEffort(resolvedModel)
     const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
     const hasFastMode = isFastModeSupportedByModel(option.value)
     const hasAutoMode = modelSupportsAutoMode(resolvedModel)
@@ -1185,12 +1182,9 @@ function runHeadlessStreaming(
       value: modelId,
       displayName: option.label,
       description: option.description,
-      ...(hasEffort && {
-        supportsEffort: true,
-        supportedEffortLevels: modelSupportsMaxEffort(resolvedModel)
-          ? [...EFFORT_LEVELS]
-          : EFFORT_LEVELS.filter(l => l !== 'max'),
-      }),
+      // Client-selectable levels; upstream validates model support.
+      supportsEffort: true,
+      supportedEffortLevels: [...EFFORT_LEVELS],
       ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
       ...(hasFastMode && { supportsFastMode: true }),
       ...(hasAutoMode && { supportsAutoMode: true }),
@@ -3712,11 +3706,7 @@ function runHeadlessStreaming(
         } else if (message.request.subtype === 'get_settings') {
           const currentAppState = getAppState()
           const model = getMainLoopModel()
-          // modelSupportsEffort gate matches claude.ts — applied.effort must
-          // mirror what actually goes to the API, not just what's configured.
-          const effort = modelSupportsEffort(model)
-            ? resolveAppliedEffort(model, currentAppState.effortValue)
-            : undefined
+          const effort = resolveAppliedEffort(model, currentAppState.effortValue)
           sendControlResponseSuccess(message, {
             ...getSettingsWithSources(),
             applied: {

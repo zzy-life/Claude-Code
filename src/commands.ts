@@ -13,7 +13,6 @@ import desktop from './commands/desktop/index.js'
 import compact from './commands/compact/index.js'
 import config from './commands/config/index.js'
 import { context, contextNonInteractive } from './commands/context/index.js'
-import cost from './commands/cost/index.js'
 import diff from './commands/diff/index.js'
 import ctx_viz from './commands/ctx_viz/index.js'
 import doctor from './commands/doctor/index.js'
@@ -122,8 +121,6 @@ import reloadPlugins from './commands/reload-plugins/index.js'
 import rewind from './commands/rewind/index.js'
 import heapDump from './commands/heapdump/index.js'
 import mockLimits from './commands/mock-limits/index.js'
-import bridgeKick from './commands/bridge-kick.js'
-import version from './commands/version.js'
 import summary from './commands/summary/index.js'
 import {
   resetLimits,
@@ -216,8 +213,6 @@ export const INTERNAL_ONLY_COMMANDS = [
   initVerifiers,
   ...(forceSnip ? [forceSnip] : []),
   mockLimits,
-  bridgeKick,
-  version,
   ...(subscribePr ? [subscribePr] : []),
   resetLimits,
   resetLimitsNonInteractive,
@@ -251,7 +246,6 @@ const COMMANDS = memoize((): Command[] => [
   desktop,
   context,
   contextNonInteractive,
-  cost,
   diff,
   doctor,
   effort,
@@ -604,7 +598,6 @@ export const REMOTE_SAFE_COMMANDS: Set<Command> = new Set([
   theme, // Change terminal theme
   color, // Change agent color
   vim, // Toggle vim mode
-  cost, // Show session cost (local cost tracking)
   usage, // Show usage info
   copy, // Copy last message
   btw, // Quick note
@@ -632,7 +625,6 @@ export const BRIDGE_SAFE_COMMANDS: Set<Command> = new Set(
   [
     compact, // Shrink context — useful mid-session from a phone
     clear, // Wipe transcript
-    cost, // Show session cost
     summary, // Summarize conversation
     releaseNotes, // Show changelog
     files, // List tracked files

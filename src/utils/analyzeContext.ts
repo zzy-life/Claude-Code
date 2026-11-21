@@ -197,11 +197,11 @@ export interface ContextData {
   readonly model: string
   readonly memoryFiles: MemoryFile[]
   readonly mcpTools: McpTool[]
-  /** Ant-only: per-tool breakdown of deferred built-in tools */
+  /** Per-tool breakdown of deferred built-in tools */
   readonly deferredBuiltinTools?: DeferredBuiltinTool[]
-  /** Ant-only: per-tool breakdown of always-loaded built-in tools */
+  /** Per-tool breakdown of always-loaded built-in tools */
   readonly systemTools?: SystemToolDetail[]
-  /** Ant-only: per-section breakdown of system prompt */
+  /** Per-section breakdown of system prompt */
   readonly systemPromptSections?: SystemPromptSectionDetail[]
   readonly agents: Agent[]
   readonly slashCommands?: SlashCommandInfo
