@@ -24,7 +24,6 @@ import { sequential } from './sequential.js'
  * NOTE: This is intentionally a repo allowlist, not an org-wide check.
  * The anthropics and anthropic-experimental orgs contain PUBLIC repos
  * (e.g. anthropics/claude-code, anthropic-experimental/sandbox-runtime).
- * Undercover mode must stay ON in those to prevent codename leaks.
  * Only add repos here that are confirmed PRIVATE.
  */
 const INTERNAL_MODEL_REPOS = [
@@ -90,22 +89,6 @@ export function getAttributionRepoRoot(): string {
 // 'external' = has a remote, not on allowlist (public/open-source repo)
 // 'none'     = no remote URL (not a git repo, or no remote configured)
 let repoClassCache: 'internal' | 'external' | 'none' | null = null
-
-/**
- * Synchronously return the cached repo classification.
- * Returns null if the async check hasn't run yet.
- */
-export function getRepoClassCached(): 'internal' | 'external' | 'none' | null {
-  return repoClassCache
-}
-
-/**
- * Synchronously return the cached result of isInternalModelRepo().
- * Returns false if the check hasn't run yet (safe default: don't leak).
- */
-export function isInternalModelRepoCached(): boolean {
-  return repoClassCache === 'internal'
-}
 
 /**
  * Check if the current repo is in the allowlist for internal model names.

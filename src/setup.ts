@@ -340,19 +340,6 @@ export async function setup(
   // overhead. NOT an early-return: the --dangerously-skip-permissions safety
   // gate, tengu_started beacon, and apiKeyHelper prefetch below must still run.
   if (!isBareMode()) {
-    if (process.env.USER_TYPE === 'ant') {
-      // Prime repo classification cache for auto-undercover mode. Default is
-      // undercover ON until proven internal; if this resolves to internal, clear
-      // the prompt cache so the next turn picks up the OFF state.
-      void import('./utils/commitAttribution.js').then(async m => {
-        if (await m.isInternalModelRepo()) {
-          const { clearSystemPromptSections } = await import(
-            './constants/systemPromptSections.js'
-          )
-          clearSystemPromptSections()
-        }
-      })
-    }
     if (feature('COMMIT_ATTRIBUTION')) {
       // Dynamic import to enable dead code elimination (module contains excluded strings).
       // Defer to next tick so the git subprocess spawn runs after first render

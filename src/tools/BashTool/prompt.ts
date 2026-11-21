@@ -1,6 +1,5 @@
 import { feature } from 'bun:bundle'
 import { prependBullets } from '../../constants/prompts.js'
-import { getAttributionTexts } from '../../utils/attribution.js'
 import { hasEmbeddedSearchTools } from '../../utils/embeddedTools.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
 import { shouldIncludeGitInstructions } from '../../utils/gitSettings.js'
@@ -11,10 +10,6 @@ import {
   getDefaultBashTimeoutMs,
   getMaxBashTimeoutMs,
 } from '../../utils/timeouts.js'
-import {
-  getUndercoverInstructions,
-  isUndercover,
-} from '../../utils/undercover.js'
 import { AGENT_TOOL_NAME } from '../AgentTool/constants.js'
 import { FILE_EDIT_TOOL_NAME } from '../FileEditTool/constants.js'
 import { FILE_READ_TOOL_NAME } from '../FileReadTool/prompt.js'
@@ -40,22 +35,9 @@ function getBackgroundUsageNote(): string | null {
 }
 
 function getCommitAndPRInstructions(): string {
-  // Defense-in-depth: undercover instructions must survive even if the user
-  // has disabled git instructions entirely. Attribution stripping and model-ID
-  // hiding are mechanical and work regardless, but the explicit "don't blow
-  // your cover" instructions are the last line of defense against the model
-  // volunteering an internal codename in a commit message.
-  const undercoverSection =
-    process.env.USER_TYPE === 'ant' && isUndercover()
-      ? getUndercoverInstructions() + '\n'
-      : ''
+  if (!shouldIncludeGitInstructions()) return ''
 
-  if (!shouldIncludeGitInstructions()) return undercoverSection
-
-  // Use inline Git instructions for all users now that the bundled Git commands are removed.
-  const { commit: commitAttribution, pr: prAttribution } = getAttributionTexts()
-
-  return `${undercoverSection}# Committing changes with git
+  return `# Committing changes with git
 
 Only create commits when requested by the user. If unclear, ask first. When the user asks you to create a new git commit, follow these steps carefully:
 
@@ -81,7 +63,7 @@ Git Safety Protocol:
   - Ensure it accurately reflects the changes and their purpose
 3. Run the following commands in parallel:
    - Add relevant untracked files to the staging area.
-   - Create the commit with a message${commitAttribution ? ` ending with:\n   ${commitAttribution}` : '.'}
+   - Create the commit with a message.
    - Run git status after the commit completes to verify success.
    Note: git status depends on the commit completing, so run it sequentially after the commit.
 4. If the commit fails due to pre-commit hook: fix the issue and create a NEW commit
@@ -96,7 +78,7 @@ Important notes:
 - In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
 <example>
 git commit -m "$(cat <<'EOF'
-   Commit message here.${commitAttribution ? `\n\n   ${commitAttribution}` : ''}
+   Commit message here.
    EOF
    )"
 </example>
@@ -124,7 +106,7 @@ gh pr create --title "the pr title" --body "$(cat <<'EOF'
 <1-3 bullet points>
 
 ## Test plan
-[Bulleted markdown checklist of TODOs for testing the pull request...]${prAttribution ? `\n\n${prAttribution}` : ''}
+[Bulleted markdown checklist of TODOs for testing the pull request...]
 EOF
 )"
 </example>
