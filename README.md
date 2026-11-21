@@ -709,7 +709,7 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | 远程与后台会话 | `useRemoteSession`、`useSSHSession`、`useDirectConnect`、`LocalMainSessionTask`、`useSessionBackgrounding` | 提供远程/SSH/直连会话能力，并支持将主会话转入后台。 |
 | 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置和动态实验配置，采集诊断/会话追踪并维护活动状态。 |
 | 条件加载模块 | `useVoiceIntegration`、`useFrustrationDetection`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
-| 其他界面能力 | `Spinner`、`TaskListV2`、`DevBar` | 显示加载状态、任务列表及开发栏。 |
+| 其他界面能力 | `Spinner`、`TaskListV2` | 显示加载状态及任务列表。 |
 
 ## 数据来源
 

@@ -185,12 +185,6 @@ type State = {
       agentId: string | null
     }
   >
-  // Track slow operations for dev bar display (ant-only)
-  slowOperations: Array<{
-    operation: string
-    durationMs: number
-    timestamp: number
-  }>
   // SDK-provided betas (e.g., context-1m-2025-08-07)
   sdkBetas: string[] | undefined
   // Main thread agent type (from --agent flag or settings)
@@ -380,8 +374,6 @@ function getInitialState(): State {
     teleportedSessionInfo: null,
     // Track invoked skills for preservation across compaction
     invokedSkills: new Map(),
-    // Track slow operations for dev bar display
-    slowOperations: [],
     // SDK-provided betas
     sdkBetas: undefined,
     // Main thread agent type
@@ -1560,64 +1552,6 @@ export function clearInvokedSkillsForAgent(agentId: string): void {
       STATE.invokedSkills.delete(key)
     }
   }
-}
-
-// Slow operations tracking for dev bar
-const MAX_SLOW_OPERATIONS = 10
-const SLOW_OPERATION_TTL_MS = 10000
-
-export function addSlowOperation(operation: string, durationMs: number): void {
-  if (process.env.USER_TYPE !== 'ant') return
-  // Skip tracking for editor sessions (user editing a prompt file in $EDITOR)
-  // These are intentionally slow since the user is drafting text
-  if (operation.includes('exec') && operation.includes('claude-prompt-')) {
-    return
-  }
-  const now = Date.now()
-  // Remove stale operations
-  STATE.slowOperations = STATE.slowOperations.filter(
-    op => now - op.timestamp < SLOW_OPERATION_TTL_MS,
-  )
-  // Add new operation
-  STATE.slowOperations.push({ operation, durationMs, timestamp: now })
-  // Keep only the most recent operations
-  if (STATE.slowOperations.length > MAX_SLOW_OPERATIONS) {
-    STATE.slowOperations = STATE.slowOperations.slice(-MAX_SLOW_OPERATIONS)
-  }
-}
-
-const EMPTY_SLOW_OPERATIONS: ReadonlyArray<{
-  operation: string
-  durationMs: number
-  timestamp: number
-}> = []
-
-export function getSlowOperations(): ReadonlyArray<{
-  operation: string
-  durationMs: number
-  timestamp: number
-}> {
-  // Most common case: nothing tracked. Return a stable reference so the
-  // caller's setState() can bail via Object.is instead of re-rendering at 2fps.
-  if (STATE.slowOperations.length === 0) {
-    return EMPTY_SLOW_OPERATIONS
-  }
-  const now = Date.now()
-  // Only allocate a new array when something actually expired; otherwise keep
-  // the reference stable across polls while ops are still fresh.
-  if (
-    STATE.slowOperations.some(op => now - op.timestamp >= SLOW_OPERATION_TTL_MS)
-  ) {
-    STATE.slowOperations = STATE.slowOperations.filter(
-      op => now - op.timestamp < SLOW_OPERATION_TTL_MS,
-    )
-    if (STATE.slowOperations.length === 0) {
-      return EMPTY_SLOW_OPERATIONS
-    }
-  }
-  // Safe to return directly: addSlowOperation() reassigns STATE.slowOperations
-  // before pushing, so the array held in React state is never mutated.
-  return STATE.slowOperations
 }
 
 export function getMainThreadAgentType(): string | undefined {

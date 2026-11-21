@@ -67,7 +67,6 @@ export type SystemPermissionRetryMessage = SystemMessage
 export type SystemScheduledTaskFireMessage = SystemMessage
 export type SystemAwaySummaryMessage = SystemMessage
 export type SystemAgentsKilledMessage = SystemMessage
-export type SystemApiMetricsMessage = SystemMessage
 export type SystemAPIErrorMessage = SystemMessage & { error?: string }
 export type SystemFileSnapshotMessage = SystemMessage
 

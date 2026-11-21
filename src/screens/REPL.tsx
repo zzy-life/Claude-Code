@@ -29,7 +29,7 @@ import { startPreventSleep, stopPreventSleep } from '../services/preventSleep.js
 import { useTerminalNotification } from '../ink/useTerminalNotification.js';
 import { hasCursorUpViewportYankBug } from '../ink/terminal.js';
 import { createFileStateCacheWithSizeLimit, mergeFileStateCaches, READ_FILE_STATE_CACHE_SIZE } from '../utils/fileStateCache.js';
-import { updateLastInteractionTime, getLastInteractionTime, getOriginalCwd, getProjectRoot, getSessionId, switchSession, setCostStateForRestore, getTurnHookDurationMs, getTurnHookCount, resetTurnHookDuration, getTurnToolDurationMs, getTurnToolCount, resetTurnToolDuration, getTurnClassifierDurationMs, getTurnClassifierCount, resetTurnClassifierDuration } from '../bootstrap/state.js';
+import { updateLastInteractionTime, getLastInteractionTime, getOriginalCwd, getProjectRoot, getSessionId, switchSession, setCostStateForRestore, resetTurnHookDuration, resetTurnToolDuration, resetTurnClassifierDuration } from '../bootstrap/state.js';
 import { asSessionId, asAgentId } from '../types/ids.js';
 import { logForDebugging } from '../utils/debug.js';
 import { QueryGuard } from '../utils/QueryGuard.js';
@@ -121,11 +121,11 @@ import { WEB_FETCH_TOOL_NAME } from '../tools/WebFetchTool/prompt.js';
 import { SLEEP_TOOL_NAME } from '../tools/SleepTool/prompt.js';
 import { clearSpeculativeChecks } from '../tools/BashTool/bashPermissions.js';
 import type { AutoUpdaterResult } from '../utils/autoUpdater.js';
-import { getGlobalConfig, saveGlobalConfig, getGlobalConfigWriteCount } from '../utils/config.js';
+import { getGlobalConfig, saveGlobalConfig } from '../utils/config.js';
 import { hasConsoleBillingAccess } from '../utils/billing.js';
 import { logEvent, type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 'src/services/analytics/index.js';
 import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js';
-import { textForResubmit, handleMessageFromStream, type StreamingToolUse, type StreamingThinking, isCompactBoundaryMessage, getMessagesAfterCompactBoundary, getContentText, createUserMessage, createAssistantMessage, createTurnDurationMessage, createAgentsKilledMessage, createApiMetricsMessage, createSystemMessage, createCommandInputMessage, formatCommandInputTags } from '../utils/messages.js';
+import { textForResubmit, handleMessageFromStream, type StreamingToolUse, type StreamingThinking, isCompactBoundaryMessage, getMessagesAfterCompactBoundary, getContentText, createUserMessage, createAssistantMessage, createTurnDurationMessage, createAgentsKilledMessage, createSystemMessage, createCommandInputMessage, formatCommandInputTags } from '../utils/messages.js';
 import { generateSessionTitle } from '../utils/sessionTitle.js';
 import { BASH_INPUT_TAG, COMMAND_MESSAGE_TAG, COMMAND_NAME_TAG, LOCAL_COMMAND_STDOUT_TAG } from '../constants/xml.js';
 import { escapeXml } from '../utils/xml.js';
@@ -255,7 +255,6 @@ const WebBrowserPanelModule = feature('WEB_BROWSER_TOOL') ? require('../tools/We
 /* eslint-enable @typescript-eslint/no-require-imports */
 import { IssueFlagBanner } from '../components/PromptInput/IssueFlagBanner.js';
 import { useIssueFlagBanner } from '../hooks/useIssueFlagBanner.js';
-import { DevBar } from '../components/DevBar.js';
 // Session manager removed - using AppState now
 import type { RemoteSessionConfig } from '../remote/RemoteSessionManager.js';
 import { REMOTE_SAFE_COMMANDS } from '../commands.js';
@@ -288,12 +287,6 @@ const RECENT_SCROLL_REPIN_WINDOW_MS = 3000;
 // Use LRU cache to prevent unbounded memory growth
 // 100 files should be sufficient for most coding sessions while preventing
 // memory issues when working across many files in large projects
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1]! + sorted[mid]!) / 2) : sorted[mid]!;
-}
 
 /**
  * Small component to display transcript mode footer with dynamic keybinding.
@@ -451,58 +444,38 @@ function TranscriptSearchBar({
         </Text> : null}
     </Box>;
 }
-const TITLE_ANIMATION_FRAMES = ['⠂', '⠐'];
+const TITLE_ANIMATION_FRAMES: Record<'busy' | 'waiting', readonly string[]> = {
+  busy: ['⠂', '⠐'],
+  waiting: ['!', '✳'],
+};
 const TITLE_STATIC_PREFIX = '✳';
 const TITLE_ANIMATION_INTERVAL_MS = 960;
 
-/**
- * Sets the terminal tab title, with an animated prefix glyph while a query
- * is running. Isolated from REPL so the 960ms animation tick re-renders only
- * this leaf component (which returns null — pure side-effect) instead of the
- * entire REPL tree. Before extraction, the tick was ~1 REPL render/sec for
- * the duration of every turn, dragging PromptInput and friends along.
- */
-function AnimatedTerminalTitle(t0) {
-  const $ = _c(6);
-  const {
-    isAnimating,
-    title,
-    disabled,
-    noPrefix
-  } = t0;
+// 动画只更新这个叶子组件，避免定时重绘整个 REPL。
+function TerminalStatusTitle({ status, title, disabled }: {
+  status: TabStatusKind;
+  title: string;
+  disabled: boolean;
+}) {
   const terminalFocused = useTerminalFocus();
   const [frame, setFrame] = useState(0);
-  let t1;
-  let t2;
-  if ($[0] !== disabled || $[1] !== isAnimating || $[2] !== noPrefix || $[3] !== terminalFocused) {
-    t1 = () => {
-      if (disabled || noPrefix || !isAnimating || !terminalFocused) {
-        return;
-      }
-      const interval = setInterval(_temp2, TITLE_ANIMATION_INTERVAL_MS, setFrame);
-      return () => clearInterval(interval);
-    };
-    t2 = [disabled, noPrefix, isAnimating, terminalFocused];
-    $[0] = disabled;
-    $[1] = isAnimating;
-    $[2] = noPrefix;
-    $[3] = terminalFocused;
-    $[4] = t1;
-    $[5] = t2;
-  } else {
-    t1 = $[4];
-    t2 = $[5];
+  useEffect(() => {
+    // 等待确认时即使标签失焦也继续闪动，便于切到其他会话后发现提醒。
+    if (disabled || status === 'idle' || (status === 'busy' && !terminalFocused)) {
+      return;
+    }
+    const interval = setInterval(() => {
+      setFrame(current => (current + 1) % 2);
+    }, TITLE_ANIMATION_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [disabled, status, terminalFocused]);
+
+  let prefix = TITLE_STATIC_PREFIX;
+  if (status !== 'idle') {
+    prefix = TITLE_ANIMATION_FRAMES[status][frame] ?? TITLE_STATIC_PREFIX;
   }
-  useEffect(t1, t2);
-  const prefix = isAnimating ? TITLE_ANIMATION_FRAMES[frame] ?? TITLE_STATIC_PREFIX : TITLE_STATIC_PREFIX;
-  useTerminalTitle(disabled ? null : noPrefix ? title : `${prefix} ${title}`);
+  useTerminalTitle(disabled ? null : `${prefix} ${title}`);
   return null;
-}
-function _temp2(setFrame_0) {
-  return setFrame_0(_temp);
-}
-function _temp(f) {
-  return (f + 1) % TITLE_ANIMATION_FRAMES.length;
 }
 type ReplRuntimeBoundaryState = {
   error: Error | null;
@@ -1142,11 +1115,6 @@ export function REPL({
   // is null, treat as not-showing so TextInput focus and queue processor
   // aren't deadlocked by a phantom overlay.
   const isShowingLocalJSXCommand = toolJSX?.isLocalJSXCommand === true && toolJSX?.jsx != null;
-  const titleIsAnimating = isLoading && !isWaitingForApproval && !isShowingLocalJSXCommand;
-  // Title animation state lives in <AnimatedTerminalTitle> so the 960ms tick
-  // doesn't re-render REPL. titleDisabled/terminalTitle are still computed
-  // here because onQueryImpl reads them (background session description,
-  // haiku title extraction gate).
 
   // Prevent macOS from sleeping while Claude is working
   useEffect(() => {
@@ -1437,34 +1405,8 @@ export function REPL({
   // Ref instead of state to avoid triggering React re-renders on every
   // streaming text_delta. The spinner reads this via its animation timer.
   const responseLengthRef = useRef(0);
-  // API performance metrics ref for ant-only spinner display (TTFT/OTPS).
-  // Accumulates metrics from all API requests in a turn for P50 aggregation.
-  const apiMetricsRef = useRef<Array<{
-    ttftMs: number;
-    firstTokenTime: number;
-    lastTokenTime: number;
-    responseLengthBaseline: number;
-    // Tracks responseLengthRef at the time of the last content addition.
-    // Updated by both streaming deltas and subagent message content.
-    // lastTokenTime is also updated at the same time, so the OTPS
-    // denominator correctly includes subagent processing time.
-    endResponseLength: number;
-  }>>([]);
   const setResponseLength = useCallback((f: (prev: number) => number) => {
-    const prev = responseLengthRef.current;
-    responseLengthRef.current = f(prev);
-    // When content is added (not a compaction reset), update the latest
-    // metrics entry so OTPS reflects all content generation activity.
-    // Updating lastTokenTime here ensures the denominator includes both
-    // streaming time AND subagent execution time, preventing inflation.
-    if (responseLengthRef.current > prev) {
-      const entries = apiMetricsRef.current;
-      if (entries.length > 0) {
-        const lastEntry = entries.at(-1)!;
-        lastEntry.lastTokenTime = Date.now();
-        lastEntry.endResponseLength = responseLengthRef.current;
-      }
-    }
+    responseLengthRef.current = f(responseLengthRef.current);
   }, []);
 
   // Streaming text display: set state directly per delta (Ink's 16ms render
@@ -1574,7 +1516,6 @@ export function REPL({
     setIsExternalLoading(false);
     setUserInputOnProcessing(undefined);
     responseLengthRef.current = 0;
-    apiMetricsRef.current = [];
     setStreamingText(null);
     setStreamingToolUses([]);
     setSpinnerMessage(null);
@@ -2440,17 +2381,6 @@ export function REPL({
       dynamicSkillDirTriggers: new Set<string>(),
       discoveredSkillNames: discoveredSkillNamesRef.current,
       setResponseLength,
-      pushApiMetricsEntry: "external" === 'ant' ? (ttftMs: number) => {
-        const now = Date.now();
-        const baseline = responseLengthRef.current;
-        apiMetricsRef.current.push({
-          ttftMs,
-          firstTokenTime: now,
-          lastTokenTime: now,
-          responseLengthBaseline: baseline,
-          endResponseLength: baseline
-        });
-      } : undefined,
       setStreamMode,
       onCompactProgress: event => {
         switch (event.type) {
@@ -2597,24 +2527,11 @@ export function REPL({
         }
       }
     }, newContent => {
-      // setResponseLength handles updating both responseLengthRef (for
-      // spinner animation) and apiMetricsRef (endResponseLength/lastTokenTime
-      // for OTPS). No separate metrics update needed here.
       setResponseLength(length => length + newContent.length);
     }, setStreamMode, setStreamingToolUses, tombstonedMessage => {
       setMessages(oldMessages => oldMessages.filter(m => m !== tombstonedMessage));
       void removeTranscriptMessage(tombstonedMessage.uuid);
-    }, setStreamingThinking, metrics => {
-      const now = Date.now();
-      const baseline = responseLengthRef.current;
-      apiMetricsRef.current.push({
-        ...metrics,
-        firstTokenTime: now,
-        lastTokenTime: now,
-        responseLengthBaseline: baseline,
-        endResponseLength: baseline
-      });
-    }, onStreamingText);
+    }, setStreamingThinking, onStreamingText);
   }, [setMessages, setResponseLength, setStreamMode, setStreamingToolUses, setStreamingThinking, onStreamingText]);
   const onQueryImpl = useCallback(async (messagesIncludingNewMessages: MessageType[], newMessages: MessageType[], abortController: AbortController, shouldQuery: boolean, additionalAllowedTools: string[], mainLoopModelParam: string, effort?: EffortValue) => {
     // Prepare IDE integration for new prompt. Read mcpClients fresh from
@@ -2770,41 +2687,6 @@ export function REPL({
     }
     queryCheckpoint('query_end');
 
-    // Capture ant-only API metrics before resetLoadingState clears the ref.
-    // For multi-request turns (tool use loops), compute P50 across all requests.
-    if ("external" === 'ant' && apiMetricsRef.current.length > 0) {
-      const entries = apiMetricsRef.current;
-      const ttfts = entries.map(e => e.ttftMs);
-      // Compute per-request OTPS using only active streaming time and
-      // streaming-only content. endResponseLength tracks content added by
-      // streaming deltas only, excluding subagent/compaction inflation.
-      const otpsValues = entries.map(e => {
-        const delta = Math.round((e.endResponseLength - e.responseLengthBaseline) / 4);
-        const samplingMs = e.lastTokenTime - e.firstTokenTime;
-        return samplingMs > 0 ? Math.round(delta / (samplingMs / 1000)) : 0;
-      });
-      const isMultiRequest = entries.length > 1;
-      const hookMs = getTurnHookDurationMs();
-      const hookCount = getTurnHookCount();
-      const toolMs = getTurnToolDurationMs();
-      const toolCount = getTurnToolCount();
-      const classifierMs = getTurnClassifierDurationMs();
-      const classifierCount = getTurnClassifierCount();
-      const turnMs = Date.now() - loadingStartTimeRef.current;
-      setMessages(prev => [...prev, createApiMetricsMessage({
-        ttftMs: isMultiRequest ? median(ttfts) : ttfts[0]!,
-        otps: isMultiRequest ? median(otpsValues) : otpsValues[0]!,
-        isP50: isMultiRequest,
-        hookDurationMs: hookMs > 0 ? hookMs : undefined,
-        hookCount: hookCount > 0 ? hookCount : undefined,
-        turnDurationMs: turnMs > 0 ? turnMs : undefined,
-        toolDurationMs: toolMs > 0 ? toolMs : undefined,
-        toolCount: toolCount > 0 ? toolCount : undefined,
-        classifierDurationMs: classifierMs > 0 ? classifierMs : undefined,
-        classifierCount: classifierCount > 0 ? classifierCount : undefined,
-        configWriteCount: getGlobalConfigWriteCount()
-      })]);
-    }
     resetLoadingState();
 
     // Log query profiling report if enabled
@@ -2855,7 +2737,6 @@ export function REPL({
         const parsedBudget = input ? parseTokenBudget(input) : null;
         snapshotOutputTokensForTurn(parsedBudget ?? getCurrentTurnTokenBudget());
       }
-      apiMetricsRef.current = [];
       setStreamingToolUses([]);
       setStreamingText(null);
 
@@ -4328,7 +4209,7 @@ export function REPL({
         {toolJSX.jsx}
       </Box>;
     const transcriptReturn = <KeybindingSetup>
-        <AnimatedTerminalTitle isAnimating={titleIsAnimating} title={terminalTitle} disabled={titleDisabled} noPrefix={showStatusInTerminalTab} />
+        <TerminalStatusTitle status={sessionStatus} title={terminalTitle} disabled={titleDisabled} />
         <GlobalKeybindingHandlers {...globalKeybindingProps} />
         {feature('VOICE_MODE') ? <VoiceKeybindingHandler voiceHandleKeyEvent={voice.handleKeyEvent} stripTrailing={voice.stripTrailing} resetAnchor={voice.resetAnchor} isActive={!toolJSX?.isLocalJSXCommand} /> : null}
         <CommandKeybindingHandlers onSubmit={onSubmit} isActive={!toolJSX?.isLocalJSXCommand} />
@@ -4455,7 +4336,7 @@ export function REPL({
   // early return above wraps its virtual-scroll branch the same way; only
   // the 30-cap dump branch stays unwrapped for native terminal scrollback.
   const mainReturn = <KeybindingSetup>
-      <AnimatedTerminalTitle isAnimating={titleIsAnimating} title={terminalTitle} disabled={titleDisabled} noPrefix={showStatusInTerminalTab} />
+      <TerminalStatusTitle status={sessionStatus} title={terminalTitle} disabled={titleDisabled} />
       <GlobalKeybindingHandlers {...globalKeybindingProps} />
       {feature('VOICE_MODE') ? <VoiceKeybindingHandler voiceHandleKeyEvent={voice.handleKeyEvent} stripTrailing={voice.stripTrailing} resetAnchor={voice.resetAnchor} isActive={!toolJSX?.isLocalJSXCommand} /> : null}
       <CommandKeybindingHandlers onSubmit={onSubmit} isActive={!toolJSX?.isLocalJSXCommand} />
@@ -4492,7 +4373,7 @@ export function REPL({
                   </Box>}
               {feature('WEB_BROWSER_TOOL') ? WebBrowserPanelModule && <WebBrowserPanelModule.WebBrowserPanel /> : null}
               <Box flexGrow={1} />
-              {showSpinner && <SpinnerWithVerb mode={streamMode} spinnerTip={spinnerTip} responseLengthRef={responseLengthRef} apiMetricsRef={apiMetricsRef} overrideMessage={spinnerMessage} spinnerSuffix={stopHookSpinnerSuffix} verbose={verbose} loadingStartTimeRef={loadingStartTimeRef} totalPausedMsRef={totalPausedMsRef} pauseStartTimeRef={pauseStartTimeRef} overrideColor={spinnerColor} overrideShimmerColor={spinnerShimmerColor} hasActiveTools={inProgressToolUseIDs.size > 0} leaderIsIdle={!isLoading} />}
+              {showSpinner && <SpinnerWithVerb mode={streamMode} spinnerTip={spinnerTip} responseLengthRef={responseLengthRef} overrideMessage={spinnerMessage} spinnerSuffix={stopHookSpinnerSuffix} verbose={verbose} loadingStartTimeRef={loadingStartTimeRef} totalPausedMsRef={totalPausedMsRef} pauseStartTimeRef={pauseStartTimeRef} overrideColor={spinnerColor} overrideShimmerColor={spinnerShimmerColor} hasActiveTools={inProgressToolUseIDs.size > 0} leaderIsIdle={!isLoading} />}
               {!showSpinner && !isLoading && !userInputOnProcessing && !hasRunningTeammates && isBriefOnly && !viewedAgentTask && <BriefIdleStatus />}
               {isFullscreenEnvEnabled() && <PromptInputQueuedCommands />}
             </>} bottom={<Box flexDirection="row" width="100%" alignItems="flex-end">
@@ -4839,7 +4720,6 @@ export function REPL({
             setIsMessageSelectorVisible(false);
             setMessageSelectorPreselect(undefined);
           }} />}
-                {"external" === 'ant' && <DevBar />}
               </Box>
             </Box>} />
       </MCPConnectionManager>
