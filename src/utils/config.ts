@@ -426,10 +426,6 @@ export type GlobalConfig = {
   // Sonnet 4.5 → 4.6 migration (pro/max/team premium)
   sonnet45To46MigrationTimestamp?: number
 
-  // Local feature overrides (ant-only, set via /config Gates tab).
-  // Environment overrides take precedence; otherwise use call-site defaults.
-  growthBookOverrides?: { [featureName: string]: unknown }
-
   // Emergency tip tracking - stores the last shown tip to prevent re-showing
   lastShownEmergencyTip?: string
 
