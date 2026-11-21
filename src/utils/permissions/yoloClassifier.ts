@@ -27,7 +27,6 @@ import { isEnvDefinedFalsy, isEnvTruthy } from '../envUtils.js'
 import { errorMessage } from '../errors.js'
 import { lazySchema } from '../lazySchema.js'
 import { extractTextContent } from '../messages.js'
-import { resolveAntModel } from '../model/antModels.js'
 import { getMainLoopModel } from '../model/model.js'
 import { getAutoModeConfig } from '../settings/settings.js'
 import { sideQuery } from '../sideQuery.js'
@@ -664,35 +663,6 @@ function replaceOutputFormatWithXml(systemPrompt: string): string {
 }
 
 /**
- * Thinking config for classifier calls. The classifier wants short text-only
- * responses — API thinking blocks are ignored by extractTextContent() and waste tokens.
- *
- * For most models: send { type: 'disabled' } via sideQuery's `thinking: false`.
- *
- * Models with alwaysOnThinking (declared in tengu_ant_model_override) default
- * to adaptive thinking server-side and reject `disabled` with a 400. For those:
- * don't pass `thinking: false`, instead pad max_tokens so adaptive thinking
- * (observed 0–1114 tokens replaying go/ccshare/shawnm-20260310-202833) doesn't
- * exhaust the budget before <block> is emitted. Without headroom,
- * stop_reason=max_tokens yields an empty text response → parseXmlBlock('')
- * → null → "unparseable" → safe commands blocked.
- *
- * Returns [disableThinking, headroom] — tuple instead of named object so
- * property-name strings don't survive minification into external builds.
- */
-function getClassifierThinkingConfig(
-  model: string,
-): [false | undefined, number] {
-  if (
-    process.env.USER_TYPE === 'ant' &&
-    resolveAntModel(model)?.alwaysOnThinking
-  ) {
-    return [undefined, 2048]
-  }
-  return [false, 0]
-}
-
-/**
  * XML classifier for auto mode security decisions. Supports three modes:
  *
  * 'both' (default): Stage 1 ("fast") runs first with max_tokens=64 and
@@ -752,7 +722,6 @@ async function classifyYoloActionXml(
   let stage1MsgId: string | undefined
   let stage1Opts: Parameters<typeof sideQuery>[0] | undefined
   const overallStart = Date.now()
-  const [disableThinking, thinkingPadding] = getClassifierThinkingConfig(model)
 
   // Wrap transcript entries in <transcript> tags for the XML classifier.
   // Wrap all content (transcript + action) in <transcript> tags.
@@ -778,11 +747,11 @@ async function classifyYoloActionXml(
       // response can carry a <reason> tag (system prompt already asks for it).
       stage1Opts = {
         model,
-        max_tokens: (mode === 'fast' ? 256 : 64) + thinkingPadding,
+        max_tokens: mode === 'fast' ? 256 : 64,
         system: systemBlocks,
         skipSystemPromptPrefix: true,
         temperature: 0,
-        thinking: disableThinking,
+        thinking: false,
         messages: [
           ...prefixMessages,
           { role: 'user' as const, content: stage1Content },
@@ -865,11 +834,11 @@ async function classifyYoloActionXml(
     ]
     const stage2Opts = {
       model,
-      max_tokens: 4096 + thinkingPadding,
+      max_tokens: 4096,
       system: systemBlocks,
       skipSystemPromptPrefix: true,
       temperature: 0,
-      thinking: disableThinking,
+      thinking: false,
       messages: [
         ...prefixMessages,
         { role: 'user' as const, content: stage2Content },
@@ -1128,12 +1097,11 @@ export async function classifyYoloAction(
       getTwoStageMode(),
     )
   }
-  const [disableThinking, thinkingPadding] = getClassifierThinkingConfig(model)
   try {
     const start = Date.now()
     const sideQueryOpts = {
       model,
-      max_tokens: 4096 + thinkingPadding,
+      max_tokens: 4096,
       system: [
         {
           type: 'text' as const,
@@ -1143,7 +1111,7 @@ export async function classifyYoloAction(
       ],
       skipSystemPromptPrefix: true,
       temperature: 0,
-      thinking: disableThinking,
+      thinking: false,
       messages: [
         ...prefixMessages,
         { role: 'user' as const, content: userContentBlocks },

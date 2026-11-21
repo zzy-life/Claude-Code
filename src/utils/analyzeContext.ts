@@ -408,30 +408,26 @@ async function countBuiltInToolTokens(
         )
       : 0
 
-  // Build per-tool breakdown for always-loaded tools (ant-only, proportional
-  // split of the bulk count based on rough schema size estimation). Excludes
-  // SkillTool since its tokens are shown in the separate Skills category.
+  // Estimate each tool's share of the bulk count; SkillTool has its own category.
   let systemToolDetails: SystemToolDetail[] = []
-  if (process.env.USER_TYPE === 'ant') {
-    const toolsForBreakdown = alwaysLoadedTools.filter(
-      t => !toolMatchesName(t, SKILL_TOOL_NAME),
+  const toolsForBreakdown = alwaysLoadedTools.filter(
+    t => !toolMatchesName(t, SKILL_TOOL_NAME),
+  )
+  if (toolsForBreakdown.length > 0) {
+    const estimates = toolsForBreakdown.map(t =>
+      roughTokenCountEstimation(jsonStringify(t.inputSchema ?? {})),
     )
-    if (toolsForBreakdown.length > 0) {
-      const estimates = toolsForBreakdown.map(t =>
-        roughTokenCountEstimation(jsonStringify(t.inputSchema ?? {})),
-      )
-      const estimateTotal = estimates.reduce((s, e) => s + e, 0) || 1
-      const distributable = Math.max(
-        0,
-        alwaysLoadedTokens - TOOL_TOKEN_COUNT_OVERHEAD,
-      )
-      systemToolDetails = toolsForBreakdown
-        .map((t, i) => ({
-          name: t.name,
-          tokens: Math.round((estimates[i]! / estimateTotal) * distributable),
-        }))
-        .sort((a, b) => b.tokens - a.tokens)
-    }
+    const estimateTotal = estimates.reduce((s, e) => s + e, 0) || 1
+    const distributable = Math.max(
+      0,
+      alwaysLoadedTokens - TOOL_TOKEN_COUNT_OVERHEAD,
+    )
+    systemToolDetails = toolsForBreakdown
+      .map((t, i) => ({
+        name: t.name,
+        tokens: Math.round((estimates[i]! / estimateTotal) * distributable),
+      }))
+      .sort((a, b) => b.tokens - a.tokens)
   }
 
   // Count deferred builtin tools individually for details
@@ -1017,14 +1013,10 @@ export async function analyzeContextUsage(
   }
 
   // Built-in tools right after system prompt (skills shown separately below)
-  // Ant users get a per-tool breakdown via systemToolDetails
   const systemToolsTokens = builtInToolTokens - skillFrontmatterTokens
   if (systemToolsTokens > 0) {
     cats.push({
-      name:
-        process.env.USER_TYPE === 'ant'
-          ? '[ANT-ONLY] System tools'
-          : 'System tools',
+      name: 'System tools',
       tokens: systemToolsTokens,
       color: 'inactive',
     })
@@ -1350,12 +1342,9 @@ export async function analyzeContextUsage(
     model: runtimeModel,
     memoryFiles: memoryFileDetails,
     mcpTools: mcpToolDetails,
-    deferredBuiltinTools:
-      process.env.USER_TYPE === 'ant' ? deferredBuiltinDetails : undefined,
-    systemTools:
-      process.env.USER_TYPE === 'ant' ? systemToolDetails : undefined,
-    systemPromptSections:
-      process.env.USER_TYPE === 'ant' ? systemPromptSections : undefined,
+    deferredBuiltinTools: deferredBuiltinDetails,
+    systemTools: systemToolDetails,
+    systemPromptSections,
     agents: agentDetails,
     slashCommands:
       slashCommandTokens > 0

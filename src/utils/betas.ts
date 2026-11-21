@@ -297,17 +297,10 @@ export const getAllModelBetas = memoize((model: string): string[] => {
     betaHeaders.push(SUMMARIZE_CONNECTOR_TEXT_BETA_HEADER)
   }
 
-  // Add context management beta for tool clearing (ant opt-in) or thinking preservation
-  const antOptedIntoToolClearing =
-    isEnvTruthy(process.env.USE_API_CONTEXT_MANAGEMENT) &&
-    process.env.USER_TYPE === 'ant'
-
+  // Add context management beta for thinking preservation.
   const thinkingPreservationEnabled = modelSupportsContextManagement(model)
 
-  if (
-    shouldIncludeFirstPartyOnlyBetas() &&
-    (antOptedIntoToolClearing || thinkingPreservationEnabled)
-  ) {
+  if (shouldIncludeFirstPartyOnlyBetas() && thinkingPreservationEnabled) {
     betaHeaders.push(CONTEXT_MANAGEMENT_BETA_HEADER)
   }
   // Add strict tool use beta if experiment is enabled.

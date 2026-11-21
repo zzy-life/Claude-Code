@@ -179,8 +179,8 @@ function stripSafeRedirections(content: string): string {
   // `> /dev/null` leaving `o`, so `echo hi > /dev/nullo` becomes `echo hi o`.
   // validateRedirections then sees no `>` and passes. The file write to
   // /dev/nullo is auto-allowed via the read-only path (checkReadOnlyConstraints).
-  // Main bashPermissions flow is protected (checkPathConstraints validates the
-  // original command), but speculation.ts uses checkReadOnlyConstraints alone.
+  // Keep this check correct independently of checkPathConstraints, which
+  // validates the original command in the main bashPermissions flow.
   return content
     .replace(/\s+2\s*>&\s*1(?=\s|$)/g, '')
     .replace(/[012]?\s*>\s*\/dev\/null(?=\s|$)/g, '')

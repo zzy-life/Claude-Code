@@ -1188,9 +1188,6 @@ class Project {
     } else if (entry.type === 'attribution-snapshot') {
       // Attribution snapshots can always be appended
       void this.enqueueWrite(sessionFile, entry)
-    } else if (entry.type === 'speculation-accept') {
-      // Speculation accept entries can always be appended
-      void this.enqueueWrite(sessionFile, entry)
     } else if (entry.type === 'mode') {
       // Mode entries can always be appended
       void this.enqueueWrite(sessionFile, entry)

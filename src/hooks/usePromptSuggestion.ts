@@ -4,7 +4,7 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../services/analytics/index.js'
-import { abortSpeculation } from '../services/PromptSuggestion/speculation.js'
+import { abortPromptSuggestion } from '../services/PromptSuggestion/promptSuggestion.js'
 import { useAppState, useSetAppState } from '../state/AppState.js'
 
 type Props = {
@@ -19,10 +19,7 @@ export function usePromptSuggestion({
   suggestion: string | null
   markAccepted: () => void
   markShown: () => void
-  logOutcomeAtSubmission: (
-    finalInput: string,
-    opts?: { skipReset: boolean },
-  ) => void
+  logOutcomeAtSubmission: (finalInput: string) => void
 } {
   const promptSuggestion = useAppState(s => s.promptSuggestion)
   const setAppState = useSetAppState()
@@ -64,7 +61,7 @@ export function usePromptSuggestion({
   }
 
   const resetSuggestion = useCallback(() => {
-    abortSpeculation(setAppState)
+    abortPromptSuggestion()
 
     setAppState(prev => ({
       ...prev,
@@ -108,7 +105,7 @@ export function usePromptSuggestion({
   }, [setAppState])
 
   const logOutcomeAtSubmission = useCallback(
-    (finalInput: string, opts?: { skipReset: boolean }) => {
+    (finalInput: string) => {
       if (!isValidSuggestion) return
 
       // Determine if accepted: either Tab was pressed (acceptedAt set) OR
@@ -155,7 +152,7 @@ export function usePromptSuggestion({
             finalInput as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         }),
       })
-      if (!opts?.skipReset) resetSuggestion()
+      resetSuggestion()
     },
     [
       isValidSuggestion,

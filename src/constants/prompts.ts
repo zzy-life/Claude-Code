@@ -133,12 +133,6 @@ function getSystemRemindersSection(): string {
 - The conversation has unlimited context through automatic summarization.`
 }
 
-function getAntModelOverrideSection(): string | null {
-  if (process.env.USER_TYPE !== 'ant') return null
-  if (isUndercover()) return null
-  return getAntModelOverrideConfig()?.defaultSystemPromptSuffix || null
-}
-
 function getLanguageSection(
   languagePreference: string | undefined,
 ): string | null {
@@ -493,9 +487,6 @@ ${CYBER_RISK_INSTRUCTION}`,
       getSessionSpecificGuidanceSection(enabledTools, skillToolCommands),
     ),
     systemPromptSection('memory', () => loadMemoryPrompt()),
-    systemPromptSection('ant_model_override', () =>
-      getAntModelOverrideSection(),
-    ),
     systemPromptSection('env_info_simple', () =>
       computeSimpleEnvInfo(model, additionalWorkingDirectories),
     ),

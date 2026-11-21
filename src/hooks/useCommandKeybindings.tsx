@@ -15,11 +15,9 @@ import { useOptionalKeybindingContext } from '../keybindings/KeybindingContext.j
 import { useKeybindings } from '../keybindings/useKeybinding.js';
 import type { PromptInputHelpers } from '../utils/handlePromptSubmit.js';
 type Props = {
-  // onSubmit accepts additional parameters beyond what we pass here,
-  // so we use a rest parameter to allow any additional args
-  onSubmit: (input: string, helpers: PromptInputHelpers, ...rest: [speculationAccept?: undefined, options?: {
+  onSubmit: (input: string, helpers: PromptInputHelpers, options?: {
     fromKeybinding?: boolean;
-  }]) => void;
+  }) => void;
   /** Set to false to disable command keybindings (e.g., when a dialog is open) */
   isActive?: boolean;
 };
@@ -78,7 +76,7 @@ export function CommandKeybindingHandlers(t0) {
     for (const action of commandActions) {
       const commandName = action.slice(8);
       map[action] = () => {
-        onSubmit(`/${commandName}`, NOOP_HELPERS, undefined, {
+        onSubmit(`/${commandName}`, NOOP_HELPERS, {
           fromKeybinding: true
         });
       };

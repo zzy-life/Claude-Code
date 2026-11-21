@@ -24,7 +24,6 @@ import {
   logEvent,
 } from '../analytics/index.js'
 import { currentLimits } from '../claudeAiLimits.js'
-import { isSpeculationEnabled, startSpeculation } from './speculation.js'
 
 let currentAbortController: AbortController | null = null
 
@@ -102,7 +101,7 @@ export function abortPromptSuggestion(): void {
 
 /**
  * Returns a suppression reason if suggestions should not be generated,
- * or null if generation is allowed. Shared by main and pipelined paths.
+ * or null if generation is allowed.
  */
 export function getSuggestionSuppressReason(appState: AppState): string | null {
   if (!appState.promptSuggestionEnabled) return 'disabled'
@@ -210,16 +209,6 @@ export async function executePromptSuggestion(
         generationRequestId: result.generationRequestId,
       },
     }))
-
-    if (isSpeculationEnabled() && result.suggestion) {
-      void startSpeculation(
-        result.suggestion,
-        context,
-        context.toolUseContext.setAppState,
-        false,
-        cacheSafeParams,
-      )
-    }
   } catch (error) {
     if (
       error instanceof Error &&

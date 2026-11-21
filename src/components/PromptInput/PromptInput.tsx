@@ -7,7 +7,7 @@ import { useNotifications } from 'src/context/notifications.js';
 import { useCommandQueue } from 'src/hooks/useCommandQueue.js';
 import { type IDEAtMentioned, useIdeAtMentioned } from 'src/hooks/useIdeAtMentioned.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
-import { type AppState, useAppState, useAppStateStore, useSetAppState } from 'src/state/AppState.js';
+import { useAppState, useAppStateStore, useSetAppState } from 'src/state/AppState.js';
 import type { FooterItem } from 'src/state/AppStateStore.js';
 import { getCwd } from 'src/utils/cwd.js';
 import { isQueuedCommandEditable, popAllEditable } from 'src/utils/messageQueueManager.js';
@@ -37,7 +37,6 @@ import { getShortcutDisplay } from '../../keybindings/shortcutFormat.js';
 import { useKeybinding, useKeybindings } from '../../keybindings/useKeybinding.js';
 import type { MCPServerConnection } from '../../services/mcp/types.js';
 import { abortPromptSuggestion, logSuggestionSuppressed } from '../../services/PromptSuggestion/promptSuggestion.js';
-import { type ActiveSpeculationState, abortSpeculation } from '../../services/PromptSuggestion/speculation.js';
 import { getActiveAgentForInput, getViewedTeammateTask } from '../../state/selectors.js';
 import { enterTeammateView, exitTeammateView, stopOrDismissAgent } from '../../state/teammateViewHelpers.js';
 import type { ToolPermissionContext } from '../../Tool.js';
@@ -159,11 +158,7 @@ type Props = {
   setShowBashesDialog: (show: string | boolean) => void;
   onExit: () => void;
   getToolUseContext: (messages: Message[], newMessages: Message[], abortController: AbortController, mainLoopModel: string) => ProcessUserInputContext;
-  onSubmit: (input: string, helpers: PromptInputHelpers, speculationAccept?: {
-    state: ActiveSpeculationState;
-    speculationSessionTimeSavedMs: number;
-    setAppState: (f: (prev: AppState) => AppState) => void;
-  }, options?: {
+  onSubmit: (input: string, helpers: PromptInputHelpers, options?: {
     fromKeybinding?: boolean;
   }) => Promise<void>;
   onAgentSubmit?: (input: string, task: InProcessTeammateTaskState | LocalAgentTaskState, helpers: PromptInputHelpers) => Promise<void>;
@@ -296,8 +291,6 @@ function PromptInput({
   const teamContext = useAppState(s => s.teamContext);
   const queuedCommands = useCommandQueue();
   const promptSuggestionState = useAppState(s => s.promptSuggestion);
-  const speculation = useAppState(s => s.speculation);
-  const speculationSessionTimeSavedMs = useAppState(s => s.speculationSessionTimeSavedMs);
   const viewingAgentTaskId = useAppState(s => s.viewingAgentTaskId);
   const viewSelectionMode = useAppState(s => s.viewSelectionMode);
   const showSpinnerTree = useAppState(s => s.expandedView) === 'teammates';
@@ -805,9 +798,8 @@ function PromptInput({
     // Dismiss stash hint when user makes any input change
     dismissStashHint();
 
-    // Cancel any pending prompt suggestion and speculation when user types
+    // Cancel any pending prompt suggestion when user types
     abortPromptSuggestion();
-    abortSpeculation(setAppState);
 
     // Check if this is a single character insertion at the start
     const isSingleCharInsertion = value.length === input.length + 1;
@@ -954,25 +946,6 @@ function PromptInput({
     const suggestionText = promptSuggestionState.text;
     const inputMatchesSuggestion = inputParam.trim() === '' || inputParam === suggestionText;
     if (inputMatchesSuggestion && suggestionText && !hasImages && !state.viewingAgentTaskId) {
-      // If speculation is active, inject messages immediately as they stream
-      if (speculation.status === 'active') {
-        markAccepted();
-        // skipReset: resetSuggestion would abort the speculation before we accept it
-        logOutcomeAtSubmission(suggestionText, {
-          skipReset: true
-        });
-        void onSubmitProp(suggestionText, {
-          setCursorOffset,
-          clearBuffer,
-          resetHistory
-        }, {
-          state: speculation,
-          speculationSessionTimeSavedMs: speculationSessionTimeSavedMs,
-          setAppState
-        });
-        return; // Skip normal query - speculation handled it
-      }
-
       // Regular suggestion acceptance (requires shownAt > 0)
       if (promptSuggestionState.shownAt > 0) {
         markAccepted();
@@ -1045,7 +1018,7 @@ function PromptInput({
       clearBuffer,
       resetHistory
     });
-  }, [promptSuggestionState, speculation, speculationSessionTimeSavedMs, teamContext, store, footerItems, suggestionsState.suggestions, onSubmitProp, onAgentSubmit, clearBuffer, resetHistory, logOutcomeAtSubmission, setAppState, markAccepted, pastedContents, removeNotification]);
+  }, [promptSuggestionState, teamContext, store, footerItems, suggestionsState.suggestions, onSubmitProp, onAgentSubmit, clearBuffer, resetHistory, logOutcomeAtSubmission, setAppState, markAccepted, pastedContents, removeNotification]);
   const {
     suggestions,
     selectedSuggestion,
@@ -1670,15 +1643,6 @@ function PromptInput({
     isActive: feature('HISTORY_PICKER') ? !isModalOverlayActive : false
   });
 
-  // Handle Ctrl+C to abort speculation when idle (not loading)
-  // CancelRequestHandler only handles Ctrl+C during active tasks
-  useKeybinding('app:interrupt', () => {
-    abortSpeculation(setAppState);
-  }, {
-    context: 'Global',
-    isActive: !isLoading && speculation.status === 'active'
-  });
-
   // Footer indicator navigation keybindings. ↑/↓ live here (not in
   // handleHistoryUp/Down) because TextInput focus=false when a pill is
   // selected — its useInput is inactive, so this is the only path.
@@ -1846,12 +1810,6 @@ function PromptInput({
 
     // Handle ESC key press
     if (key.escape) {
-      // Abort active speculation
-      if (speculation.status === 'active') {
-        abortSpeculation(setAppState);
-        return;
-      }
-
       // Dismiss side question response if visible
       if (isSideQuestionVisible && onDismissSideQuestion) {
         onDismissSideQuestion();

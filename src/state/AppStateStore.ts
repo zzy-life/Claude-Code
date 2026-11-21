@@ -19,7 +19,7 @@ import type { AgentColorName } from '../tools/AgentTool/agentColorManager.js'
 import type { AgentDefinitionsResult } from '../tools/AgentTool/loadAgentsDir.js'
 import type { AllowedPrompt } from '../tools/ExitPlanModeTool/ExitPlanModeV2Tool.js'
 import type { AgentId } from '../types/ids.js'
-import type { Message, UserMessage } from '../types/message.js'
+import type { UserMessage } from '../types/message.js'
 import type { LoadedPlugin, PluginError } from '../types/plugin.js'
 import type { DeepImmutable } from '../types/utils.js'
 import {
@@ -28,7 +28,6 @@ import {
 } from '../utils/commitAttribution.js'
 import type { EffortValue } from '../utils/effort.js'
 import type { FileHistoryState } from '../utils/fileHistory.js'
-import type { REPLHookContext } from '../utils/hooks/postSamplingHooks.js'
 import type { SessionHooksState } from '../utils/hooks/sessionHooks.js'
 import type { ModelSetting } from '../utils/model/model.js'
 import type { DenialTrackingState } from '../utils/permissions/denialTracking.js'
@@ -37,46 +36,6 @@ import { getInitialSettings } from '../utils/settings/settings.js'
 import type { SettingsJson } from '../utils/settings/types.js'
 import { shouldEnableThinkingByDefault } from '../utils/thinking.js'
 import type { Store } from './store.js'
-
-export type CompletionBoundary =
-  | { type: 'complete'; completedAt: number; outputTokens: number }
-  | { type: 'bash'; command: string; completedAt: number }
-  | { type: 'edit'; toolName: string; filePath: string; completedAt: number }
-  | {
-      type: 'denied_tool'
-      toolName: string
-      detail: string
-      completedAt: number
-    }
-
-export type SpeculationResult = {
-  messages: Message[]
-  boundary: CompletionBoundary | null
-  timeSavedMs: number
-}
-
-export type SpeculationState =
-  | { status: 'idle' }
-  | {
-      status: 'active'
-      id: string
-      abort: () => void
-      startTime: number
-      messagesRef: { current: Message[] } // Mutable ref - avoids array spreading per message
-      writtenPathsRef: { current: Set<string> } // Mutable ref - relative paths written to overlay
-      boundary: CompletionBoundary | null
-      suggestionLength: number
-      toolUseCount: number
-      isPipelined: boolean
-      contextRef: { current: REPLHookContext }
-      pipelinedSuggestion?: {
-        text: string
-        promptId: 'user_intent' | 'stated_intent'
-        generationRequestId: string | null
-      } | null
-    }
-
-export const IDLE_SPECULATION_STATE: SpeculationState = { status: 'idle' }
 
 export type FooterItem =
   | 'tasks'
@@ -368,8 +327,6 @@ export type AppState = DeepImmutable<{
     acceptedAt: number
     generationRequestId: string | null
   }
-  speculation: SpeculationState
-  speculationSessionTimeSavedMs: number
   skillImprovement: {
     suggestion: {
       skillName: string
@@ -518,8 +475,6 @@ export function getDefaultAppState(): AppState {
       acceptedAt: 0,
       generationRequestId: null,
     },
-    speculation: IDLE_SPECULATION_STATE,
-    speculationSessionTimeSavedMs: 0,
     skillImprovement: {
       suggestion: null,
     },
