@@ -62,7 +62,7 @@
 - 独立检查：`node check-phase3-removal.mjs`、`node check-phase4-removal.mjs`；此前两阶段脚本同步调整保留命令清单。仅验证静态约束与提取的纯逻辑，不替代运行验收。
 - 未运行构建、未执行 Git 提交/推送。账户限流菜单、Fast Mode/1M 拒绝场景、历史远程记录真实展示和 Remote Control 仍需按环境人工验收。
 
-## 阶段 5：Advisor 全链路与最终收敛
+## 阶段 5：Advisor 全链路与最终收敛（已完成）
 
 涉及 `src/commands/advisor.ts`、`src/utils/advisor.ts`、`src/services/api/claude.ts`、`src/query.ts`、`src/main.tsx`、`src/state/AppStateStore.ts`、`src/utils/settings/types.ts`、`src/cost-tracker.ts` 和消息模块。
 
@@ -70,6 +70,14 @@
 - 删除 `src/components/messages/AdvisorMessage.tsx` 等失去用途的展示代码，并收敛 `Message.tsx`、`Messages.tsx`、`src/utils/messages.ts` 的相关分支。
 - **先检查历史会话协议再删消息类型/过滤逻辑**：旧 Advisor block 不应导致恢复崩溃或被错误发送到不接受它的 API；优先复用现有未知/不支持 block 处理。若确实需要保留最小历史协议处理，明确记录理由，不保留可重新启用 Advisor 的功能实现，也不另建兼容层。
 - 最后全仓检查命令名、别名、动态 import/require、专属设置/环境变量/开关、推广入口和文档；对保留命中逐项说明消费者，不能用关键词全删代替依赖分析。
+
+### 第五阶段交付记录
+
+- 已删除 `/advisor`、隐藏 `--advisor`、模型设置/状态、实验自动启用、专属 beta/系统指令/服务端工具注入、流式遥测、展示及递归成本统计；不改写用户旧设置或历史会话。
+- 历史协议仅保留 `src/utils/messages.ts` 的既有 `stripAdvisorBlocks` 及 API 边界无条件调用：旧 Advisor use/result 不再透传；只有空白/思考内容时补占位文本，避免空消息。UI 复用未知 block 返回空的既有兜底，不恢复顾问功能。
+- `utils/tokens.ts` 的通用 iterations 上下文计算、其他服务端工具和工具配对修复保持；MCP 分类中的安全公告工具与 `get_advisors` 属于外部工具名，与删除功能无关，保留。
+- README 与隐藏命令文档已同步；前期脚本删除 Advisor 保留断言。`node check-phase1-removal.mjs` 至 `node check-phase5-removal.mjs` 均通过；第五阶段含历史过滤 11 个用例及过滤先于配对修复的顺序断言。复核发现中断 Advisor use 可能被配对修复提前删除、遗留纯 thinking 或触发 strict 报错，已将旧 block 过滤提前；未扩大修改通用配对逻辑。脚本仅验证静态约束及提取的纯逻辑，不是完整请求链组合测试。
+- 未运行构建、未提交/推送。普通对话与工具调用、菜单、真实旧 Advisor 会话恢复后继续对话，以及 Remote Control/远程任务仍需按可用环境人工验收。
 
 ## 各阶段验证与交付
 

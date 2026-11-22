@@ -29,11 +29,6 @@ import {
 } from './bootstrap/state.js'
 import type { ModelUsage } from './entrypoints/agentSdkTypes.js'
 import {
-  type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  logEvent,
-} from './services/analytics/index.js'
-import { getAdvisorUsage } from './utils/advisor.js'
-import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
 } from './utils/config.js'
@@ -45,7 +40,6 @@ import { isFastModeEnabled } from './utils/fastMode.js'
 import { formatDuration, formatNumber } from './utils/format.js'
 import type { FpsMetrics } from './utils/fpsTracker.js'
 import { getCanonicalName } from './utils/model/model.js'
-import { calculateUSDCost } from './utils/modelCost.js'
 export {
   getTotalCostUSD as getTotalCost,
   getTotalDuration,
@@ -300,24 +294,5 @@ export function addToTotalSessionCost(
     type: 'cacheCreation',
   })
 
-  let totalCost = cost
-  for (const advisorUsage of getAdvisorUsage(usage)) {
-    const advisorCost = calculateUSDCost(advisorUsage.model, advisorUsage)
-    logEvent('tengu_advisor_tool_token_usage', {
-      advisor_model:
-        advisorUsage.model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      input_tokens: advisorUsage.input_tokens,
-      output_tokens: advisorUsage.output_tokens,
-      cache_read_input_tokens: advisorUsage.cache_read_input_tokens ?? 0,
-      cache_creation_input_tokens:
-        advisorUsage.cache_creation_input_tokens ?? 0,
-      cost_usd_micros: Math.round(advisorCost * 1_000_000),
-    })
-    totalCost += addToTotalSessionCost(
-      advisorCost,
-      advisorUsage,
-      advisorUsage.model,
-    )
-  }
-  return totalCost
+  return cost
 }

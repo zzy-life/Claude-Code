@@ -667,10 +667,6 @@ export const SettingsSchema = lazySchema(() =>
         .optional()
         .catch(undefined)
         .describe('Persisted effort level for supported models.'),
-      advisorModel: z
-        .string()
-        .optional()
-        .describe('Advisor model for the server-side advisor tool.'),
       fastMode: z
         .boolean()
         .optional()

@@ -56,7 +56,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `/heapdump` | 将 JavaScript 堆内存快照写入桌面目录，供内存问题诊断。 |
 | `/sandbox` | 切换命令执行沙箱。 |
 | `/chrome` | Claude in Chrome 浏览器扩展设置（Beta）。 |
-| `/advisor` | 配置辅助顾问模型；仅具备资格的账户可见。 |
 | `/btw` | 在不打断主任务的情况下发起简短旁路提问。 |
 
 ---
@@ -72,7 +71,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `--teleport [session]` | 恢复传送会话 |
 | `--remote [description]` | 创建远程会话 |
 | `--sdk-url <url>` | WebSocket 端点（仅 `-p` 模式） |
-| `--advisor <model>` | 服务端顾问工具 |
 | `--agent-id <id>` | 队友代理 ID |
 | `--agent-name <name>` | 队友显示名称 |
 | `--team-name <name>` | 团队名称 |

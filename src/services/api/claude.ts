@@ -146,13 +146,6 @@ import type { Notification } from 'src/context/notifications.js'
 import { addToTotalSessionCost } from 'src/cost-tracker.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js'
 import type { AgentId } from 'src/types/ids.js'
-import {
-  ADVISOR_TOOL_INSTRUCTIONS,
-  getExperimentAdvisorModels,
-  isAdvisorEnabled,
-  isValidAdvisorModel,
-  modelSupportsAdvisor,
-} from 'src/utils/advisor.js'
 import { getAgentContext } from 'src/utils/agentContext.js'
 import { isClaudeAISubscriber } from 'src/utils/auth.js'
 import {
@@ -189,7 +182,6 @@ import {
   isToolSearchEnabled,
 } from 'src/utils/toolSearch.js'
 import { API_MAX_MEDIA_PER_REQUEST } from '../../constants/apiLimits.js'
-import { ADVISOR_BETA_HEADER } from '../../constants/betas.js'
 import {
   formatDeferredToolLine,
   isDeferredTool,
@@ -200,10 +192,7 @@ import { insertBlockAfterToolResults } from '../../utils/contentArray.js'
 import { validateBoundedIntEnvVar } from '../../utils/envValidation.js'
 import { safeParseJSON } from '../../utils/json.js'
 import { getInferenceProfileBackingModel } from '../../utils/model/bedrock.js'
-import {
-  normalizeModelStringForAPI,
-  parseUserSpecifiedModel,
-} from '../../utils/model/model.js'
+import { normalizeModelStringForAPI } from '../../utils/model/model.js'
 import {
   startSessionActivity,
   stopSessionActivity,
@@ -697,7 +686,6 @@ export type Options = {
   agentId?: AgentId // Only set for subagents
   outputFormat?: BetaJSONOutputFormat
   fastMode?: boolean
-  advisorModel?: string
   addNotification?: (notif: Notification) => void
   // API-side task budget (output_config.task_budget). Distinct from the
   // tokenBudget.ts +500k auto-continue feature — this one is sent to the API
@@ -1070,51 +1058,6 @@ async function* queryModel(
     options.querySource === 'verification_agent'
   const betas = getMergedBetas(options.model, { isAgenticQuery })
 
-  // Always send the advisor beta header when advisor is enabled, so
-  // non-agentic queries (compact, side_question, extract_memories, etc.)
-  // can parse advisor server_tool_use blocks already in the conversation history.
-  if (isAdvisorEnabled()) {
-    betas.push(ADVISOR_BETA_HEADER)
-  }
-
-  let advisorModel: string | undefined
-  if (isAgenticQuery && isAdvisorEnabled()) {
-    let advisorOption = options.advisorModel
-
-    const advisorExperiment = getExperimentAdvisorModels()
-    if (advisorExperiment !== undefined) {
-      if (
-        normalizeModelStringForAPI(advisorExperiment.baseModel) ===
-        normalizeModelStringForAPI(options.model)
-      ) {
-        // Override the advisor model if the base model matches. We
-        // should only have experiment models if the user cannot
-        // configure it themselves.
-        advisorOption = advisorExperiment.advisorModel
-      }
-    }
-
-    if (advisorOption) {
-      const normalizedAdvisorModel = normalizeModelStringForAPI(
-        parseUserSpecifiedModel(advisorOption),
-      )
-      if (!modelSupportsAdvisor(options.model)) {
-        logForDebugging(
-          `[AdvisorTool] Skipping advisor - base model ${options.model} does not support advisor`,
-        )
-      } else if (!isValidAdvisorModel(normalizedAdvisorModel)) {
-        logForDebugging(
-          `[AdvisorTool] Skipping advisor - ${normalizedAdvisorModel} is not a valid advisor model`,
-        )
-      } else {
-        advisorModel = normalizedAdvisorModel
-        logForDebugging(
-          `[AdvisorTool] Server-side tool enabled with ${advisorModel} as the advisor model`,
-        )
-      }
-    }
-  }
-
   // Check if tool search is enabled (checks mode, model support, and threshold for auto mode)
   // This is async because it may need to calculate MCP tool description sizes for TstAuto mode
   let useToolSearch = await isToolSearchEnabled(
@@ -1295,15 +1238,14 @@ async function* queryModel(
     })
   }
 
+  // Filter legacy Advisor blocks before pairing repair: an interrupted use
+  // must not trigger strict pairing errors or leave a thinking-only message.
+  messagesForAPI = stripAdvisorBlocks(messagesForAPI)
+
   // Repair tool_use/tool_result pairing mismatches that can occur when resuming
   // remote/teleport sessions. Inserts synthetic error tool_results for orphaned
   // tool_uses and strips orphaned tool_results referencing non-existent tool_uses.
   messagesForAPI = ensureToolResultPairing(messagesForAPI)
-
-  // Strip advisor blocks — the API rejects them without the beta header.
-  if (!betas.includes(ADVISOR_BETA_HEADER)) {
-    messagesForAPI = stripAdvisorBlocks(messagesForAPI)
-  }
 
   // Strip excess media items before making the API call.
   // The API rejects requests with >100 media items but returns a confusing error.
@@ -1363,7 +1305,6 @@ async function* queryModel(
         hasAppendSystemPrompt: options.hasAppendSystemPrompt,
       }),
       ...systemPrompt,
-      ...(advisorModel ? [ADVISOR_TOOL_INSTRUCTIONS] : []),
       ...(injectChromeHere ? [CHROME_TOOL_SEARCH_INSTRUCTIONS] : []),
     ].filter(Boolean),
   )
@@ -1383,16 +1324,6 @@ async function* queryModel(
   // Note: The actual new_context message extraction is done in sessionTracing.ts using
   // hash-based tracking per querySource (agent) from the messagesForAPI array
   const extraToolSchemas = [...(options.extraToolSchemas ?? [])]
-  if (advisorModel) {
-    // Server tools must be in the tools array by API contract. Appended after
-    // toolSchemas (which carries the cache_control marker) so toggling /advisor
-    // only churns the small suffix, not the cached prefix.
-    extraToolSchemas.push({
-      type: 'advisor_20260301',
-      name: 'advisor',
-      model: advisorModel,
-    } as unknown as BetaToolUnion)
-  }
   const allTools = [...toolSchemas, ...extraToolSchemas]
 
   const isFastMode =
@@ -1776,7 +1707,6 @@ async function* queryModel(
   let responseHeaders: globalThis.Headers | undefined = undefined
   let research: unknown = undefined
   let isFastModeRequest = isFastMode // Keep separate state as it may change if falling back
-  let isAdvisorInProgress = false
 
   try {
     queryCheckpoint('query_client_creation_start')
@@ -1875,7 +1805,6 @@ async function* queryModel(
     contentBlocks.length = 0
     usage = EMPTY_USAGE
     stopReason = null
-    isAdvisorInProgress = false
 
     // Streaming idle timeout watchdog: abort the stream if no chunks arrive
     // for STREAM_IDLE_TIMEOUT_MS. Unlike the stall detection below (which only
@@ -2017,16 +1946,6 @@ async function* queryModel(
                   ...part.content_block,
                   input: '' as unknown as { [key: string]: unknown },
                 }
-                if ((part.content_block.name as string) === 'advisor') {
-                  isAdvisorInProgress = true
-                  logForDebugging(`[AdvisorTool] Advisor tool called`)
-                  logEvent('tengu_advisor_tool_call', {
-                    model:
-                      options.model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-                    advisor_model: (advisorModel ??
-                      'unknown') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-                  })
-                }
                 break
               case 'text':
                 contentBlocks[part.index] = {
@@ -2053,12 +1972,6 @@ async function* queryModel(
                 // as it works. we want the blocks to be immutable, so that we can
                 // accumulate state ourselves.
                 contentBlocks[part.index] = { ...part.content_block }
-                if (
-                  (part.content_block.type as string) === 'advisor_tool_result'
-                ) {
-                  isAdvisorInProgress = false
-                  logForDebugging(`[AdvisorTool] Advisor tool result received`)
-                }
                 break
             }
             break
@@ -2216,7 +2129,6 @@ async function* queryModel(
               timestamp: new Date().toISOString(),
               ...(process.env.USER_TYPE === 'ant' &&
                 research !== undefined && { research }),
-              ...(advisorModel && { advisorModel }),
             }
             newMessages.push(m)
             yield m
@@ -2458,14 +2370,6 @@ async function* queryModel(
           logForDebugging(
             `Streaming aborted by user: ${errorMessage(streamingError)}`,
           )
-          if (isAdvisorInProgress) {
-            logEvent('tengu_advisor_tool_interrupted', {
-              model:
-                options.model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-              advisor_model: (advisorModel ??
-                'unknown') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-            })
-          }
           throw streamingError
         } else {
           // The SDK threw APIUserAbortError but our signal wasn't aborted
@@ -2613,9 +2517,6 @@ async function* queryModel(
           research !== undefined && {
             research,
           }),
-        ...(advisorModel && {
-          advisorModel,
-        }),
       }
       newMessages.push(m)
       fallbackMessage = m
@@ -2722,7 +2623,6 @@ async function* queryModel(
           timestamp: new Date().toISOString(),
           ...(process.env.USER_TYPE === 'ant' &&
             research !== undefined && { research }),
-          ...(advisorModel && { advisorModel }),
         }
         newMessages.push(m)
         fallbackMessage = m

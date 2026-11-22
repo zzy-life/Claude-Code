@@ -9,12 +9,10 @@ import { Box } from '../ink.js';
 import type { Tools } from '../Tool.js';
 import { type ConnectorTextBlock, isConnectorTextBlock } from '../types/connectorText.js';
 import type { AssistantMessage, AttachmentMessage as AttachmentMessageType, CollapsedReadSearchGroup as CollapsedReadSearchGroupType, GroupedToolUseMessage as GroupedToolUseMessageType, NormalizedUserMessage, ProgressMessage, SystemMessage } from '../types/message.js';
-import { type AdvisorBlock, isAdvisorBlock } from '../utils/advisor.js';
 import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import { logError } from '../utils/log.js';
 import type { buildMessageLookups } from '../utils/messages.js';
 import { CompactSummary } from './CompactSummary.js';
-import { AdvisorMessage } from './messages/AdvisorMessage.js';
 import { AssistantRedactedThinkingMessage } from './messages/AssistantRedactedThinkingMessage.js';
 import { AssistantTextMessage } from './messages/AssistantTextMessage.js';
 import { AssistantThinkingMessage } from './messages/AssistantThinkingMessage.js';
@@ -99,17 +97,16 @@ function MessageImpl(t0) {
       {
         const t2 = containerWidth ?? "100%";
         let t3;
-        if ($[5] !== addMargin || $[6] !== commands || $[7] !== inProgressToolUseIDs || $[8] !== isTranscriptMode || $[9] !== lastThinkingBlockId || $[10] !== lookups || $[11] !== message.advisorModel || $[12] !== message.message.content || $[13] !== message.uuid || $[14] !== onOpenRateLimitOptions || $[15] !== progressMessagesForMessage || $[16] !== shouldAnimate || $[17] !== shouldShowDot || $[18] !== tools || $[19] !== verbose || $[20] !== width) {
+        if ($[5] !== addMargin || $[6] !== commands || $[7] !== inProgressToolUseIDs || $[8] !== isTranscriptMode || $[9] !== lastThinkingBlockId || $[10] !== lookups || $[12] !== message.message.content || $[13] !== message.uuid || $[14] !== onOpenRateLimitOptions || $[15] !== progressMessagesForMessage || $[16] !== shouldAnimate || $[17] !== shouldShowDot || $[18] !== tools || $[19] !== verbose || $[20] !== width) {
           let t4;
-          if ($[22] !== addMargin || $[23] !== commands || $[24] !== inProgressToolUseIDs || $[25] !== isTranscriptMode || $[26] !== lastThinkingBlockId || $[27] !== lookups || $[28] !== message.advisorModel || $[29] !== message.uuid || $[30] !== onOpenRateLimitOptions || $[31] !== progressMessagesForMessage || $[32] !== shouldAnimate || $[33] !== shouldShowDot || $[34] !== tools || $[35] !== verbose || $[36] !== width) {
-            t4 = (_, index_0) => <AssistantMessageBlock key={index_0} param={_} addMargin={addMargin} tools={tools} commands={commands} verbose={verbose} inProgressToolUseIDs={inProgressToolUseIDs} progressMessagesForMessage={progressMessagesForMessage} shouldAnimate={shouldAnimate} shouldShowDot={shouldShowDot} width={width} inProgressToolCallCount={inProgressToolUseIDs.size} isTranscriptMode={isTranscriptMode} lookups={lookups} onOpenRateLimitOptions={onOpenRateLimitOptions} thinkingBlockId={`${message.uuid}:${index_0}`} lastThinkingBlockId={lastThinkingBlockId} advisorModel={message.advisorModel} />;
+          if ($[22] !== addMargin || $[23] !== commands || $[24] !== inProgressToolUseIDs || $[25] !== isTranscriptMode || $[26] !== lastThinkingBlockId || $[27] !== lookups || $[29] !== message.uuid || $[30] !== onOpenRateLimitOptions || $[31] !== progressMessagesForMessage || $[32] !== shouldAnimate || $[33] !== shouldShowDot || $[34] !== tools || $[35] !== verbose || $[36] !== width) {
+            t4 = (_, index_0) => <AssistantMessageBlock key={index_0} param={_} addMargin={addMargin} tools={tools} commands={commands} verbose={verbose} inProgressToolUseIDs={inProgressToolUseIDs} progressMessagesForMessage={progressMessagesForMessage} shouldAnimate={shouldAnimate} shouldShowDot={shouldShowDot} width={width} inProgressToolCallCount={inProgressToolUseIDs.size} isTranscriptMode={isTranscriptMode} lookups={lookups} onOpenRateLimitOptions={onOpenRateLimitOptions} thinkingBlockId={`${message.uuid}:${index_0}`} lastThinkingBlockId={lastThinkingBlockId} />;
             $[22] = addMargin;
             $[23] = commands;
             $[24] = inProgressToolUseIDs;
             $[25] = isTranscriptMode;
             $[26] = lastThinkingBlockId;
             $[27] = lookups;
-            $[28] = message.advisorModel;
             $[29] = message.uuid;
             $[30] = onOpenRateLimitOptions;
             $[31] = progressMessagesForMessage;
@@ -129,7 +126,6 @@ function MessageImpl(t0) {
           $[8] = isTranscriptMode;
           $[9] = lastThinkingBlockId;
           $[10] = lookups;
-          $[11] = message.advisorModel;
           $[12] = message.message.content;
           $[13] = message.uuid;
           $[14] = onOpenRateLimitOptions;
@@ -431,7 +427,7 @@ function UserMessage(t0) {
   }
 }
 function AssistantMessageBlock(t0) {
-  const $ = _c(45);
+  const $ = _c(37);
   const {
     param,
     addMargin,
@@ -448,8 +444,7 @@ function AssistantMessageBlock(t0) {
     lookups,
     onOpenRateLimitOptions,
     thinkingBlockId,
-    lastThinkingBlockId,
-    advisorModel
+    lastThinkingBlockId
   } = t0;
   if (feature("CONNECTOR_TEXT")) {
     if (isConnectorTextBlock(param)) {
@@ -556,30 +551,6 @@ function AssistantMessageBlock(t0) {
           t2 = $[36];
         }
         return t2;
-      }
-    case "server_tool_use":
-    case "advisor_tool_result":
-      {
-        if (isAdvisorBlock(param)) {
-          const t1 = verbose || isTranscriptMode;
-          let t2;
-          if ($[37] !== addMargin || $[38] !== advisorModel || $[39] !== lookups.erroredToolUseIDs || $[40] !== lookups.resolvedToolUseIDs || $[41] !== param || $[42] !== shouldAnimate || $[43] !== t1) {
-            t2 = <AdvisorMessage block={param} addMargin={addMargin} resolvedToolUseIDs={lookups.resolvedToolUseIDs} erroredToolUseIDs={lookups.erroredToolUseIDs} shouldAnimate={shouldAnimate} verbose={t1} advisorModel={advisorModel} />;
-            $[37] = addMargin;
-            $[38] = advisorModel;
-            $[39] = lookups.erroredToolUseIDs;
-            $[40] = lookups.resolvedToolUseIDs;
-            $[41] = param;
-            $[42] = shouldAnimate;
-            $[43] = t1;
-            $[44] = t2;
-          } else {
-            t2 = $[44];
-          }
-          return t2;
-        }
-        logError(new Error(`Unable to render server tool block: ${param.type}`));
-        return null;
       }
     default:
       {
