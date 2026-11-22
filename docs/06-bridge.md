@@ -49,20 +49,22 @@ Bridge（Remote Control）让用户从 **claude.ai 网页端**远程操控运行
 
 ## 启用条件
 
-`src/bridge/bridgeEnabled.ts` 定义了严格的检查链：
+`src/bridge/bridgeEnabled.ts` 保留以下检查链。原始实现使用服务端授权 flag，但本仓库的查询接口已固定返回默认值：
 
 ```
 isBridgeEnabled() =
   feature('BRIDGE_MODE')             ← 编译时 flag
   && isClaudeAISubscriber()          ← 必须是付费订阅用户
-  && GrowthBook('tengu_ccr_bridge')  ← 服务端 feature flag
+  && getFeatureValue('tengu_ccr_bridge', false) ← 当前固定 false
 ```
 
 不满足时的诊断信息：
 - 非订阅用户 → 提示需要订阅
 - 缺少 `user:profile` OAuth scope → 提示需要重新登录
 - 无法确定组织 UUID → 提示刷新账户信息
-- GrowthBook 未通过 → 提示功能未启用
+- 默认 gate 未通过 → 提示功能未启用
+
+当前 `isBridgeEnabled()` 和阻塞检查都无法通过默认 `false` 的授权 gate；登录订阅账户、设置内部身份或旧 GrowthBook 覆盖变量均不能放行。因此 `/remote-control` 所依赖的上述入口当前不可启用。下文描述的是仍保留的传输实现，不代表此构建可直接使用远程控制；其他远程任务／会话链路需按各自入口单独判断。
 
 ---
 

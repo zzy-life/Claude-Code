@@ -24,16 +24,22 @@ export function validateInputForSettingsFileEdit(
   // Check if the current file (before edit) conforms to the schema
   const beforeValidation = validateSettingsFileContent(originalContent)
 
-  if (!beforeValidation.isValid) {
-    // If the before version is invalid, allow the edit (don't block it)
-    return null
+  let allowedUnknownKeys: string[] = []
+  if (beforeValidation.isValid === false) {
+    allowedUnknownKeys = beforeValidation.unknownKeys ?? []
+    // Retired keys must not disable validation of otherwise valid settings.
+    if (!beforeValidation.onlyUnknownKeys) {
+      return null
+    }
   }
 
-  // If the before version is valid, ensure the after version is also valid
   const updatedContent = getUpdatedContent()
-  const afterValidation = validateSettingsFileContent(updatedContent)
+  const afterValidation = validateSettingsFileContent(
+    updatedContent,
+    allowedUnknownKeys,
+  )
 
-  if (!afterValidation.isValid) {
+  if (afterValidation.isValid === false) {
     return {
       result: false,
       message: `Claude Code settings.json validation failed after edit:\n${afterValidation.error}\n\nFull schema:\n${afterValidation.fullSchema}\nIMPORTANT: Do not update the env unless explicitly instructed to do so.`,

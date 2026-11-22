@@ -32,27 +32,14 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 
 | 命令 | 功能 |
 |------|------|
-| `/backfill-sessions` | 回填历史会话数据。 |
-| `/bughunter` | 内部 Bug 诊断工具。 |
-| `/ctx_viz` | 上下文占用可视化。 |
-| `/good-claude` | 提交内部正向反馈。 |
-| `/issue` | 内部 issue 工作流。 |
 | `/init-verifiers` | 初始化验证器。 |
-| `/mock-limits` | 模拟速率限制。 |
-| `/bridge-kick` | 断开桥接连接。 |
-| `/version` | 查看或诊断内部版本信息。 |
-| `/reset-limits` | 重置速率限制。 |
-| `/onboarding` | 内部引导流程。 |
-| `/share` | 分享会话。 |
-| `/summary` | 生成会话摘要。 |
-| `/teleport` | 在本地与远程环境之间传送会话。 |
-| `/ant-trace` | 内部追踪工具。 |
-| `/perf-issue` | 性能问题诊断。 |
-| `/env` | 环境变量管理。 |
-| `/oauth-refresh` | 刷新 OAuth 凭据。 |
-| `/debug-tool-call` | 调试工具调用。 |
+| `/force-snip` | 强制截断历史；还需 `HISTORY_SNIP`。 |
+| `/subscribe-pr` | 订阅 Pull Request；还需 `KAIROS_GITHUB_WEBHOOKS`。 |
 | `/agents-platform` | 智能体平台入口；当前还原开发构建标注为不可用。 |
-| `/autofix-pr` | 自动修复 Pull Request。 |
+
+已删除的禁用桩入口：`/backfill-sessions`、`/bughunter`、`/ctx_viz`、`/good-claude`、`/issue`、`/mock-limits`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/autofix-pr`。这些入口在删除前已不可用，不应列为当前功能。
+
+`/commit`、`/commit-push-pr`、`/cost`、`/version`、`/bridge-kick` 及内置 `/verify`、`/stuck` 也已移除；用户自定义同名技能不受影响。共享 Git、成本统计和远程会话实现不因命令删除而整体移除。
 
 `/force-snip`、`/subscribe-pr` 还分别受 `HISTORY_SNIP`、`KAIROS_GITHUB_WEBHOOKS` 等开关约束；即使进入内部构建也未必可用。`/files` 与 `/tag` 属于常规注册表中的受限命令，不属于 `INTERNAL_ONLY_COMMANDS`。
 
@@ -170,8 +157,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 
 | 环境变量 | 功能 |
 |----------|------|
-| `CLAUDE_INTERNAL_FC_OVERRIDES` | GrowthBook 功能覆盖 JSON |
-| `CLAUDE_CODE_GB_BASE_URL` | GrowthBook API URL 覆盖 |
 | `MAX_THINKING_TOKENS` | 最大思考 token 数 |
 | `SESSION_INGRESS_URL` | 会话入口 URL |
 | `IS_DEMO` | 演示模式 |

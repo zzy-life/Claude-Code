@@ -1,5 +1,5 @@
 import type { ConfigScope } from 'src/services/mcp/types.js'
-import type { ZodError, ZodIssue } from 'zod/v4'
+import { ZodError, type ZodIssue } from 'zod/v4'
 import { jsonParse } from '../slowOperations.js'
 import { plural } from '../stringUtils.js'
 import { validatePermissionRule } from './permissionValidation.js'
@@ -176,7 +176,10 @@ export function formatZodError(
  * Validates that settings file content conforms to the SettingsSchema.
  * This is used during file edits to ensure the resulting file is valid.
  */
-export function validateSettingsFileContent(content: string):
+export function validateSettingsFileContent(
+  content: string,
+  allowedUnknownKeys: readonly string[] = [],
+):
   | {
       isValid: true
     }
@@ -184,6 +187,8 @@ export function validateSettingsFileContent(content: string):
       isValid: false
       error: string
       fullSchema: string
+      unknownKeys?: string[]
+      onlyUnknownKeys?: boolean
     } {
   try {
     // Parse the JSON first
@@ -196,8 +201,26 @@ export function validateSettingsFileContent(content: string):
       return { isValid: true }
     }
 
+    // Keep existing unknown top-level keys without accepting newly introduced ones.
+    const issues: ZodIssue[] = []
+    const unknownKeys: string[] = []
+    for (const issue of result.error.issues) {
+      if (isUnrecognizedKeysIssue(issue) && issue.path.length === 0) {
+        const keys = issue.keys.filter(key => !allowedUnknownKeys.includes(key))
+        if (keys.length > 0) {
+          issues.push({ ...issue, keys })
+          unknownKeys.push(...keys)
+        }
+      } else {
+        issues.push(issue)
+      }
+    }
+    if (issues.length === 0) {
+      return { isValid: true }
+    }
+
     // Format the validation error in a helpful way
-    const errors = formatZodError(result.error, 'settings')
+    const errors = formatZodError(new ZodError(issues), 'settings')
     const errorMessage =
       'Settings validation failed:\n' +
       errors.map(err => `- ${err.path}: ${err.message}`).join('\n')
@@ -206,6 +229,10 @@ export function validateSettingsFileContent(content: string):
       isValid: false,
       error: errorMessage,
       fullSchema: generateSettingsJSONSchema(),
+      unknownKeys,
+      onlyUnknownKeys: unknownKeys.length > 0 && issues.every(
+        issue => isUnrecognizedKeysIssue(issue) && issue.path.length === 0,
+      ),
     }
   } catch (parseError) {
     return {

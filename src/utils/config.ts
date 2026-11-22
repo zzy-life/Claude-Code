@@ -257,11 +257,6 @@ export type GlobalConfig = {
     [tipId: string]: number // Key is tipId, value is the numStartups when tip was last shown
   }
 
-  // Feedback survey tracking
-  feedbackSurveyState?: {
-    lastShownTime?: number
-  }
-
   // Memory usage tracking
   memoryUsageCount: number // Number of times user has added to memory
 

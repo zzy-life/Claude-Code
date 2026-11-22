@@ -180,7 +180,7 @@ function getHaiku45Option(): ModelOption {
   }
 }
 
-export function getHaiku45_1MOption(): ModelOption {
+export function getHaiku45_1MOption(): ModelOption & { value: string } {
   const is3P = getAPIProvider() !== 'firstParty'
   return {
     value: is3P ? getModelStrings().haiku45 + '[1m]' : 'haiku[1m]',
@@ -189,6 +189,14 @@ export function getHaiku45_1MOption(): ModelOption {
     descriptionForModel:
       'Haiku 4.5 with 1M context window - for long sessions with large codebases',
   }
+}
+
+function isHaiku1mOptionAvailable(): boolean {
+  if (!checkHaiku1mAccess()) {
+    return false
+  }
+
+  return isModelAllowed(getHaiku45_1MOption().value)
 }
 
 export function getMaxHaiku45_1MOption(): ModelOption {
@@ -276,7 +284,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
       }
 
       premiumOptions.push(
-        checkHaiku1mAccess() ? getMaxHaiku45_1MOption() : MaxHaiku45Option,
+        isHaiku1mOptionAvailable() ? getMaxHaiku45_1MOption() : MaxHaiku45Option,
       )
       return premiumOptions
     }
@@ -297,7 +305,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     }
 
     standardOptions.push(
-      checkHaiku1mAccess() ? getMaxHaiku45_1MOption() : MaxHaiku45Option,
+      isHaiku1mOptionAvailable() ? getMaxHaiku45_1MOption() : MaxHaiku45Option,
     )
     return standardOptions
   }
@@ -318,7 +326,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
     }
     // Prefer a single Haiku entry, falling back when 1M context is unavailable.
     payg1POptions.push(
-      checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaiku45Option(),
+      isHaiku1mOptionAvailable() ? getHaiku45_1MOption() : getHaiku45Option(),
     )
     return payg1POptions
   }
@@ -351,7 +359,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
   const customHaiku = getCustomHaikuOption()
   payg3pOptions.push(
     customHaiku ??
-      (checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaiku45Option()),
+      (isHaiku1mOptionAvailable() ? getHaiku45_1MOption() : getHaiku45Option()),
   )
   return payg3pOptions
 }

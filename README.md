@@ -56,7 +56,7 @@ ccli proxy config set <代理地址> <你的密钥>
 
 ### 模型与上下文
 
-`/model` 菜单同时提供普通 `Haiku` 和 `Haiku (1M context)`，也可以使用 `/model haiku[1m]` 显式选择 1M 上下文。该选项需要代理或模型端点支持，不代表官方 Haiku 4.5 已支持 1M。自动压缩仍受 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 限制：配置为 `258000` 时，通常约在 225,000 tokens 触发压缩；未配置该上限时，1M 选项通常约在 967,000 tokens 触发压缩（均按摘要预留 20,000 tokens、缓冲 13,000 tokens 计算）。
+`/model` 菜单只展示一个默认 Haiku 入口：1M 可用且通过 `availableModels` 白名单时优先展示 `Haiku (1M context)`，否则回退普通 `Haiku`（仍须通过白名单）；第三方自定义 Haiku 配置优先。也可以使用 `/model haiku[1m]` 显式选择 1M 上下文。该选项需要代理或模型端点支持，不代表官方 Haiku 4.5 已支持 1M。自动压缩仍受 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 限制：配置为 `258000` 时，通常约在 225,000 tokens 触发压缩；未配置该上限时，1M 选项通常约在 967,000 tokens 触发压缩（均按摘要预留 20,000 tokens、缓冲 13,000 tokens 计算）。
 
 ### VS Code 终端标题与会话名称
 
@@ -112,7 +112,6 @@ ccli proxy config set <代理地址> <你的密钥>
 | `/effort` | 设置模型的 effort 等级。 |
 | `/plan` | 进入计划模式或查看当前会话计划。 |
 | `/status` | 查看 Claude Code 状态。 |
-| `/cost` | 显示当前会话的成本与时长。 |
 | `/diff` | 查看未提交改动及本轮差异。 |
 | `/copy` | 复制最近一条消息内容。 |
 | `/rename` | 重命名当前会话。 |
@@ -169,7 +168,7 @@ ccli proxy config set <代理地址> <你的密钥>
 |---|---|
 | `/advisor` | 选择辅助顾问模型：它可在主模型之外协助回答或分析；仅账户具备该实验资格时显示。 |
 | `/files` | 列出本次会话已加入上下文、可供模型参考的文件；仅内部构建可用。 |
-| `/remote-control`、`/rc` | 让 Claude 网页端或移动端连接并操作当前本地终端；当前构建需启用远程控制功能。 |
+| `/remote-control`、`/rc` | 原用于网页端或移动端连接本地终端；当前授权 gate 固定为 `false`，入口不可启用，不能通过旧覆盖变量放行。 |
 | `/session`、`/remote` | 生成远程会话链接和二维码，用其他设备继续或查看当前会话；仅远程会话模式可用。 |
 | `/desktop`、`/app` | 把当前会话转交到 Claude Desktop 应用继续处理；仅部分平台和订阅账户可用。 |
 | `/chrome` | 连接、设置或管理 Claude in Chrome 浏览器扩展（Beta）；需满足登录和会话条件。 |
@@ -192,6 +191,23 @@ ccli proxy config set <代理地址> <你的密钥>
 | `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
 
 ---
+
+### 已移除功能与保留边界
+
+本仓库已对还原源码进行裁剪，以下能力不再是当前版本提供的功能；旧文档、历史配置键或编译开关名称不代表它们仍然可用。
+
+| 已移除内容 | 保留能力／替代方式 |
+|---|---|
+| 内置 Computer Use、专属授权界面及三个依赖空壳 | 通用 MCP 和 Chrome 接入代码保留；不代表原生空壳实现已恢复可用。 |
+| Undercover 模式、自动提交／PR 署名注入及 `attribution`、`includeCoAuthoredBy` 设置 | 普通 Git 工作流提示和 `includeGitInstructions` 保留；旧署名键不再控制行为，不自动改写用户配置。 |
+| 内置 `/commit`、`/commit-push-pr`、`/verify`、`/stuck` | 用户自定义同名命令／技能仍可使用，普通 `/review` 和 `/debug` 保留。 |
+| `/cost`、`/version`、`/bridge-kick`、`/web-setup`、内部 lorem-ipsum 入口及已禁用的内部桩命令 | 会话成本统计、退出摘要、Bridge 底层实现和共享远程会话代码保留；Bridge 入口的可用性仍受固定默认值限制，桩命令清单见隐藏命令文档。 |
+| 云端深度规划 ultraplan、旧云端启动消息专用排版、buddy 电子宠物、Overflow／Tungsten 内部测试工具 | 普通计划模式、本地命令输出、远程任务及 Bash 的 tmux 隔离机制保留。 |
+| DevBar／员工 API 性能面板、限流模拟和内部自动 issue 链路 | 真实 429 重试、总耗时与成本、慢操作日志以及 `/feedback`、`/bug` 保留。 |
+| 会话／记忆／压缩／技能改进问卷及 `feedbackSurveyRate` 设置 | 普通技能与 Hook 执行保留；不再后台生成技能改进问卷。 |
+| 官方统计上传、远程 GrowthBook 求值、Gates 标签页、本地特性覆盖和设置同步 | 用户显式配置的 OTEL、本地错误日志、显式启动 profiling、托管设置及正常设置监听保留。功能查询固定采用调用方默认值。 |
+
+`CLAUDE_INTERNAL_FC_OVERRIDES`、`growthBookOverrides` 和 `CLAUDE_CODE_GB_BASE_URL` 已不生效。默认值为 `false` 的会话记忆／后台提取门控也不会因设置内部用户身份而自动启用；普通记忆文件和正常压缩不等于后台自动提取器。贡献追踪仍有历史缺失模块，不保证端到端文件贡献采集可用。
 
 ## 开发者指南
 
@@ -348,7 +364,7 @@ vendor/                 # 原生绑定源码
 - **主动模式（Proactive）**：没人说话时自己找活干，没活就调用 `SleepTool` 等着。接收周期性 `<tick>` 提示来检查是否有事可做
 - **后台任务**：命令超 15 秒自动丢后台，支持持久 cron 任务（`permanent: true` 不受 7 天过期限制）
 - **编译开关**：`feature('KAIROS')`、`feature('KAIROS_BRIEF')`、`feature('KAIROS_CHANNELS')`
-- **远程开关**：GrowthBook `tengu_kairos`、`tengu_onyx_plover`（Dream 阈值配置）
+- **本地默认值查询**：`tengu_kairos`、`tengu_onyx_plover`（Dream 阈值配置）仍有调用，但已不连接 GrowthBook，不支持远程求值或本地覆盖
 
 ---
 
@@ -375,7 +391,7 @@ vendor/                 # 原生绑定源码
 
 常见受限能力包括远程控制、持久助手、语音和工作流；它们是否可见取决于构建开关、登录方式、套餐资格和服务端策略。
 
-内部构建（`USER_TYPE === 'ant'` 且非 Demo）还会注册：`/backfill-sessions`、`/bughunter`、`/commit`、`/commit-push-pr`、`/ctx_viz`、`/good-claude`、`/issue`、`/init-verifiers`、`/mock-limits`、`/bridge-kick`、`/version`、`/reset-limits`、`/onboarding`、`/share`、`/summary`、`/teleport`、`/ant-trace`、`/perf-issue`、`/env`、`/oauth-refresh`、`/debug-tool-call`、`/agents-platform`、`/autofix-pr`。其中部分还受各自功能开关约束，不应视为外部可用命令。
+当前 `INTERNAL_ONLY_COMMANDS` 仅保留 `/init-verifiers`、条件启用的 `/force-snip` 和 `/subscribe-pr`，以及当前还原开发构建不可用的 `/agents-platform`。这些入口仍受内部身份、Demo 模式及各自编译开关约束；已删除的内部命令不再注册。
 
 ---
 
@@ -396,7 +412,7 @@ vendor/                 # 原生绑定源码
 
 #### 5. [编译开关 + 远程门控](docs/07-feature-gates.md)
 
-外部发布版是**阉割版**。Anthropic 通过三层门控控制功能。[查看完整分析 →](docs/07-feature-gates.md)
+原始源码使用编译开关、用户身份和远程配置三层门控。本仓库已移除远程配置及本地覆盖，当前保留编译／身份检查和调用方默认值查询。[查看当前机制 →](docs/07-feature-gates.md)
 
 ##### 第一层：编译时开关（`feature()`）
 
@@ -453,10 +469,12 @@ vendor/                 # 原生绑定源码
 
 ##### 第二层：用户类型（`USER_TYPE`）
 
-- **`ant`**（Anthropic 内部）— 解锁全部功能、20 分钟 GrowthBook 刷新、调试工具、200+ 处专属检查
-- **`external`**（外部用户）— 裁剪版，6 小时 GrowthBook 刷新
+- **`ant`**（Anthropic 内部）— 仍有部分身份检查，但不会恢复已删除功能或默认关闭的 gate。
+- **`external`**（外部用户）— 使用外部身份对应分支。
 
-##### 第三层：GrowthBook 远程 A/B 测试
+##### 第三层：本地默认值查询（原 GrowthBook 接口）
+
+`growthbook.ts` 现在直接返回调用方传入的默认值，不请求远程服务，不缓存或定时刷新，也不读取覆盖配置。下列名称仅表示源码中的查询用途，不代表仍有在线 A/B 测试。
 
 | 开关 | 控制内容 |
 |------|---------|
@@ -491,7 +509,6 @@ vendor/                 # 原生绑定源码
 | `CLAUDE_CODE_EXTRA_BODY` | API 附加 JSON |
 | `CLAUDE_CODE_SYNTAX_HIGHLIGHT` | 语法高亮主题 |
 | `CLAUDE_CODE_IDLE_THRESHOLD_MINUTES` | 空闲阈值（默认 75 分钟） |
-| `CLAUDE_INTERNAL_FC_OVERRIDES` | GrowthBook 覆盖（仅 ant） |
 
 </details>
 
@@ -542,7 +559,7 @@ vendor/                 # 原生绑定源码
 | `ENABLE_TOOL_SEARCH=auto:N`（`N=1..99`） | `tst-auto` | 仅当定义总量达到模型上下文窗口的 `N%` 时启用。 |
 | 未设置 | `tst` | 源码默认启用；但 First-party provider 使用非官方 `ANTHROPIC_BASE_URL` 时，候选池阶段默认关闭。 |
 
-模式不是最终结果。每个 API 请求还必须同时满足：当前模型支持 `tool_reference`（默认 Haiku 不支持；支持列表可由 `tengu_tool_search_unsupported_models` 覆盖）、`ToolSearch` 未被权限或 Agent 类型过滤移除，以及本次存在可延迟工具或仍在连接的 MCP Server。`tst-auto` 还必须通过相应阈值检查。任一条件不满足，当前请求都回退为 `standard` 行为。
+模式不是最终结果。每个 API 请求还必须同时满足：当前模型支持 `tool_reference`（默认 Haiku 不支持；`tengu_tool_search_unsupported_models` 采用调用方默认列表）、`ToolSearch` 未被权限或 Agent 类型过滤移除，以及本次存在可延迟工具或仍在连接的 MCP Server。`tst-auto` 还必须通过相应阈值检查。任一条件不满足，当前请求都回退为 `standard` 行为。
 
 当 ToolSearch 关闭时，`ToolSearch` 自身会从 API 工具列表移除；其余 MCP 工具和标记 `shouldDefer: true` 的内置工具**不会被移除**，而是以完整 `prompt()` 和 `input_schema` 直接注入。因此它们在该请求中属于基础工具，不需要先经 ToolSearch 发现。`alwaysLoad: true` 的 MCP 工具本来就不延迟，关闭 ToolSearch 时没有额外差异。
 
@@ -704,11 +721,11 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | Agent 与协作 | `AgentTool/*`、`InProcessTeammateTask`、`LocalAgentTask`、`useSwarmInitialization`、`useInboxPoller` | 加载/恢复 Agent，管理本地与进程内队友任务、权限同步、收件箱和协作状态。 |
 | 压缩、令牌与成本 | `compact/*`、`tokenBudget`、`tokens`、`cost-tracker`、`CostThresholdDialog` | 计算令牌预算与上下文窗口，执行压缩，记录会话成本并展示成本提醒。 |
 | 文件与编辑器 | `fileHistory`、`fileStateCache`、`attachments`、`editor`、`exportRenderer` | 保存文件快照/回退，缓存读取状态，创建附件，导出消息文本并调用外部编辑器。 |
-| 通知与提示 | `notifications`、`notifier`、`hooks/notifs/*`、`tips/*`、`IssueFlagBanner` | 展示终端/系统通知、设置和网络状态、限流、升级、插件、IDE 等提示。 |
+| 通知与提示 | `notifications`、`notifier`、`hooks/notifs/*`、`tips/*` | 展示终端/系统通知、设置和网络状态、限流、升级、插件、IDE 等提示。 |
 | 会话生命周期 | `sessionStart`、`hooks`、`ExitFlow`、`gracefulShutdown`、`preventSleep`、`backgroundHousekeeping` | 执行会话开始/结束钩子，处理退出、后台清理和防止系统休眠。 |
 | 远程与后台会话 | `useRemoteSession`、`useSSHSession`、`useDirectConnect`、`LocalMainSessionTask`、`useSessionBackgrounding` | 提供远程/SSH/直连会话能力，并支持将主会话转入后台。 |
-| 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置和动态实验配置，采集诊断/会话追踪并维护活动状态。 |
-| 条件加载模块 | `useVoiceIntegration`、`useFrustrationDetection`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
+| 配置、实验与遥测 | `config`、`analytics/*`、`diagnosticTracking`、`sessionTracing`、`activityManager` | 读写用户配置、查询固定默认值，保留本地诊断、用户配置的遥测及活动状态；不包含官方统计上传。 |
+| 条件加载模块 | `useVoiceIntegration`、`coordinatorMode`、`proactive/*`、`WebBrowserPanel` | 通过 `feature(...)` 或内部构建条件按需 `require`，使未启用功能可被构建工具剔除。 |
 | 其他界面能力 | `Spinner`、`TaskListV2` | 显示加载状态及任务列表。 |
 
 ## 数据来源

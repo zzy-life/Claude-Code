@@ -1,8 +1,8 @@
-# 编译开关 + 远程门控
+# 编译开关 + 本地默认值门控
 
 > 源码位置：`src/commands.ts`、`src/main.tsx`、`src/services/analytics/growthbook.ts`
 
-外部发布版是**阉割版**。Anthropic 通过三层门控精确控制每个功能的可见性和可用性。
+原始源码使用编译开关、用户身份、远程配置三层门控。本仓库已移除 GrowthBook 远程求值和本地覆盖；查询接口现在固定返回调用方默认值。下文区分当前机制与历史名称，不将源码保留等同于功能已启用。
 
 ---
 
@@ -16,8 +16,8 @@
 │  第二层：运行时 USER_TYPE                          │
 │  'ant'（内部）vs 'external'（外部）                 │
 ├─────────────────────────────────────────────────┤
-│  第三层：GrowthBook 远程 A/B 测试                   │
-│  tengu_ 前缀的远程开关，动态控制                     │
+│  第三层：本地默认值查询                             │
+│  tengu_ 接口返回调用方默认值，无远程求值              │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -118,30 +118,26 @@
 
 | 类别 | 能力 |
 |------|------|
-| GrowthBook | 调试日志、覆盖、20 分钟刷新（vs 外部 6 小时） |
-| 调试 | API 错误详情、推测性执行日志、prompt dump |
-| 命令 | 所有 `INTERNAL_ONLY_COMMANDS`（24+ 个） |
-| CLI 参数 | `--delegate-permissions`、`--afk`、`--tasks` |
-| 环境变量 | `CLAUDE_INTERNAL_FC_OVERRIDES`（JSON 覆盖 GrowthBook） |
-| 配置 | `/config` Gates 标签页（UI 覆盖 GrowthBook） |
-| 错误处理 | 5xx 额外重试逻辑 |
-| 隐私 | DataDog 中模型名不匿名化 |
+| 调试 | 部分 API 错误详情、prompt dump 等身份分支仍保留，实际以当前调用链为准。 |
+| 命令 | `INTERNAL_ONLY_COMMANDS` 仅保留 `/init-verifiers`、条件启用的 `/force-snip`、`/subscribe-pr` 和当前不可用的 `/agents-platform`。 |
+| 功能限制 | 内部身份不会恢复已删除的功能，也不会覆盖默认关闭的 gate。 |
+
+Gates 标签页、GrowthBook 覆盖／刷新和官方 Datadog 上传已删除，不再是 ant 专属能力。
 
 ---
 
-## 第三层：GrowthBook 远程开关
+## 第三层：本地默认值查询
 
-`src/services/analytics/growthbook.ts` 配置了 GrowthBook SDK：
+`src/services/analytics/growthbook.ts` 保留查询接口，但直接返回调用方默认值：
 
-### 基础设施
+- 不初始化 GrowthBook SDK，不发起远程求值请求。
+- 不维护远程配置磁盘缓存、用户属性或定时刷新。
+- 不提供本地覆盖写入、订阅或 Gates UI。
+- 默认值为 `false` 的分支保持关闭；仍须保留具有有效默认行为的查询，不能按 `tengu_` 名称批量删除。
 
-- 使用 `@growthbook/growthbook` SDK
-- 远程评估模式（`remoteEval: true`）
-- 内部用户 20 分钟刷新，外部用户 **6 小时**刷新
-- 支持磁盘缓存跨进程持久化
-- 用户属性包含：`id`、`deviceID`、`platform`、`accountUUID`、`userType`、`subscriptionType`、`rateLimitTier`、`appVersion` 等
+### 查询名称与历史用途（`tengu_` 前缀）
 
-### 已知远程开关（`tengu_` 前缀）
+下表仅说明历史名称及用途，不表示各名称当前仍有消费者或远程服务。官方埋点、模型覆盖等专用链路已移除。
 
 | 开关 | 控制内容 |
 |------|---------|
@@ -164,19 +160,17 @@
 | `tengu_kairos_cron_config` | Cron Jitter 配置 |
 | `tengu_kairos_cron_durable` | 持久 Cron 任务开关 |
 
-### 覆盖机制
+### 已删除的覆盖机制
 
-内部用户可以通过以下方式覆盖远程开关：
+`CLAUDE_INTERNAL_FC_OVERRIDES`、`growthBookOverrides` 和 `CLAUDE_CODE_GB_BASE_URL` 不再被功能查询读取；`/config` 的 Gates 标签页也已删除。保留在旧 JSON 中的字段不代表覆盖仍有效，不自动迁移用户配置。
 
-1. 环境变量 `CLAUDE_INTERNAL_FC_OVERRIDES`（JSON 格式）
-2. `/config` → Gates 标签页 → `growthBookOverrides`
-3. `CLAUDE_CODE_GB_BASE_URL` 覆盖 GrowthBook API 地址
+会话记忆和后台记忆提取受默认 `false` 门控时不会执行；普通记忆文件、手动编辑记忆及正常压缩是不同能力。用户显式配置的 OTEL、托管设置和正常设置监听没有随官方远程配置一并删除。
 
 ---
 
 ## 总结
 
-Claude Code 的功能分层非常清晰：
+当前功能边界：
 
 ```
 外部用户能看到的
@@ -190,13 +184,12 @@ Claude Code 的功能分层非常清晰：
 
 被 USER_TYPE 锁住的
 ═══════════════════════════════
-  24+ 内部命令、调试工具、
-  GrowthBook 覆盖能力
+  剩余内部命令、部分调试分支
 
-被 GrowthBook 远程控制的
+由调用方默认值决定的
 ═══════════════════════════════
-  A/B 测试、灰度发布、
-  Kill Switch、动态配置
+  保留的 tengu_ 查询，
+  无远程刷新或本地覆盖
 ```
 
-外部版本是经过三层过滤后的精简版。Anthropic 内部用 `USER_TYPE=ant` 构建解锁全部功能。
+修改 `USER_TYPE` 只能影响仍存在的身份分支，不能恢复本仓库已删除的实现、远程配置或空壳原生依赖。
