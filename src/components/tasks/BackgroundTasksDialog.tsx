@@ -118,17 +118,9 @@ const killMonitorMcp = monitorMcpModule?.killMonitorMcp ?? null;
 const MonitorMcpDetailDialog = feature('MONITOR_TOOL') ? (require('./MonitorMcpDetailDialog.js') as typeof import('./MonitorMcpDetailDialog.js')).MonitorMcpDetailDialog : null;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-// Historical records are selectable here, but must not count as active background work.
-function isSelectableTask(task: TaskState): boolean {
-  if (task.type === 'remote_agent' && task.isHistorical) {
-    return true;
-  }
-  return isBackgroundTask(task);
-}
-
 // Helper to get filtered background tasks (excludes foregrounded local_agent)
 function getSelectableBackgroundTasks(tasks: Record<string, TaskState> | undefined, foregroundedTaskId: string | undefined): TaskState[] {
-  const backgroundTasks = Object.values(tasks ?? {}).filter(isSelectableTask);
+  const backgroundTasks = Object.values(tasks ?? {}).filter(isBackgroundTask);
   return backgroundTasks.filter(task => !(task.type === 'local_agent' && task.id === foregroundedTaskId));
 }
 export function BackgroundTasksDialog({
@@ -185,8 +177,7 @@ export function BackgroundTasksDialog({
     dreamTasks: dreamTasks_0,
     allSelectableItems
   } = useMemo(() => {
-    // Include historical remote records only in this dialog, not in active-work counts.
-    const backgroundTasks = Object.values(typedTasks ?? {}).filter(isSelectableTask);
+    const backgroundTasks = Object.values(typedTasks ?? {}).filter(isBackgroundTask);
     const allItems_0 = backgroundTasks.map(toListItem);
     const sorted = allItems_0.sort((a, b) => {
       const aStatus = a.status;
@@ -330,7 +321,7 @@ export function BackgroundTasksDialog({
       const task = (typedTasks ?? {})[viewState.itemId];
       // Workflow tasks get a grace: their detail view stays open through
       // completion so the user sees the final state before eviction.
-      if (!task || task.type !== 'local_workflow' && !isSelectableTask(task)) {
+      if (!task || task.type !== 'local_workflow' && !isBackgroundTask(task)) {
         // Task was removed or is no longer a background task (e.g. killed).
         // If we skipped the list on mount, close the dialog entirely.
         if (skippedListOnMount.current) {
@@ -381,7 +372,7 @@ export function BackgroundTasksDialog({
       case 'local_agent':
         return <AsyncAgentDetailDialog agent={task_0} onDone={onDone} onKillAgent={() => void killAgentTask(task_0.id)} onBack={goBackToList} key={`agent-${task_0.id}`} />;
       case 'remote_agent':
-        return <RemoteSessionDetailDialog session={task_0} onDone={onDone} toolUseContext={toolUseContext} onBack={goBackToList} onKill={task_0.status !== 'running' ? undefined : () => void killRemoteAgentTask(task_0.id)} key={`session-${task_0.id}`} />;
+        return <RemoteSessionDetailDialog session={task_0} onDone={onDone} toolUseContext={toolUseContext} onBack={goBackToList} key={`session-${task_0.id}`} />;
       case 'in_process_teammate':
         return <InProcessTeammateDetailDialog teammate={task_0} onDone={onDone} onKill={task_0.status === 'running' ? () => void killTeammateTask(task_0.id) : undefined} onBack={goBackToList} onForeground={task_0.status === 'running' ? () => {
           enterTeammateView(task_0.id, setAppState);

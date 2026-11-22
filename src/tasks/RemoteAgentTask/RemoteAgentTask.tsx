@@ -20,8 +20,6 @@ import type { TodoList } from '../../utils/todo/types.js';
 export type RemoteAgentTaskState = TaskStateBase & {
   type: 'remote_agent';
   remoteTaskType: RemoteTaskType;
-  /** Historical record only; not active work and never polled. */
-  isHistorical?: boolean;
   /** Task-specific metadata (PR number, repo, etc.). */
   remoteTaskMetadata?: RemoteTaskMetadata;
   sessionId: string; // Original session ID for API calls
@@ -274,8 +272,7 @@ export function registerRemoteAgentTask(options: {
 /**
  * Restore remote-agent tasks from the session sidecar on --resume.
  *
- * Historical remote reviews remain visible locally without fetching or polling.
- * For other remote-agents/ entries, fetches live CCR status, reconstructs
+ * For remote-agents/ entries, fetches live CCR status, reconstructs
  * RemoteAgentTaskState into AppState.tasks, and restarts polling for sessions
  * still running. Sessions that are archived or 404 have their sidecar file
  * removed. Must run after switchSession() so getSessionId() points at the
@@ -292,28 +289,6 @@ async function restoreRemoteAgentTasksImpl(context: TaskContext): Promise<void> 
   const persisted = await listRemoteAgentMetadata();
   if (persisted.length === 0) return;
   for (const meta of persisted) {
-    if (meta.remoteTaskType === 'ultrareview' || meta.isRemoteReview) {
-      // Keep historical sessions discoverable without restarting removed review tracking.
-      // Do not fetch, poll, archive, or remove their sidecar metadata.
-      const taskState: RemoteAgentTaskState = {
-        ...createTaskStateBase(meta.taskId, 'remote_agent', meta.title, meta.toolUseId),
-        type: 'remote_agent',
-        remoteTaskType: 'remote-agent',
-        status: 'killed',
-        isHistorical: true,
-        // No completion notification is emitted; keep this record out of notified-task GC.
-        notified: false,
-        startTime: meta.spawnedAt,
-        description: 'Historical remote review (local tracking removed; open the session to view results)',
-        sessionId: meta.sessionId,
-        command: meta.command,
-        title: meta.title,
-        todoList: [],
-        log: []
-      };
-      registerTask(taskState, context.setAppState);
-      continue;
-    }
     let remoteStatus: string;
     try {
       const session = await fetchSession(meta.sessionId);

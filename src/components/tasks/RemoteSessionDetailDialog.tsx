@@ -24,15 +24,13 @@ type Props = {
     display?: CommandResultDisplay;
   }) => void;
   onBack?: () => void;
-  onKill?: () => void;
 };
 
 export function RemoteSessionDetailDialog({
   session,
   toolUseContext,
   onDone,
-  onBack,
-  onKill
+  onBack
 }: Props): React.ReactNode {
   const [isTeleporting, setIsTeleporting] = useState(false);
   const [teleportError, setTeleportError] = useState<string | null>(null);
@@ -86,9 +84,7 @@ export function RemoteSessionDetailDialog({
 
   // Map TaskStatus to display status (handle 'pending')
   let displayStatus: string = session.status;
-  if (session.isHistorical) {
-    displayStatus = 'local tracking removed';
-  } else if (session.status === 'pending') {
+  if (session.status === 'pending') {
     displayStatus = 'starting';
   }
   return <Box flexDirection="column" tabIndex={0} autoFocus onKeyDown={handleKeyDown}>
@@ -102,18 +98,18 @@ export function RemoteSessionDetailDialog({
             <Text bold>Status</Text>:{' '}
             {displayStatus === 'running' || displayStatus === 'starting' ? <Text color="background">{displayStatus}</Text> : displayStatus === 'completed' ? <Text color="success">{displayStatus}</Text> : <Text color="error">{displayStatus}</Text>}
           </Text>
-          {!session.isHistorical && <Text>
+          <Text>
             <Text bold>Runtime</Text>:{' '}
             {formatDuration((session.endTime ?? Date.now()) - session.startTime)}
-          </Text>}
+          </Text>
           <Text wrap="truncate-end">
             <Text bold>Title</Text>: {displayTitle}
           </Text>
           {session.description !== session.title && <Text dimColor>{session.description}</Text>}
-          {!session.isHistorical && <Text>
+          <Text>
             <Text bold>Progress</Text>:{' '}
             <RemoteSessionProgress session={session} />
-          </Text>}
+          </Text>
           <Text>
             <Text bold>Session URL</Text>:{' '}
             <Link url={getRemoteTaskSessionUrl(session.sessionId)}>

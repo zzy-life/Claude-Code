@@ -312,8 +312,6 @@ export type RemoteAgentMetadata = {
   spawnedAt: number
   toolUseId?: string
   isLongRunning?: boolean
-  /** Legacy marker only for identifying historical remote reviews; new tasks no longer write it. */
-  isRemoteReview?: boolean
   remoteTaskMetadata?: Record<string, unknown>
 }
 
