@@ -144,8 +144,7 @@ export function OverageCreditUpsell(t0) {
 }
 
 /**
- * Feed config for the homescreen rotating feed. Mirrors
- * createGuestPassesFeed in feedConfigs.tsx.
+ * Feed config for the homescreen rotating feed.
  *
  * Copy from "OC & Bulk Overages copy" doc (#4 — CLI Welcome screen).
  * Char budgets: title ≤19, subtitle ≤48.

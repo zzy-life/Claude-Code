@@ -74,10 +74,8 @@ export const getGroveSettings = memoize(
       return { success: true, data: response.data }
     } catch (err) {
       logError(err)
-      // Don't cache failures — transient network issues would lock the user
-      // out of privacy settings for the entire session (deadlock: dialog needs
-      // success to render the toggle, toggle calls updateGroveSettings which
-      // is the only other place the cache is cleared).
+      // Don't cache failures — allow subsequent reads to retry after a
+      // transient network issue instead of skipping the notice for the session.
       getGroveSettings.cache.clear?.()
       return { success: false }
     }
@@ -109,8 +107,7 @@ export async function updateGroveSettings(
         },
       )
     })
-    // Invalidate memoized settings so the post-toggle confirmation
-    // read in privacy-settings.tsx picks up the new value.
+    // Invalidate memoized settings so subsequent reads pick up the new value.
     getGroveSettings.cache.clear?.()
   } catch (err) {
     logError(err)
@@ -254,7 +251,6 @@ export const getGroveNoticeConfig = memoize(
 export function calculateShouldShowGrove(
   settingsResult: ApiResult<AccountSettings>,
   configResult: ApiResult<GroveConfig>,
-  showIfAlreadyViewed: boolean,
 ): boolean {
   // Hide dialog on API failure (after retry)
   if (!settingsResult.success || !configResult.success) {
@@ -267,9 +263,6 @@ export function calculateShouldShowGrove(
   const hasChosen = settings.grove_enabled !== null
   if (hasChosen) {
     return false
-  }
-  if (showIfAlreadyViewed) {
-    return true
   }
   if (!config.notice_is_grace_period) {
     return true
@@ -300,7 +293,6 @@ export async function checkGroveForNonInteractive(): Promise<void> {
   const shouldShowGrove = calculateShouldShowGrove(
     settingsResult,
     configResult,
-    false,
   )
 
   if (shouldShowGrove) {
