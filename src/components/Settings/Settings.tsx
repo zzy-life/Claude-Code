@@ -20,7 +20,7 @@ type Props = {
   defaultTab: 'Status' | 'Config' | 'Usage';
 };
 export function Settings(t0) {
-  const $ = _c(25);
+  const $ = _c(22);
   const {
     onClose,
     context,
@@ -93,28 +93,28 @@ export function Settings(t0) {
     t6 = $[12];
   }
   let t8;
-  if ($[15] !== t4 || $[16] !== t5) {
+  if ($[13] !== t4 || $[14] !== t5) {
     t8 = [t4, t5, t6];
-    $[15] = t4;
-    $[16] = t5;
-    $[18] = t8;
+    $[13] = t4;
+    $[14] = t5;
+    $[15] = t8;
   } else {
-    t8 = $[18];
+    t8 = $[15];
   }
   const tabs = t8;
   const t9 = defaultTab !== "Config";
   const t10 = tabsHidden || insideModal ? undefined : contentHeight;
   let t11;
-  if ($[19] !== selectedTab || $[20] !== t10 || $[21] !== t9 || $[22] !== tabs || $[23] !== tabsHidden) {
+  if ($[16] !== selectedTab || $[17] !== t10 || $[18] !== t9 || $[19] !== tabs || $[20] !== tabsHidden) {
     t11 = <Pane color="permission"><Tabs color="permission" selectedTab={selectedTab} onTabChange={setSelectedTab} hidden={tabsHidden} initialHeaderFocused={t9} contentHeight={t10}>{tabs}</Tabs></Pane>;
-    $[19] = selectedTab;
-    $[20] = t10;
-    $[21] = t9;
-    $[22] = tabs;
-    $[23] = tabsHidden;
-    $[24] = t11;
+    $[16] = selectedTab;
+    $[17] = t10;
+    $[18] = t9;
+    $[19] = tabs;
+    $[20] = tabsHidden;
+    $[21] = t11;
   } else {
-    t11 = $[24];
+    t11 = $[21];
   }
   return t11;
 }

@@ -15,7 +15,6 @@ import {
 import { logForDebugging } from '../debug.js'
 import { getPlatform } from '../platform.js'
 import { getSessionEnvironmentScript } from '../sessionEnvironment.js'
-import { getSessionEnvVars } from '../sessionEnvVars.js'
 import {
   ensureSocketInitialized,
   getClaudeTmuxEnv,
@@ -232,10 +231,6 @@ export async function createBashShellProvider(
         // heredocs work in sandboxed zsh commands.
         // Safe to set unconditionally — non-zsh shells ignore TMPPREFIX.
         env.TMPPREFIX = posixJoin(posixTmpDir, 'zsh')
-      }
-      // Apply session env vars set via /env (child processes only, not the REPL)
-      for (const [key, value] of getSessionEnvVars()) {
-        env[key] = value
       }
       return env
     },

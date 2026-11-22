@@ -29,7 +29,6 @@ import { resetGetMemoryFilesCache } from '../../utils/claudemd.js'
 import { clearRepositoryCaches } from '../../utils/detectRepository.js'
 import { clearResolveGitDirCache } from '../../utils/git/gitFilesystem.js'
 import { clearStoredImagePaths } from '../../utils/imageStore.js'
-import { clearSessionEnvVars } from '../../utils/sessionEnvVars.js'
 import { setTeamToolsModeEnabled } from '../../utils/teamToolsMode.js'
 
 /**
@@ -111,8 +110,7 @@ export function clearSessionCaches(
   resetAllLSPDiagnosticState()
   // Clear tracked magic docs
   clearTrackedMagicDocs()
-  // Clear session environment variables and session-only Team tool mode.
-  clearSessionEnvVars()
+  // Clear session-only Team tool mode.
   setTeamToolsModeEnabled(false)
   // Clear WebFetch URL cache (up to 50MB of cached page content)
   void import('../../tools/WebFetchTool/utils.js').then(

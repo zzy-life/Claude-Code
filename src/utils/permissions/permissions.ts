@@ -64,7 +64,6 @@ const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER')
   : null
 
 import {
-  addToTurnClassifierDuration,
   getTotalCacheCreationInputTokens,
   getTotalCacheReadInputTokens,
   getTotalInputTokens,
@@ -810,10 +809,6 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
               )
             : undefined,
       })
-
-      if (classifierResult.durationMs !== undefined) {
-        addToTurnClassifierDuration(classifierResult.durationMs)
-      }
 
       if (classifierResult.shouldBlock) {
         // Transcript exceeded the classifier's context window — deterministic

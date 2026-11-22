@@ -52,12 +52,6 @@ type State = {
   totalAPIDuration: number
   totalAPIDurationWithoutRetries: number
   totalToolDuration: number
-  turnHookDurationMs: number
-  turnToolDurationMs: number
-  turnClassifierDurationMs: number
-  turnToolCount: number
-  turnHookCount: number
-  turnClassifierCount: number
   startTime: number
   lastInteractionTime: number
   totalLinesAdded: number
@@ -275,12 +269,6 @@ function getInitialState(): State {
     totalAPIDuration: 0,
     totalAPIDurationWithoutRetries: 0,
     totalToolDuration: 0,
-    turnHookDurationMs: 0,
-    turnToolDurationMs: 0,
-    turnClassifierDurationMs: 0,
-    turnToolCount: 0,
-    turnHookCount: 0,
-    turnClassifierCount: 0,
     startTime: Date.now(),
     lastInteractionTime: Date.now(),
     totalLinesAdded: 0,
@@ -577,57 +565,6 @@ export function getTotalToolDuration(): number {
 
 export function addToToolDuration(duration: number): void {
   STATE.totalToolDuration += duration
-  STATE.turnToolDurationMs += duration
-  STATE.turnToolCount++
-}
-
-export function getTurnHookDurationMs(): number {
-  return STATE.turnHookDurationMs
-}
-
-export function addToTurnHookDuration(duration: number): void {
-  STATE.turnHookDurationMs += duration
-  STATE.turnHookCount++
-}
-
-export function resetTurnHookDuration(): void {
-  STATE.turnHookDurationMs = 0
-  STATE.turnHookCount = 0
-}
-
-export function getTurnHookCount(): number {
-  return STATE.turnHookCount
-}
-
-export function getTurnToolDurationMs(): number {
-  return STATE.turnToolDurationMs
-}
-
-export function resetTurnToolDuration(): void {
-  STATE.turnToolDurationMs = 0
-  STATE.turnToolCount = 0
-}
-
-export function getTurnToolCount(): number {
-  return STATE.turnToolCount
-}
-
-export function getTurnClassifierDurationMs(): number {
-  return STATE.turnClassifierDurationMs
-}
-
-export function addToTurnClassifierDuration(duration: number): void {
-  STATE.turnClassifierDurationMs += duration
-  STATE.turnClassifierCount++
-}
-
-export function resetTurnClassifierDuration(): void {
-  STATE.turnClassifierDurationMs = 0
-  STATE.turnClassifierCount = 0
-}
-
-export function getTurnClassifierCount(): number {
-  return STATE.turnClassifierCount
 }
 
 export function getStatsStore(): {

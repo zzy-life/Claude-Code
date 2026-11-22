@@ -12,10 +12,6 @@ import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 
 import { logEvent } from './analytics/index.js'
 import { getAPIMetadata } from './api/claude.js'
 import { getAnthropicClient } from './api/client.js'
-import {
-  processRateLimitHeaders,
-  shouldProcessRateLimits,
-} from './rateLimitMocking.js'
 
 // Re-export message functions from centralized location
 export {
@@ -223,8 +219,8 @@ export async function checkQuotaStatus(): Promise<void> {
     return
   }
 
-  // Check if we should process rate limits (real subscriber or mock testing)
-  if (!shouldProcessRateLimits(isClaudeAISubscriber())) {
+  // Only fetch Claude.ai quota status for subscribers.
+  if (!isClaudeAISubscriber()) {
     return
   }
 
@@ -457,7 +453,7 @@ export function extractQuotaStatusFromHeaders(
   // Check if we need to process rate limits
   const isSubscriber = isClaudeAISubscriber()
 
-  if (!shouldProcessRateLimits(isSubscriber)) {
+  if (!isSubscriber) {
     // If we have any rate limit state, clear it
     rawUtilization = {}
     if (currentLimits.status !== 'allowed' || currentLimits.resetsAt) {
@@ -471,13 +467,11 @@ export function extractQuotaStatusFromHeaders(
     return
   }
 
-  // Process headers (applies mocks from /mock-limits command if active)
-  const headersToUse = processRateLimitHeaders(headers)
-  rawUtilization = extractRawUtilization(headersToUse)
-  const newLimits = computeNewLimitsFromHeaders(headersToUse)
+  rawUtilization = extractRawUtilization(headers)
+  const newLimits = computeNewLimitsFromHeaders(headers)
 
   // Cache extra usage status (persists across sessions)
-  cacheExtraUsageDisabledReason(headersToUse)
+  cacheExtraUsageDisabledReason(headers)
 
   if (!isEqual(currentLimits, newLimits)) {
     emitStatusChange(newLimits)
@@ -485,23 +479,18 @@ export function extractQuotaStatusFromHeaders(
 }
 
 export function extractQuotaStatusFromError(error: APIError): void {
-  if (
-    !shouldProcessRateLimits(isClaudeAISubscriber()) ||
-    error.status !== 429
-  ) {
+  if (!isClaudeAISubscriber() || error.status !== 429) {
     return
   }
 
   try {
     let newLimits = { ...currentLimits }
     if (error.headers) {
-      // Process headers (applies mocks from /mock-limits command if active)
-      const headersToUse = processRateLimitHeaders(error.headers)
-      rawUtilization = extractRawUtilization(headersToUse)
-      newLimits = computeNewLimitsFromHeaders(headersToUse)
+      rawUtilization = extractRawUtilization(error.headers)
+      newLimits = computeNewLimitsFromHeaders(error.headers)
 
       // Cache extra usage status (persists across sessions)
-      cacheExtraUsageDisabledReason(headersToUse)
+      cacheExtraUsageDisabledReason(error.headers)
     }
     // For errors, always set status to rejected even if headers are not present.
     newLimits.status = 'rejected'

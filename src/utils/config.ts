@@ -833,17 +833,6 @@ let globalConfigCache: { config: GlobalConfig | null; mtime: number } = {
 let lastReadFileStats: { mtime: number; size: number } | null = null
 let configCacheHits = 0
 let configCacheMisses = 0
-// Session-total count of actual disk writes to the global config file.
-// Exposed for ant-only dev diagnostics (see inc-4552) so anomalous write
-// rates surface in the UI before they corrupt ~/.claude.json.
-let globalConfigWriteCount = 0
-
-export function getGlobalConfigWriteCount(): number {
-  return globalConfigWriteCount
-}
-
-export const CONFIG_WRITE_DISPLAY_THRESHOLD = 20
-
 function reportConfigCacheStats(): void {
   const total = configCacheHits + configCacheMisses
   if (total > 0) {
@@ -1097,9 +1086,6 @@ function saveConfig<A extends object>(
       mode: 0o600,
     },
   )
-  if (file === getGlobalClaudeFile()) {
-    globalConfigWriteCount++
-  }
 }
 
 /**
@@ -1275,9 +1261,6 @@ function saveConfigWithLock<A extends object>(
         mode: 0o600,
       },
     )
-    if (file === getGlobalClaudeFile()) {
-      globalConfigWriteCount++
-    }
     return true
   } finally {
     if (release) {
