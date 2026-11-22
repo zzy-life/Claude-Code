@@ -246,6 +246,10 @@ function inputPreview(input: Record<string, unknown>): string {
 }
 
 export function createSessionSpawner(deps: SessionSpawnerDeps): SessionSpawner {
+  // Programmatic callers must not forward a local-only mode to bridge children.
+  if (deps.permissionMode === 'auto') {
+    throw new Error('Cannot spawn bridge sessions with auto mode: auto mode is not supported in bridge sessions.')
+  }
   return {
     spawn(opts: SessionSpawnOpts, dir: string): SessionHandle {
       // Debug file resolution:

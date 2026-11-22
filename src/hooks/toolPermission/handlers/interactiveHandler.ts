@@ -22,7 +22,6 @@ import {
   clearClassifierChecking,
   setClassifierApproval,
   setClassifierChecking,
-  setYoloClassifierApproval,
 } from '../../../utils/classifierApprovals.js'
 import { errorMessage } from '../../../utils/errors.js'
 import type { PermissionDecision } from '../../../utils/permissions/PermissionResult.js'
@@ -519,9 +518,7 @@ function handleInteractivePermission(
             feature('TRANSCRIPT_CLASSIFIER') &&
             decisionReason.type === 'classifier'
           ) {
-            if (decisionReason.classifier === 'auto-mode') {
-              setYoloClassifierApproval(ctx.toolUseID, decisionReason.reason)
-            } else if (matchedRule) {
+            if (matchedRule) {
               setClassifierApproval(ctx.toolUseID, matchedRule)
             }
           }

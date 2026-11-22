@@ -11,6 +11,7 @@
 
 import { randomUUID } from 'crypto'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { setIsRemoteMode } from '../bootstrap/state.js'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import {
   createSyntheticAssistantMessage,
@@ -66,6 +67,9 @@ export function useSSHSession({
   useEffect(() => {
     if (!session) return
 
+    // The SSH child/proxy already exist; execution belongs to this remote session.
+    // Preserve the boundary through reconnects and cleanup until process exit.
+    setIsRemoteMode(true)
     hasReceivedInitRef.current = false
     logForDebugging('[useSSHSession] wiring SSH session manager')
 

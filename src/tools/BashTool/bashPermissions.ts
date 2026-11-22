@@ -1463,8 +1463,8 @@ function buildPendingClassifierCheck(
   if (!isClassifierPermissionsEnabled()) {
     return undefined
   }
-  // Skip in auto mode - auto mode classifier handles all permission decisions
-  if (feature('TRANSCRIPT_CLASSIFIER') && toolPermissionContext.mode === 'auto')
+  // Auto approval owns ordinary pending requests; do not race another approver.
+  if (toolPermissionContext.mode === 'auto')
     return undefined
   if (toolPermissionContext.mode === 'bypassPermissions') return undefined
 
@@ -1502,7 +1502,7 @@ export function startSpeculativeClassifierCheck(
 ): boolean {
   // Same guards as buildPendingClassifierCheck
   if (!isClassifierPermissionsEnabled()) return false
-  if (feature('TRANSCRIPT_CLASSIFIER') && toolPermissionContext.mode === 'auto')
+  if (toolPermissionContext.mode === 'auto')
     return false
   if (toolPermissionContext.mode === 'bypassPermissions') return false
   const allowDescriptions = getBashPromptAllowDescriptions(
@@ -1855,14 +1855,8 @@ export async function bashToolHasPermission(
 
   // Check Bash prompt deny and ask rules in parallel (both use Haiku).
   // Deny takes precedence over ask, and both take precedence over allow rules.
-  // Skip when in auto mode - auto mode classifier handles all permission decisions
-  if (
-    isClassifierPermissionsEnabled() &&
-    !(
-      feature('TRANSCRIPT_CLASSIFIER') &&
-      appState.toolPermissionContext.mode === 'auto'
-    )
-  ) {
+  // Auto approval cannot override configured deny or explicit ask decisions.
+  if (isClassifierPermissionsEnabled()) {
     const denyDescriptions = getBashPromptDenyDescriptions(
       appState.toolPermissionContext,
     )
@@ -1953,8 +1947,10 @@ export async function bashToolHasPermission(
           behavior: 'ask',
           message: createPermissionRequestMessage(BashTool.name),
           decisionReason: {
-            type: 'other',
+            type: 'safetyCheck',
             reason: `Required by Bash prompt rule: "${askResult.matchedDescription}"`,
+            // An explicit ask remains human-only even when auto approval is enabled.
+            classifierApprovable: false,
           },
           suggestions,
           ...(feature('BASH_CLASSIFIER')

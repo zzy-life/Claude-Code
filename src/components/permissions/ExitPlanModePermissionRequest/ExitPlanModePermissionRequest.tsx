@@ -1,11 +1,10 @@
-import { feature } from 'bun:bundle';
 import type { UUID } from 'crypto';
 import figures from 'figures';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications } from 'src/context/notifications.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
 import { useAppState, useSetAppState } from 'src/state/AppState.js';
-import { getSdkBetas, getSessionId, isSessionPersistenceDisabled, setHasExitedPlanMode, setNeedsAutoModeExitAttachment, setNeedsPlanModeExitAttachment } from '../../../bootstrap/state.js';
+import { getSdkBetas, getSessionId, isSessionPersistenceDisabled, setHasExitedPlanMode, setNeedsPlanModeExitAttachment } from '../../../bootstrap/state.js';
 import { generateSessionName } from '../../../commands/rename/generateSessionName.js';
 import type { KeyboardEvent } from '../../../ink/events/keyboard-event.js';
 import { Box, Text } from '../../../ink.js';
@@ -25,22 +24,19 @@ import { getMainLoopModel, getRuntimeMainLoopModel } from '../../../utils/model/
 import { createPromptRuleContent, isClassifierPermissionsEnabled, PROMPT_PREFIX } from '../../../utils/permissions/bashClassifier.js';
 import { type PermissionMode, toExternalPermissionMode } from '../../../utils/permissions/PermissionMode.js';
 import type { PermissionUpdate } from '../../../utils/permissions/PermissionUpdateSchema.js';
-import { isAutoModeGateEnabled, restoreDangerousPermissions, stripDangerousPermissionsForAutoMode } from '../../../utils/permissions/permissionSetup.js';
+import { isAutoModeGateEnabled, transitionPermissionMode } from '../../../utils/permissions/permissionSetup.js';
 import { getPewterLedgerVariant, isPlanModeInterviewPhaseEnabled } from '../../../utils/planModeV2.js';
 import { getPlan, getPlanFilePath } from '../../../utils/plans.js';
 import { editFileInEditor, editPromptInEditor } from '../../../utils/promptEditor.js';
 import { getCurrentSessionTitle, getTranscriptPath, saveAgentName, saveCustomTitle } from '../../../utils/sessionStorage.js';
-import { getSettings_DEPRECATED } from '../../../utils/settings/settings.js';
+import { getSettings_DEPRECATED, hasLocalAutoApprovalConsent } from '../../../utils/settings/settings.js';
 import { type OptionWithDescription, Select } from '../../CustomSelect/index.js';
 import { Markdown } from '../../Markdown.js';
 import { PermissionDialog } from '../PermissionDialog.js';
 import type { PermissionRequestProps } from '../PermissionRequest.js';
 import { PermissionRuleExplanation } from '../PermissionRuleExplanation.js';
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER') ? require('../../../utils/permissions/autoModeState.js') as typeof import('../../../utils/permissions/autoModeState.js') : null;
 import type { Base64ImageSource, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
-/* eslint-enable @typescript-eslint/no-require-imports */
 import type { PastedContent } from '../../../utils/config.js';
 import type { ImageDimensions } from '../../../utils/imageResizer.js';
 import { maybeResizeAndDownsampleImageBlock } from '../../../utils/imageResizer.js';
@@ -271,31 +267,11 @@ export function ExitPlanModePermissionRequest({
       plan: currentPlan
     };
 
-    // If auto was active during plan (from auto mode or opt-in) and NOT going
-    // to auto, deactivate auto + restore permissions + fire exit attachment.
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      const goingToAuto = (value === 'yes-resume-auto-mode' || value === 'yes-auto-clear-context') && isAutoModeGateEnabled();
-      // isAutoModeActive() is the authoritative signal — prePlanMode/
-      // strippedDangerousRules are stale after transitionPlanAutoMode
-      // deactivates mid-plan (would cause duplicate exit attachment).
-      const autoWasUsedDuringPlan = autoModeStateModule?.isAutoModeActive() ?? false;
-      if (value !== 'no' && !goingToAuto && autoWasUsedDuringPlan) {
-        autoModeStateModule?.setAutoModeActive(false);
-        setNeedsAutoModeExitAttachment(true);
-        setAppState(prev => ({
-          ...prev,
-          toolPermissionContext: {
-            ...restoreDangerousPermissions(prev.toolPermissionContext),
-            prePlanMode: undefined
-          }
-        }));
-      }
-    }
 
     // Clear-context options: set pending plan implementation and reject the dialog
     // The REPL will handle context clear and trigger a fresh query
     // Keep-context options skip this block and go through the normal flow below
-    const isResumeAutoOption = feature('TRANSCRIPT_CLASSIFIER') ? value === 'yes-resume-auto-mode' : false;
+    const isResumeAutoOption = value === 'yes-resume-auto-mode';
     const isKeepContextOption = value === 'yes-accept-edits-keep-context' || value === 'yes-default-keep-context' || isResumeAutoOption;
     if (value !== 'no') {
       autoNameSessionFromPlan(currentPlan, setAppState, !isKeepContextOption);
@@ -307,11 +283,9 @@ export function ExitPlanModePermissionRequest({
         mode = 'bypassPermissions';
       } else if (value === 'yes-accept-edits') {
         mode = 'acceptEdits';
-      } else if (feature('TRANSCRIPT_CLASSIFIER') && value === 'yes-auto-clear-context' && isAutoModeGateEnabled()) {
-        // REPL's processInitialMessage handles stripDangerousPermissions + mode,
-        // but does NOT set autoModeActive. Gate-off falls through to 'default'.
+      } else if (value === 'yes-auto-clear-context' && isAutoModeAvailable && isAutoModeGateEnabled() && hasLocalAutoApprovalConsent()) {
+        // REPL revalidates after clearing context, immediately before activation.
         mode = 'auto';
-        autoModeStateModule?.setAutoModeActive(true);
       }
 
       // Log plan exit event
@@ -357,10 +331,9 @@ export function ExitPlanModePermissionRequest({
       return;
     }
 
-    // Handle auto keep-context option — needs special handling because
-    // buildPermissionUpdates maps auto to 'default' via toExternalPermissionMode.
-    // We set the mode directly via setAppState and sync the bootstrap state.
-    if (feature('TRANSCRIPT_CLASSIFIER') && value === 'yes-resume-auto-mode' && isAutoModeGateEnabled()) {
+    // Auto is internal: apply through the shared transition, not external mode mapping.
+    // Revalidate inside the state updater in case policy changed since rendering.
+    if (value === 'yes-resume-auto-mode') {
       logEvent('tengu_plan_exit', {
         planLengthChars: currentPlan.length,
         outcome: value as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -371,31 +344,31 @@ export function ExitPlanModePermissionRequest({
       });
       setHasExitedPlanMode(true);
       setNeedsPlanModeExitAttachment(true);
-      autoModeStateModule?.setAutoModeActive(true);
-      setAppState(prev => ({
-        ...prev,
-        toolPermissionContext: stripDangerousPermissionsForAutoMode({
-          ...prev.toolPermissionContext,
-          mode: 'auto',
-          prePlanMode: undefined
-        })
-      }));
+      setAppState(prev => {
+        const currentContext = prev.toolPermissionContext;
+        let targetMode: PermissionMode = 'default';
+        if (currentContext.isAutoModeAvailable && isAutoModeGateEnabled() && hasLocalAutoApprovalConsent()) {
+          targetMode = 'auto';
+        }
+        const transitionedContext = transitionPermissionMode(currentContext.mode, targetMode, currentContext);
+        return {
+          ...prev,
+          toolPermissionContext: {
+            ...transitionedContext,
+            mode: targetMode,
+            prePlanMode: undefined
+          }
+        };
+      });
       onDone();
       toolUseConfirm.onAllow(updatedInput, [], acceptFeedback);
       return;
     }
 
-    // Handle keep-context options (goes through normal onAllow flow)
-    // yes-resume-auto-mode falls through here when the auto mode gate is
-    // disabled (e.g. circuit breaker fired after the dialog rendered).
-    // Without this fallback the function would return without resolving the
-    // dialog, leaving the query loop blocked and safety state corrupted.
+    // Handle other keep-context options through the normal onAllow flow.
     const keepContextModes: Record<string, PermissionMode> = {
       'yes-accept-edits-keep-context': toolPermissionContext.isBypassPermissionsModeAvailable ? 'bypassPermissions' : 'acceptEdits',
-      'yes-default-keep-context': 'default',
-      ...(feature('TRANSCRIPT_CLASSIFIER') ? {
-        'yes-resume-auto-mode': 'default' as const
-      } : {})
+      'yes-default-keep-context': 'default'
     };
     const keepContextMode = keepContextModes[value];
     if (keepContextMode) {
@@ -527,20 +500,6 @@ export function ExitPlanModePermissionRequest({
           interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
           planStructureVariant
         });
-        if (feature('TRANSCRIPT_CLASSIFIER')) {
-          const autoWasUsedDuringPlan = autoModeStateModule?.isAutoModeActive() ?? false;
-          if (autoWasUsedDuringPlan) {
-            autoModeStateModule?.setAutoModeActive(false);
-            setNeedsAutoModeExitAttachment(true);
-            setAppState(prev => ({
-              ...prev,
-              toolPermissionContext: {
-                ...restoreDangerousPermissions(prev.toolPermissionContext),
-                prePlanMode: undefined
-              }
-            }));
-          }
-        }
         setHasExitedPlanMode(true);
         setNeedsPlanModeExitAttachment(true);
         onDone();
@@ -650,7 +609,7 @@ export function buildPlanApprovalOptions({
   const options: OptionWithDescription<ResponseValue>[] = [];
   const usedLabel = usedPercent !== null ? ` (${usedPercent}% used)` : '';
   if (showClearContext) {
-    if (feature('TRANSCRIPT_CLASSIFIER') && isAutoModeAvailable) {
+    if (isAutoModeAvailable && isAutoModeGateEnabled() && hasLocalAutoApprovalConsent()) {
       options.push({
         label: `Yes, clear context${usedLabel} and use auto mode`,
         value: 'yes-auto-clear-context'
@@ -669,7 +628,7 @@ export function buildPlanApprovalOptions({
   }
 
   // Slot 2: keep-context with elevated mode (same priority: auto > bypass > edits).
-  if (feature('TRANSCRIPT_CLASSIFIER') && isAutoModeAvailable) {
+  if (isAutoModeAvailable && isAutoModeGateEnabled() && hasLocalAutoApprovalConsent()) {
     options.push({
       label: 'Yes, and use auto mode',
       value: 'yes-resume-auto-mode'

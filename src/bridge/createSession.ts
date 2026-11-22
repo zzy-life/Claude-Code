@@ -30,6 +30,7 @@ type SessionEvent = {
  * history).
  *
  * Returns the session ID on success, or null if creation fails (non-fatal).
+ * Throws if the caller explicitly requests the unsupported auto mode.
  */
 export async function createBridgeSession({
   environmentId,
@@ -52,6 +53,10 @@ export async function createBridgeSession({
   getAccessToken?: () => string | undefined
   permissionMode?: string
 }): Promise<string | null> {
+  // Reject unsupported explicit modes before authentication or network requests.
+  if (permissionMode === 'auto') {
+    throw new Error('Cannot create a bridge session with auto mode: auto mode is not supported in bridge sessions.')
+  }
   const { getClaudeAIOAuthTokens } = await import('../utils/auth.js')
   const { getOrganizationUUID } = await import('../services/oauth/client.js')
   const { getOauthConfig } = await import('../constants/oauth.js')

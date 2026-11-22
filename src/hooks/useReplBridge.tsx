@@ -22,7 +22,7 @@ import { errorMessage } from '../utils/errors.js';
 import { enqueue } from '../utils/messageQueueManager.js';
 import { buildSystemInitMessage } from '../utils/messages/systemInit.js';
 import { createBridgeStatusMessage, createSystemMessage } from '../utils/messages.js';
-import { getAutoModeUnavailableNotification, getAutoModeUnavailableReason, isAutoModeGateEnabled, isBypassPermissionsModeDisabled, transitionPermissionMode } from '../utils/permissions/permissionSetup.js';
+import { isBypassPermissionsModeDisabled, setLocalAutoApprovalBridgeStateReader, transitionPermissionMode } from '../utils/permissions/permissionSetup.js';
 import { getLeaderToolUseConfirmQueue } from '../utils/swarm/leaderPermissionBridge.js';
 
 /** How long after a failure before replBridgeEnabled is auto-cleared (stops retries). */
@@ -89,7 +89,24 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
   // biome-ignore lint/correctness/useHookAtTopLevel: feature() is a compile-time constant
   useAppState(s_2 => s_2.replBridgeInitialName) : undefined;
 
-  // Initialize/teardown bridge when enabled state changes.
+  const autoModeActive = feature('BRIDGE_MODE') ?
+  // biome-ignore lint/correctness/useHookAtTopLevel: feature() is a compile-time constant
+  useAppState(s => s.toolPermissionContext.mode === 'auto') : false;
+
+  // Register before the initialization effect. The gate reads current state on
+  // every call, including between a bridge toggle and the next React render.
+  useEffect(() => {
+    if (feature('BRIDGE_MODE')) {
+      setLocalAutoApprovalBridgeStateReader(() => {
+        const state = store.getState();
+        return state.replBridgeEnabled || state.replBridgeConnected ||
+          state.replBridgeSessionActive || state.replBridgeReconnecting;
+      });
+      return () => setLocalAutoApprovalBridgeStateReader(undefined);
+    }
+  }, [store]);
+
+  // Initialize/teardown bridge when enabled state or auto compatibility changes.
   // Passes current messages as initialMessages so the remote session
   // starts with the existing conversation context (e.g. from /bridge).
   useEffect(() => {
@@ -98,6 +115,18 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
     // dynamic imports below.
     if (feature('BRIDGE_MODE')) {
       if (!replBridgeEnabled) return;
+      // Keep local auto unchanged; refuse bridge instead of silently changing permissions.
+      // Watching autoModeActive also cancels in-flight init and tears down existing bridges.
+      if (autoModeActive) {
+        const detail = 'auto mode is not supported in bridge sessions. Switch to another permission mode before enabling Remote Control.';
+        setAppState(prev => ({
+          ...prev,
+          replBridgeEnabled: false,
+          replBridgeError: detail
+        }));
+        setMessages(prev => [...prev, createSystemMessage(`Remote Control unavailable: ${detail}`, 'warning')]);
+        return;
+      }
       const outboundOnly = replBridgeOutboundOnly;
       function notifyBridgeFailed(detail?: string): void {
         if (outboundOnly) return;
@@ -384,6 +413,11 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
               handler(inner.response);
             }
           }
+          // Imports/teardown above await; recheck the live mode before connecting.
+          if (cancelled) return;
+          if (store.getState().toolPermissionContext.mode === 'auto') {
+            throw new Error('auto mode is not supported in bridge sessions. Switch to another permission mode before enabling Remote Control.');
+          }
           const handle_0 = await initReplBridge({
             outboundOnly,
             tags: outboundOnly ? ['ccr-mirror'] : undefined,
@@ -414,16 +448,8 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
               });
             },
             onSetPermissionMode(mode) {
-              // Policy guards MUST fire before transitionPermissionMode —
-              // its internal auto-gate check is a defensive throw (with a
-              // setAutoModeActive(true) side-effect BEFORE the throw) rather
-              // than a graceful reject. Letting that throw escape would:
-              // (1) leave STATE.autoModeActive=true while the mode is
-              //     unchanged (3-way invariant violation per src/CLAUDE.md)
-              // (2) fail to send a control_response → server kills WS
-              // These mirror print.ts handleSetPermissionMode; the bridge
-              // can't import the checks directly (bootstrap-isolation), so
-              // it relies on this verdict to emit the error response.
+              // Reject unsupported modes before transition side effects; bridgeMessaging
+              // converts this verdict into an error control_response.
               if (mode === 'bypassPermissions') {
                 if (isBypassPermissionsModeDisabled()) {
                   return {
@@ -438,11 +464,10 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
                   };
                 }
               }
-              if (feature('TRANSCRIPT_CLASSIFIER') && mode === 'auto' && !isAutoModeGateEnabled()) {
-                const reason = getAutoModeUnavailableReason();
+              if (mode === 'auto') {
                 return {
                   ok: false,
-                  error: reason ? `Cannot set permission mode to auto: ${getAutoModeUnavailableNotification(reason)}` : 'Cannot set permission mode to auto'
+                  error: 'Cannot set permission mode to auto: auto mode is not supported in bridge sessions.'
                 };
               }
               // Guards passed — apply via the centralized transition so
@@ -479,8 +504,8 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
             initialName: replBridgeInitialName,
             perpetual
           });
-          if (cancelled) {
-            // Effect was cancelled while initReplBridge was in flight.
+          if (cancelled || store.getState().toolPermissionContext.mode === 'auto') {
+            // The effect was cancelled or local auto was entered during init.
             // Tear down the handle to avoid leaking resources (poll loop,
             // WebSocket, registered environment, cleanup callback).
             logForDebugging(`[bridge:repl] Hook: init cancelled during flight, tearing down${handle_0 ? ` env=${handle_0.environmentId}` : ''}`);
@@ -677,7 +702,7 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
         lastWrittenIndexRef.current = 0;
       };
     }
-  }, [replBridgeEnabled, replBridgeOutboundOnly, setAppState, setMessages, addNotification]);
+  }, [replBridgeEnabled, replBridgeOutboundOnly, autoModeActive, setAppState, setMessages, addNotification]);
 
   // Write new messages as they appear.
   // Also re-runs when replBridgeConnected changes (bridge finishes init),

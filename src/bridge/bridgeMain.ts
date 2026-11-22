@@ -2029,8 +2029,14 @@ export async function bridgeMain(args: string[]): Promise<void> {
   // Validate permission mode early so the user gets an error before
   // the bridge starts polling for work.
   if (permissionMode !== undefined) {
-    const { PERMISSION_MODES } = await import('../types/permissions.js')
-    const valid: readonly string[] = PERMISSION_MODES
+    if (permissionMode === 'auto') {
+      // biome-ignore lint/suspicious/noConsole: intentional error output
+      console.error('Error: auto mode is not supported in bridge sessions.')
+      // eslint-disable-next-line custom-rules/no-process-exit
+      process.exit(1)
+    }
+    const { EXTERNAL_PERMISSION_MODES } = await import('../types/permissions.js')
+    const valid: readonly string[] = EXTERNAL_PERMISSION_MODES
     if (!valid.includes(permissionMode)) {
       // biome-ignore lint/suspicious/noConsole: intentional error output
       console.error(

@@ -170,9 +170,6 @@ import {
   getFastModeState,
 } from 'src/utils/fastMode.js'
 import {
-  isAutoModeGateEnabled,
-  getAutoModeUnavailableNotification,
-  getAutoModeUnavailableReason,
   isBypassPermissionsModeDisabled,
   transitionPermissionMode,
 } from 'src/utils/permissions/permissionSetup.js'
@@ -272,7 +269,6 @@ import {
   resolveAppliedEffort,
 } from 'src/utils/effort.js'
 import { modelSupportsAdaptiveThinking } from 'src/utils/thinking.js'
-import { modelSupportsAutoMode } from 'src/utils/betas.js'
 import { ensureModelStringsInitialized } from 'src/utils/model/modelStrings.js'
 import {
   getSessionId,
@@ -1177,7 +1173,6 @@ function runHeadlessStreaming(
         : parseUserSpecifiedModel(modelId)
     const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
     const hasFastMode = isFastModeSupportedByModel(option.value)
-    const hasAutoMode = modelSupportsAutoMode(resolvedModel)
     return {
       value: modelId,
       displayName: option.label,
@@ -1187,7 +1182,6 @@ function runHeadlessStreaming(
       supportedEffortLevels: [...EFFORT_LEVELS],
       ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
       ...(hasFastMode && { supportsFastMode: true }),
-      ...(hasAutoMode && { supportsAutoMode: true }),
     }
   })
   let activeUserSpecifiedModel = options.userSpecifiedModel
@@ -4545,21 +4539,14 @@ function handleSetPermissionMode(
     }
   }
 
-  // Check if trying to switch to auto mode without the classifier gate
-  if (
-    feature('TRANSCRIPT_CLASSIFIER') &&
-    request.mode === 'auto' &&
-    !isAutoModeGateEnabled()
-  ) {
-    const reason = getAutoModeUnavailableReason()
+  // SDK/print sessions cannot provide the local interactive auto approval flow.
+  if (request.mode === 'auto') {
     output.enqueue({
       type: 'control_response',
       response: {
         subtype: 'error',
         request_id: requestId,
-        error: reason
-          ? `Cannot set permission mode to auto: ${getAutoModeUnavailableNotification(reason)}`
-          : 'Cannot set permission mode to auto',
+        error: 'Cannot set permission mode to auto: auto mode is only supported in local interactive sessions and their ordinary local subagents, not SDK or print/headless sessions.',
       },
     })
     return toolPermissionContext

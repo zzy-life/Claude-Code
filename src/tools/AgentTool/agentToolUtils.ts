@@ -1,4 +1,3 @@
-import { feature } from 'bun:bundle'
 import { z } from 'zod/v4'
 import { clearInvokedSkillsForAgent } from '../../bootstrap/state.js'
 import {
@@ -16,7 +15,6 @@ import { clearDumpState } from '../../services/api/dumpPrompts.js'
 import type { AppState } from '../../state/AppState.js'
 import type {
   Tool,
-  ToolPermissionContext,
   Tools,
   ToolUseContext,
 } from '../../Tool.js'
@@ -39,7 +37,6 @@ import { asAgentId } from '../../types/ids.js'
 import type { Message as MessageType } from '../../types/message.js'
 import { isAgentSwarmsEnabled } from '../../utils/agentSwarmsEnabled.js'
 import { logForDebugging } from '../../utils/debug.js'
-import { isInProtectedNamespace } from '../../utils/envUtils.js'
 import { AbortError, errorMessage } from '../../utils/errors.js'
 import type { CacheSafeParams } from '../../utils/forkedAgent.js'
 import { lazySchema } from '../../utils/lazySchema.js'
@@ -49,15 +46,11 @@ import {
 } from '../../utils/messages.js'
 import type { PermissionMode } from '../../utils/permissions/PermissionMode.js'
 import { permissionRuleValueFromString } from '../../utils/permissions/permissionRuleParser.js'
-import {
-  buildTranscriptForClassifier,
-  classifyYoloAction,
-} from '../../utils/permissions/yoloClassifier.js'
 import { emitTaskProgress as emitTaskProgressEvent } from '../../utils/task/sdkProgress.js'
 import { isInProcessTeammate } from '../../utils/teammateContext.js'
 import { getTokenCountFromUsage } from '../../utils/tokens.js'
 import { EXIT_PLAN_MODE_V2_TOOL_NAME } from '../ExitPlanModeTool/constants.js'
-import { AGENT_TOOL_NAME, LEGACY_AGENT_TOOL_NAME } from './constants.js'
+import { AGENT_TOOL_NAME } from './constants.js'
 import type { AgentDefinition } from './loadAgentsDir.js'
 export type ResolvedAgentTools = {
   hasWildcard: boolean
@@ -386,100 +379,6 @@ export function emitTaskProgress(
   })
 }
 
-export async function classifyHandoffIfNeeded({
-  agentMessages,
-  tools,
-  toolPermissionContext,
-  abortSignal,
-  subagentType,
-  totalToolUseCount,
-}: {
-  agentMessages: MessageType[]
-  tools: Tools
-  toolPermissionContext: AppState['toolPermissionContext']
-  abortSignal: AbortSignal
-  subagentType: string
-  totalToolUseCount: number
-}): Promise<string | null> {
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    if (toolPermissionContext.mode !== 'auto') return null
-
-    const agentTranscript = buildTranscriptForClassifier(agentMessages, tools)
-    if (!agentTranscript) return null
-
-    const classifierResult = await classifyYoloAction(
-      agentMessages,
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: "Sub-agent has finished and is handing back control to the main agent. Review the sub-agent's work based on the block rules and let the main agent know if any file is dangerous (the main agent will see the reason).",
-          },
-        ],
-      },
-      tools,
-      toolPermissionContext as ToolPermissionContext,
-      abortSignal,
-    )
-
-    const handoffDecision = classifierResult.unavailable
-      ? 'unavailable'
-      : classifierResult.shouldBlock
-        ? 'blocked'
-        : 'allowed'
-    logEvent('tengu_auto_mode_decision', {
-      decision:
-        handoffDecision as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      toolName:
-        // Use legacy name for analytics continuity across the Task→Agent rename
-        LEGACY_AGENT_TOOL_NAME as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      inProtectedNamespace: isInProtectedNamespace(),
-      classifierModel:
-        classifierResult.model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      agentType:
-        subagentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      toolUseCount: totalToolUseCount,
-      isHandoff: true,
-      // For handoff, the relevant agent completion is the subagent's final
-      // assistant message — the last thing the classifier transcript shows
-      // before the handoff review prompt.
-      agentMsgId: getLastAssistantMessage(agentMessages)?.message
-        .id as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      classifierStage:
-        classifierResult.stage as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      classifierStage1RequestId:
-        classifierResult.stage1RequestId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      classifierStage1MsgId:
-        classifierResult.stage1MsgId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      classifierStage2RequestId:
-        classifierResult.stage2RequestId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      classifierStage2MsgId:
-        classifierResult.stage2MsgId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-    })
-
-    if (classifierResult.shouldBlock) {
-      // When classifier is unavailable, still propagate the sub-agent's
-      // results but with a warning so the parent agent can verify the work.
-      if (classifierResult.unavailable) {
-        logForDebugging(
-          'Handoff classifier unavailable, allowing sub-agent output with warning',
-          { level: 'warn' },
-        )
-        return `Note: The safety classifier was unavailable when reviewing this sub-agent's work. Please carefully verify the sub-agent's actions and output before acting on them.`
-      }
-
-      logForDebugging(
-        `Handoff classifier flagged sub-agent output: ${classifierResult.reason}`,
-        { level: 'warn' },
-      )
-      return `SECURITY WARNING: This sub-agent performed actions that may violate security policy. Reason: ${classifierResult.reason}. Review the sub-agent's actions carefully before acting on its output.`
-    }
-  }
-
-  return null
-}
-
 /**
  * Extract a partial result string from an agent's accumulated messages.
  * Used when an async agent is killed to preserve what it accomplished.
@@ -597,27 +496,11 @@ export async function runAsyncAgentLifecycle({
     const agentResult = finalizeAgentTool(agentMessages, taskId, metadata)
 
     // Mark task completed FIRST so TaskOutput(block=true) unblocks
-    // immediately. classifyHandoffIfNeeded (API call) and getWorktreeResult
-    // (git exec) are notification embellishments that can hang — they must
-    // not gate the status transition (gh-20236).
+    // immediately. getWorktreeResult (git exec) can hang and must not
+    // gate the status transition (gh-20236).
     completeAsyncAgent(agentResult, rootSetAppState)
 
-    let finalMessage = extractTextContent(agentResult.content, '\n')
-
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      const handoffWarning = await classifyHandoffIfNeeded({
-        agentMessages,
-        tools: toolUseContext.options.tools,
-        toolPermissionContext:
-          toolUseContext.getAppState().toolPermissionContext,
-        abortSignal: abortController.signal,
-        subagentType: metadata.agentType,
-        totalToolUseCount: agentResult.totalToolUseCount,
-      })
-      if (handoffWarning) {
-        finalMessage = `${handoffWarning}\n\n${finalMessage}`
-      }
-    }
+    const finalMessage = extractTextContent(agentResult.content, '\n')
 
     const worktreeResult = await getWorktreeResult()
 

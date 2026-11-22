@@ -1,4 +1,3 @@
-import { feature } from 'bun:bundle'
 import z from 'zod/v4'
 import { PAUSE_ICON } from '../../constants/figures.js'
 // Types extracted to src/types/permissions.ts to break import cycles
@@ -77,17 +76,13 @@ const PERMISSION_MODE_CONFIG: Partial<
     color: 'error',
     external: 'dontAsk',
   },
-  ...(feature('TRANSCRIPT_CLASSIFIER')
-    ? {
-        auto: {
-          title: 'Auto mode',
-          shortTitle: 'Auto',
-          symbol: '⏵⏵',
-          color: 'warning' as ModeColorKey,
-          external: 'default' as ExternalPermissionMode,
-        },
-      }
-    : {}),
+  auto: {
+    title: 'Auto mode',
+    shortTitle: 'Auto',
+    symbol: '⏵⏵',
+    color: 'warning',
+    external: 'default',
+  },
 }
 
 /**

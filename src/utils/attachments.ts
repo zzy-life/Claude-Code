@@ -100,9 +100,6 @@ const skillSearchModules = feature('EXPERIMENTAL_SKILL_SEARCH')
         require('../services/skillSearch/prefetch.js') as typeof import('../services/skillSearch/prefetch.js'),
     }
   : null
-const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER')
-  ? (require('./permissions/autoModeState.js') as typeof import('./permissions/autoModeState.js'))
-  : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   MAX_LINES_TO_READ,
@@ -869,16 +866,8 @@ export async function getAttachments(
     // replaces it; see src/services/skillSearch/prefetch.ts.
     maybe('plan_mode', () => getPlanModeAttachments(messages, toolUseContext)),
     maybe('plan_mode_exit', () => getPlanModeExitAttachment(toolUseContext)),
-    ...(feature('TRANSCRIPT_CLASSIFIER')
-      ? [
-          maybe('auto_mode', () =>
-            getAutoModeAttachments(messages, toolUseContext),
-          ),
-          maybe('auto_mode_exit', () =>
-            getAutoModeExitAttachment(toolUseContext),
-          ),
-        ]
-      : []),
+    maybe('auto_mode', () => getAutoModeAttachments(messages, toolUseContext)),
+    maybe('auto_mode_exit', () => getAutoModeExitAttachment(toolUseContext)),
     maybe('todo_reminders', () =>
       isTodoV2Enabled()
         ? getTaskReminderAttachments(messages, toolUseContext)
@@ -1343,10 +1332,7 @@ async function getAutoModeAttachments(
   const appState = toolUseContext.getAppState()
   const permissionContext = appState.toolPermissionContext
   const inAuto = permissionContext.mode === 'auto'
-  const inPlanWithAuto =
-    permissionContext.mode === 'plan' &&
-    (autoModeStateModule?.isAutoModeActive() ?? false)
-  if (!inAuto && !inPlanWithAuto) {
+  if (!inAuto) {
     return []
   }
 
@@ -1389,12 +1375,8 @@ async function getAutoModeExitAttachment(
   }
 
   const appState = toolUseContext.getAppState()
-  // Suppress when auto is still active — covers both mode==='auto' and
-  // plan-with-auto-active (where mode==='plan' but classifier runs).
-  if (
-    appState.toolPermissionContext.mode === 'auto' ||
-    (autoModeStateModule?.isAutoModeActive() ?? false)
-  ) {
+  // Only the actual auto mode enables AI approval; plan never does.
+  if (appState.toolPermissionContext.mode === 'auto') {
     setNeedsAutoModeExitAttachment(false)
     return []
   }

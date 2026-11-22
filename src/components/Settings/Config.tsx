@@ -11,8 +11,10 @@ import { type GlobalConfig, saveGlobalConfig, getCurrentProjectConfig, type Outp
 import { normalizeApiKeyForConfig } from '../../utils/authPortable.js';
 import { getGlobalConfig, getAutoUpdaterDisabledReason, formatAutoUpdaterDisabledReason, getRemoteControlAtStartup } from '../../utils/config.js';
 import chalk from 'chalk';
-import { permissionModeTitle, permissionModeFromString, toExternalPermissionMode, isExternalPermissionMode, EXTERNAL_PERMISSION_MODES, PERMISSION_MODES, type PermissionMode } from '../../utils/permissions/PermissionMode.js';
-import { getAutoModeEnabledState, hasAutoModeOptInAnySource, transitionPlanAutoMode } from '../../utils/permissions/permissionSetup.js';
+import { permissionModeTitle, permissionModeFromString, toExternalPermissionMode, isExternalPermissionMode, PERMISSION_MODES, type PermissionMode } from '../../utils/permissions/PermissionMode.js';
+import { isAutoModeGateEnabled } from '../../utils/permissions/permissionSetup.js';
+import { getIsRemoteMode } from '../../bootstrap/state.js';
+import { isInProcessTeammate } from '../../utils/teammateContext.js';
 import { logError } from '../../utils/log.js';
 import { logEvent, type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 'src/services/analytics/index.js';
 import { isBridgeEnabled } from '../../bridge/bridgeEnabled.js';
@@ -35,7 +37,7 @@ import { useTabHeaderFocus } from '../design-system/Tabs.js';
 import { useIsInsideModal } from '../../context/modalContext.js';
 import { SearchBox } from '../SearchBox.js';
 import { isSupportedTerminal, hasAccessToIDEExtensionDiffFeature } from '../../utils/ide.js';
-import { getInitialSettings, getSettingsForSource, updateSettingsForSource } from '../../utils/settings/settings.js';
+import { getInitialSettings, getPermissionDefaultMode, getSettingsForSource, updateSettingsForSource } from '../../utils/settings/settings.js';
 import { getUserMsgOptIn, setUserMsgOptIn } from '../../bootstrap/state.js';
 import { DEFAULT_OUTPUT_STYLE_NAME } from 'src/constants/outputStyles.js';
 import { isEnvTruthy, isRunningOnHomespace } from 'src/utils/envUtils.js';
@@ -122,10 +124,8 @@ export function Config({
   const thinkingEnabled = useAppState(s_1 => s_1.thinkingEnabled);
   const isFastMode = useAppState(s_2 => isFastModeEnabled() ? s_2.fastMode : false);
   const promptSuggestionEnabled = useAppState(s_3 => s_3.promptSuggestionEnabled);
-  // Show auto in the default-mode dropdown when the user has opted in OR the
-  // config is fully 'enabled' — even if currently circuit-broken ('disabled'),
-  // an opted-in user should still see it in settings (it's a temporary state).
-  const showAutoInDefaultModePicker = feature('TRANSCRIPT_CLASSIFIER') ? hasAutoModeOptInAnySource() || getAutoModeEnabledState() === 'enabled' : false;
+  // Saving a default is a preference, not consent or immediate activation.
+  const showAutoInDefaultModePicker = isAutoModeGateEnabled() && !isInProcessTeammate() && !getIsRemoteMode();
   // Chat/Transcript view picker is visible to entitled users (pass the GB
   // gate) even if they haven't opted in this session — it IS the persistent
   // opt-in. 'chat' written here is read at next startup by main.tsx which
@@ -471,12 +471,12 @@ export function Config({
   }, {
     id: 'defaultPermissionMode',
     label: 'Default permission mode',
-    value: settingsData?.permissions?.defaultMode || 'default',
+    value: getPermissionDefaultMode() || 'default',
     options: (() => {
       const priorityOrder: PermissionMode[] = ['default', 'plan'];
-      const allModes: readonly PermissionMode[] = feature('TRANSCRIPT_CLASSIFIER') ? PERMISSION_MODES : EXTERNAL_PERMISSION_MODES;
+      const allModes: readonly PermissionMode[] = PERMISSION_MODES;
       const excluded: PermissionMode[] = ['bypassPermissions'];
-      if (feature('TRANSCRIPT_CLASSIFIER') && !showAutoInDefaultModePicker) {
+      if (!showAutoInDefaultModePicker) {
         excluded.push('auto');
       }
       return [...priorityOrder, ...allModes.filter(m => !priorityOrder.includes(m) && !excluded.includes(m))];
@@ -488,7 +488,6 @@ export function Config({
       const validatedMode = isExternalPermissionMode(parsedMode) ? toExternalPermissionMode(parsedMode) : parsedMode;
       const result = updateSettingsForSource('userSettings', {
         permissions: {
-          ...settingsData?.permissions,
           defaultMode: validatedMode
         }
       });
@@ -518,38 +517,7 @@ export function Config({
         value: mode as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
       });
     }
-  }, ...(feature('TRANSCRIPT_CLASSIFIER') && showAutoInDefaultModePicker ? [{
-    id: 'useAutoModeDuringPlan',
-    label: 'Use auto mode during plan',
-    value: (settingsData as {
-      useAutoModeDuringPlan?: boolean;
-    } | undefined)?.useAutoModeDuringPlan ?? true,
-    type: 'boolean' as const,
-    onChange(useAutoModeDuringPlan: boolean) {
-      updateSettingsForSource('userSettings', {
-        useAutoModeDuringPlan
-      });
-      setSettingsData(prev_14 => ({
-        ...prev_14,
-        useAutoModeDuringPlan
-      }));
-      // Internal writes suppress the file watcher, so
-      // applySettingsChange won't fire. Reconcile directly so
-      // mid-plan toggles take effect immediately.
-      setAppState(prev_15 => {
-        const next = transitionPlanAutoMode(prev_15.toolPermissionContext);
-        if (next === prev_15.toolPermissionContext) return prev_15;
-        return {
-          ...prev_15,
-          toolPermissionContext: next
-        };
-      });
-      setChanges(prev_16 => ({
-        ...prev_16,
-        'Use auto mode during plan': useAutoModeDuringPlan
-      }));
-    }
-  }] : []), {
+  }, {
     id: 'respectGitignore',
     label: 'Respect .gitignore in file picker',
     value: globalConfig.respectGitignore,
@@ -1181,23 +1149,13 @@ export function Config({
       autoUpdatesChannel: iu?.autoUpdatesChannel,
       minimumVersion: iu?.minimumVersion,
       language: iu?.language,
-      ...(feature('TRANSCRIPT_CLASSIFIER') ? {
-        useAutoModeDuringPlan: (iu as {
-          useAutoModeDuringPlan?: boolean;
-        } | undefined)?.useAutoModeDuringPlan
-      } : {}),
       // ThemePicker's Ctrl+T writes this key directly — include it so the
       // disk state reverts along with the in-memory AppState.settings restore.
       syntaxHighlightingDisabled: iu?.syntaxHighlightingDisabled,
-      // permissions: the defaultMode onChange (above) spreads the MERGED
-      // settingsData.permissions into userSettings — project/policy allow/deny
-      // arrays can leak to disk. Spread the full initial snapshot so the
-      // mergeWith array-customizer (settings.ts:375) replaces leaked arrays.
-      // Explicitly include defaultMode so undefined triggers the customizer's
-      // delete path even when iu.permissions lacks that key.
-      permissions: iu?.permissions === undefined ? undefined : {
-        ...iu.permissions,
-        defaultMode: iu.permissions.defaultMode
+      // Only defaultMode is edited here; do not copy merged project/policy rules
+      // into user settings. undefined restores the original absence of the key.
+      permissions: {
+        defaultMode: iu?.permissions?.defaultMode
       }
     });
     // AppState: batch-restore all possibly-touched fields.
@@ -1213,10 +1171,7 @@ export function Config({
       isBriefOnly: ia.isBriefOnly,
       replBridgeEnabled: ia.replBridgeEnabled,
       replBridgeOutboundOnly: ia.replBridgeOutboundOnly,
-      settings: ia.settings,
-      // Reconcile auto-mode state after useAutoModeDuringPlan revert above —
-      // the onChange handler may have activated/deactivated auto mid-plan.
-      toolPermissionContext: transitionPlanAutoMode(prev_23.toolPermissionContext)
+      settings: ia.settings
     }));
     // Bootstrap state: restore userMsgOptIn. Only touched by the defaultView
     // onChange above, so no feature() guard needed here (that path only

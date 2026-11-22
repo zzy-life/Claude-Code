@@ -6,13 +6,11 @@ import { useCallback } from 'react';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
 import { sanitizeToolNameForAnalytics } from 'src/services/analytics/metadata.js';
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js';
-import { Text } from '../ink.js';
 import type { ToolPermissionContext, Tool as ToolType, ToolUseContext } from '../Tool.js';
 import { consumeSpeculativeClassifierCheck, peekSpeculativeClassifierCheck } from '../tools/BashTool/bashPermissions.js';
 import { BASH_TOOL_NAME } from '../tools/BashTool/toolName.js';
 import type { AssistantMessage } from '../types/message.js';
-import { recordAutoModeDenial } from '../utils/autoModeDenials.js';
-import { clearClassifierChecking, setClassifierApproval, setYoloClassifierApproval } from '../utils/classifierApprovals.js';
+import { clearClassifierChecking, setClassifierApproval } from '../utils/classifierApprovals.js';
 import { logForDebugging } from '../utils/debug.js';
 import { AbortError } from '../utils/errors.js';
 import { logError } from '../utils/log.js';
@@ -36,7 +34,8 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
         return;
       }
       const decisionPromise = forceDecision !== undefined ? (async () => {
-        if (forceDecision.behavior === 'ask' && usesLocalAutoApproval(toolUseContext) && !forceDecision.autoApprovalNeedsUser) {
+        // 强制 ask 也不能绕过 auto 的本地人工回退，或重新启动旧分类器。
+        if (forceDecision.behavior === 'ask' && (usesLocalAutoApproval(toolUseContext) || toolUseContext.getAppState().toolPermissionContext.mode === 'auto') && !forceDecision.autoApprovalNeedsUser) {
           const checked = await hasPermissionsToUseToolInner(tool, forceDecision.updatedInput ?? input, toolUseContext);
           if (checked.behavior === 'deny') return checked;
           return { ...forceDecision, message: `User approval required: ${forceDecision.message}`, autoApprovalNeedsUser: true, pendingClassifierCheck: undefined };
@@ -47,9 +46,6 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
         if (result.behavior === "allow") {
           if (ctx.resolveIfAborted(resolve)) {
             return;
-          }
-          if (feature("TRANSCRIPT_CLASSIFIER") && result.decisionReason?.type === "classifier" && result.decisionReason.classifier === "auto-mode") {
-            setYoloClassifierApproval(toolUseID, result.decisionReason.reason);
           }
           ctx.logDecision({
             decision: "accept",
@@ -85,19 +81,6 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
                 decision: "reject",
                 source: "config"
               });
-              if (feature("TRANSCRIPT_CLASSIFIER") && result.decisionReason?.type === "classifier" && result.decisionReason.classifier === "auto-mode") {
-                recordAutoModeDenial({
-                  toolName: tool.name,
-                  display: description,
-                  reason: result.decisionReason.reason ?? "",
-                  timestamp: Date.now()
-                });
-                toolUseContext.addNotification?.({
-                  key: "auto-mode-denied",
-                  priority: "immediate",
-                  jsx: <><Text color="error">{tool.userFacingName(input).toLowerCase()} denied by auto mode</Text><Text dimColor={true}> · /permissions</Text></>
-                });
-              }
               resolve(result);
               return;
             }

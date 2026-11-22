@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { setIsRemoteMode } from '../bootstrap/state.js'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import type { RemotePermissionResponse } from '../remote/RemoteSessionManager.js'
 import {
@@ -60,6 +61,9 @@ export function useDirectConnect({
       return
     }
 
+    // A concrete remote session now owns execution, including while connecting.
+    // Disconnect exits this session; never reopen local auto during cleanup.
+    setIsRemoteMode(true)
     hasReceivedInitRef.current = false
     logForDebugging(`[useDirectConnect] Connecting to ${config.wsUrl}`)
 

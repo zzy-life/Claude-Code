@@ -1,6 +1,6 @@
 # 「帮我批准」AI 权限审批方案
 
-> 状态：第一、二阶段代码已实施并完成源码复审，第三、四阶段待实施。未构建、未执行测试或类型检查，运行正确性尚待验证。新版 auto 首次确认和用户入口尚未开放，当前不是可直接使用的完整产品交付。
+> 状态：第一、二、三阶段代码已实施；第三阶段已接入本地首次确认、默认模式和 Shift+Tab，第四阶段待实施。未构建、未执行测试或类型检查，运行正确性及真实终端交互尚待验证，不宣称完整产品交付。
 
 ## Context
 
@@ -23,7 +23,7 @@
 | 帮我批准 | `auto`（实现命名 `autoApproval`） | 沿用 acceptEdits 基础放行，剩余普通请求交 AI；允许时静默执行 |
 | 完全访问 | 现有 `bypassPermissions` | 保持现有跳过常规审批的行为，不叠加 AI |
 
-用户确认、第三阶段待接入的常规本地循环顺序：`default → plan → acceptEdits → auto → bypassPermissions（已开放时）→ default`。Plan 放第二；其后按人工授权、AI 代理审批、跳过常规审批排列，自动化程度逐步提高。该顺序不是 AI 安全性保证；Plan 的既有执行边界不变。auto 计划仅在本方案支持的本地交互环境中可选，统一按本地启用确认及管理策略判断可用性，不依赖旧远程实验资格。其他受限模式的可用性限制不变；dontAsk 不新增到循环中。
+用户确认、第三阶段已接入但尚未运行验收的常规本地循环顺序：`default → plan → acceptEdits → auto → bypassPermissions（已开放时）→ default`。Plan 放第二；其后按人工授权、AI 代理审批、跳过常规审批排列，自动化程度逐步提高。该顺序不是 AI 安全性保证；Plan 的既有执行边界不变。auto 计划仅在本方案支持的本地交互环境中可选，统一按本地启用确认及管理策略判断可用性，不依赖旧远程实验资格。其他受限模式的可用性限制不变；dontAsk 不新增到循环中。
 
 完全访问不是无条件执行，现有 deny、显式 ask 和不可绕过的安全检查继续生效。AI 放行不显示理由、不添加“AI 已批准”标记，不额外输出批准通知；仅拒绝、停止或需要人工时向用户说明。
 
@@ -317,7 +317,7 @@ Shift+Tab 循环
 | --- | --- | --- | --- |
 | 1. 权限契约与安全停止基础 | 已实施（源码审查；测试未运行） | 明确审批协议、规则优先级、可信设置、执行前门禁和轮次安全上下文；复用 acceptEdits 编辑能力；定义 auto 内外部边界 | 拒绝与取消不会误变为允许；hard_deny 能表达并传播停止；不改变原 default/plan/acceptEdits/dontAsk/bypassPermissions 行为 |
 | 2. AI 审批闭环与子代理接入 | 已实施（源码复审完成；测试未运行） | 独立 sideQuery 审批、真实提示词、精确输入绑定、拒绝回传、人工兜底、所属子代理取消和 usage 归因 | allow 只执行一次；retryable_deny 可继续改案；hard_deny 停止所属轮次且不误杀其他轮次；失败不放行 |
-| 3. 模式启用与 Shift+Tab 交互 | 待实施 | 替换旧 auto 入口/远程门禁及二态审批路径，接入首次确认、默认模式、底栏和切换顺序 | 顺序为 default → plan → acceptEdits → auto → bypassPermissions（可用时）；批准静默；离开 auto 使旧结果失效；外部不支持路径不误启用 |
+| 3. 模式启用与 Shift+Tab 交互 | 已实施（源码复审；测试与终端验收未运行） | 替换旧 auto 入口/远程门禁及二态审批路径，接入首次确认、默认模式、底栏和切换顺序 | 顺序为 default → plan → acceptEdits → auto → bypassPermissions（可用时）；批准静默；离开 auto 使旧结果失效；外部不支持路径不误启用 |
 | 4. 独立测试、README 与最终交付 | 待实施 | 一键测试文件、人工验收说明、更新 README.md、本方案状态与实际验证记录 | 交付物齐全；清楚区分已测试/未运行/需用户验收，不把未运行或失败写成通过；文档与实际实现一致 |
 
 ### 阶段 1：先确定权限契约和停止能力
@@ -387,6 +387,21 @@ Shift+Tab 循环
 - Shift+Tab 接入约定顺序，沿用原确认设施但先确认后激活，支持快速切换取消旧请求和计划恢复。
 - allow 不新增任何批准理由、标记或通知；仅拒绝、停止及人工兜底展示原因。
 
+#### 第三阶段实际交付记录（2026-11-22）
+
+本阶段代码已实施，已做限定源码复审；未构建、未执行测试或类型检查，未做真实终端交互验收，未提交或推送。
+
+- 内部运行时枚举、设置 schema 和展示解除 `TRANSCRIPT_CLASSIFIER` 门禁；外部枚举仍不包含 auto，底栏沿用现有渲染显示 `auto mode on`，bypassPermissions 名称与行为保留。
+- Shift+Tab 顺序改为 default → plan → acceptEdits → auto → bypassPermissions（已开放时）→ default；删除 ant 专属跳档。首次选择 auto 先确认后激活，取消保持原模式；同步 pending/确认序号与实时状态校验使旧确认失效，不再先写 auto 或使用延迟激活。
+- 确认只写用户级 `autoModeConsentVersion: 1`，旧 skip 字段不构成新同意；说明独立模型费用、误判、人工保留、硬停止和非沙箱边界。默认选择保存到用户级；Config 展示使用与启动相同的可信来源解析，项目/仓库 local auto 不会伪装为有效默认值。
+- 统一可用性改为本地交互环境与显式 disableAutoMode 策略，不读取旧远程实验、供应商/主模型名单或 fast-mode 熔断；审批实际运行仍要求新版同意。普通本地子代理保留既有继承，独立队友不继承 auto。
+- main 启动区分本地、headless、队友与远端；不支持环境忽略默认 auto，显式请求报错。SDK/print、bridge 运行时切换明确拒绝 auto，SDK 不再宣传 auto 模型能力；Direct Connect/SSH 持久标明远端环境。本地 Remote Control 与 auto 互斥，连接前复查且运行期 gate 读取桥接状态。
+- 计划模式不再隐式启用分类器；记录真实 prePlanMode，恢复 auto 要求当前本地策略及新版同意并经统一转换。未同意时退出计划选项不提供 auto，可在主界面 Shift+Tab 完成首次确认；清上下文实际恢复时再次核验，不可用则 default。
+- 删除普通权限及子代理交接的旧二态分类调用、旧批准标记/通知、旧 auto CLI 配置/critique 入口和 opt-in flag；保留共享 Bash 分类能力、现有 hooks 和 bypass 管理链路。auto 不剥离既有 allow 规则，Bash 配置的 deny/ask 不再被旧 auto 跳过。模型提醒改为新四态审批边界，不以 auto 推断额外任务授权。
+- 独立测试增补内部/外部枚举、确定性循环片段和不可用跳档断言；未运行。测试不修改真实用户设置；完整 acceptEdits → auto、确认交互、后台队列和远端集成仍需第四阶段测试/人工验收，不能据源码推断已通过。
+- 源码复审修正默认模式显示来源不一致、计划退出残留 strip/未确认恢复、远端运行期门禁、旧子代理交接分类调用及 Bash deny/ask 跳过。迟到复审另指出 Bash prompt ask 使用普通 other 原因、以及 teleport 被误归为远端启动：已将实际命中的 prompt ask 标为不可 AI 代批的结构化 safetyCheck；teleport 恢复历史后本地执行，移除其远端启动分类，不改变真实远端边界。既有 sandbox 提前放行例外未改。上述补修未运行验证，不能以其他限定复查无发现代替通过结论。第三阶段不提供真实模型判断质量或 usage 实测结论。
+- 下一阶段仅补齐第四阶段独立测试、README、可操作人工验收及最终验证记录；当前未修改 README。本功能无新增 HTTP API，无 curl 对接。
+
 ### 阶段 4：测试文件和文档必须一起交付
 
 - 编写第十一节的一键测试文件，常量位于顶部，不引入额外测试框架、独立服务或真实 API 依赖。
@@ -436,7 +451,7 @@ bun run ./test-auto-approval.ts
 ## 十二、交付摘要
 
 - 这是本地 CLI 权限功能，无新增 HTTP API，不需要 curl 对接。
-- 保留 `auto` 模式，以 `autoApproval` 实现帮我批准，不增加兼容别名或独立审批人开关；bypassPermissions 保持原名和行为。第三阶段计划的 Shift+Tab 顺序为 default → plan → acceptEdits → auto → bypassPermissions（可用时）。审批结果四种，其中三种为业务决定，另一种回人工；allow 静默执行。
+- 保留 `auto` 模式，以 `autoApproval` 实现帮我批准，不增加兼容别名或独立审批人开关；bypassPermissions 保持原名和行为。第三阶段已实现的 Shift+Tab 顺序为 default → plan → acceptEdits → auto → bypassPermissions（可用时），尚待运行验收。审批结果四种，其中三种为业务决定，另一种回人工；allow 静默执行。
 - 明确区分“本次拒绝可改方案”和“程序停止本轮”，不靠主模型自觉执行硬停止。
 - 功能只代理剩余授权，不能承诺审查每个动作或提供系统级隔离；不改变完全访问及 acceptEdits 的既有边界。
 
@@ -447,6 +462,6 @@ bun run ./test-auto-approval.ts
 - 确认字段恢复第一阶段的 `autoModeConsentVersion: 1`，schema 与读取一致，仅信任 userSettings / policySettings，仍与旧 skipAutoPermissionPrompt 隔离；不新增确认写入或入口。
 - 标题/短标题恢复 `Auto mode` / `Auto`。Footer 仍按原有标题转小写并追加 ` on` 渲染 `auto mode on`，颜色、符号、布局与快捷键提示不变，不修改 Footer 文件。
 - 保留新英文运行提示及英文 prompt 正文；`approvalTurnScope`、既有 autoMode 函数/字段、feature 门禁和外部协议不改。测试中的中文原因仍是注入夹具；schema 仅校验非空，不保证模型遵守英文要求。
-- 第一、二阶段实施状态不变，第三、四阶段仍待实施。本次只做明确重命名及方案同步，不开放第三阶段入口，不改变审批、安全停止、模型选择、预算或费用行为。
+- 此处记录命名同步时的历史状态：第一、二阶段已实施，当时第三、四阶段待实施。第三阶段后续实际交付以下方阶段记录为准；该次命名同步本身不改变审批、安全停止、模型选择、预算或费用行为。
 - 静态搜索已核对：此前实现前缀及旧测试文件名无残留，无误用的实现名模式字面量或实现前缀确认字段；四个新模块及测试文件存在，引用已同步。此结论不代表运行验证通过。
 - 测试命令为 `bun run ./test-auto-approval.ts`，仅供用户后续运行；本轮未构建、未运行测试或类型检查、未执行 Git 操作，不修改 README 或原有 package.json 修改。

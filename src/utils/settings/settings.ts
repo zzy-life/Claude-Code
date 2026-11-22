@@ -574,7 +574,7 @@ export function getManagedSettingsKeysForLogging(
       'ask',
       'defaultMode',
       'disableBypassPermissionsMode',
-      ...(feature('TRANSCRIPT_CLASSIFIER') ? ['disableAutoMode'] : []),
+      'disableAutoMode',
       'additionalDirectories',
     ]),
     sandbox: new Set([

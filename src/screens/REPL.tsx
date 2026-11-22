@@ -116,7 +116,6 @@ import useCanUseTool from '../hooks/useCanUseTool.js';
 import type { ToolPermissionContext, Tool } from '../Tool.js';
 import { applyPermissionUpdate, applyPermissionUpdates, persistPermissionUpdate } from '../utils/permissions/PermissionUpdate.js';
 import { buildPermissionUpdates } from '../components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.js';
-import { stripDangerousPermissionsForAutoMode } from '../utils/permissions/permissionSetup.js';
 import { getScratchpadDir, isScratchpadEnabled } from '../utils/permissions/filesystem.js';
 import { WEB_FETCH_TOOL_NAME } from '../tools/WebFetchTool/prompt.js';
 import { SLEEP_TOOL_NAME } from '../tools/SleepTool/prompt.js';
@@ -230,7 +229,6 @@ import { SandboxViolationExpandedView } from 'src/components/SandboxViolationExp
 import { useSettingsErrors } from 'src/hooks/notifs/useSettingsErrors.js';
 import { useMcpConnectivityStatus } from 'src/hooks/notifs/useMcpConnectivityStatus.js';
 import { useAutoModeUnavailableNotification } from 'src/hooks/notifs/useAutoModeUnavailableNotification.js';
-import { AUTO_MODE_DESCRIPTION } from 'src/components/AutoModeOptInDialog.js';
 import { useLspInitializationNotification } from 'src/hooks/notifs/useLspInitializationNotification.js';
 import { useLspPluginRecommendation } from 'src/hooks/useLspPluginRecommendation.js';
 import { LspRecommendationMenu } from 'src/components/LspRecommendation/LspRecommendationMenu.js';
@@ -1547,37 +1545,6 @@ export function REPL({
     }
   }, [hasRunningTeammates, setMessages]);
 
-  // Show auto permissions warning when entering auto mode
-  // (either via Shift+Tab toggle or on startup). Debounced to avoid
-  // flashing when the user is cycling through modes quickly.
-  // Only shown 3 times total across sessions.
-  const safeYoloMessageShownRef = useRef(false);
-  useEffect(() => {
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      if (toolPermissionContext.mode !== 'auto') {
-        safeYoloMessageShownRef.current = false;
-        return;
-      }
-      if (safeYoloMessageShownRef.current) return;
-      const config = getGlobalConfig();
-      const count = config.autoPermissionsNotificationCount ?? 0;
-      if (count >= 3) return;
-      const timer = setTimeout((ref, setMessages) => {
-        ref.current = true;
-        saveGlobalConfig(prev => {
-          const prevCount = prev.autoPermissionsNotificationCount ?? 0;
-          if (prevCount >= 3) return prev;
-          return {
-            ...prev,
-            autoPermissionsNotificationCount: prevCount + 1
-          };
-        });
-        setMessages(prev => [...prev, createSystemMessage(AUTO_MODE_DESCRIPTION, 'warning')]);
-      }, 800, safeYoloMessageShownRef, setMessages);
-      return () => clearTimeout(timer);
-    }
-  }, [toolPermissionContext.mode, setMessages]);
-
   // If worktree creation was slow and sparse-checkout isn't configured,
   // nudge the user toward settings.worktree.sparsePaths.
   const worktreeTipShownRef = useRef(false);
@@ -2657,8 +2624,8 @@ export function REPL({
     const [,, defaultSystemPrompt, baseUserContext, systemContext] = await Promise.all([
     // IMPORTANT: do this after setMessages() above, to avoid UI jank
     checkAndDisableBypassPermissionsIfNeeded(toolPermissionContext, setAppState),
-    // Gated on TRANSCRIPT_CLASSIFIER so GrowthBook kill switch runs wherever auto mode is built in
-    feature('TRANSCRIPT_CLASSIFIER') ? checkAndDisableAutoModeIfNeeded(toolPermissionContext, setAppState, store.getState().fastMode) : undefined, getSystemPrompt(freshTools, mainLoopModelParam, Array.from(toolPermissionContext.additionalWorkingDirectories.keys()), freshMcpClients), getUserContext(), getSystemContext()]);
+    // Recheck local auto availability before every query, independently of the legacy classifier feature.
+    checkAndDisableAutoModeIfNeeded(toolPermissionContext, setAppState, store.getState().fastMode), getSystemPrompt(freshTools, mainLoopModelParam, Array.from(toolPermissionContext.additionalWorkingDirectories.keys()), freshMcpClients), getUserContext(), getSystemContext()]);
     const userContext = {
       ...baseUserContext,
       ...getCoordinatorUserContext(freshMcpClients, isScratchpadEnabled() ? getScratchpadDir() : undefined),
@@ -2901,14 +2868,24 @@ export function REPL({
       setAppState(prev => {
         // Build and apply permission updates (mode + allowedPrompts rules)
         let updatedToolPermissionContext = initialMsg.mode ? applyPermissionUpdates(prev.toolPermissionContext, buildPermissionUpdates(initialMsg.mode, initialMsg.allowedPrompts)) : prev.toolPermissionContext;
-        // For auto, override the mode (buildPermissionUpdates maps
-        // it to 'default' via toExternalPermissionMode) and strip dangerous rules
-        if (feature('TRANSCRIPT_CLASSIFIER') && initialMsg.mode === 'auto') {
-          updatedToolPermissionContext = stripDangerousPermissionsForAutoMode({
-            ...updatedToolPermissionContext,
-            mode: 'auto',
+        if (initialMsg.mode) {
+          // Revalidate after context clear, immediately before applying the mode.
+          // External permission updates map auto to default; only the shared
+          // transition may restore that internal mode after checking consent.
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { isAutoModeGateEnabled, transitionPermissionMode } = require('../utils/permissions/permissionSetup.js') as typeof import('../utils/permissions/permissionSetup.js');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { hasLocalAutoApprovalConsent } = require('../utils/settings/settings.js') as typeof import('../utils/settings/settings.js');
+          let targetMode = initialMsg.mode;
+          if (targetMode === 'auto' &&
+              (!isAutoModeGateEnabled() || !hasLocalAutoApprovalConsent())) {
+            targetMode = 'default';
+          }
+          updatedToolPermissionContext = {
+            ...transitionPermissionMode(prev.toolPermissionContext.mode, targetMode, updatedToolPermissionContext),
+            mode: targetMode,
             prePlanMode: undefined
-          });
+          };
         }
         return {
           ...prev,

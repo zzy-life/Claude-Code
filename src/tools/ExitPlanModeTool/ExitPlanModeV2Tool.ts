@@ -5,7 +5,6 @@ import {
   getAllowedChannels,
   hasExitedPlanModeInSession,
   setHasExitedPlanMode,
-  setNeedsAutoModeExitAttachment,
   setNeedsPlanModeExitAttachment,
 } from '../../bootstrap/state.js'
 import { logEvent } from '../../services/analytics/index.js'
@@ -18,7 +17,6 @@ import {
 } from '../../Tool.js'
 import { formatAgentId, generateRequestId } from '../../utils/agentId.js'
 import { isAgentSwarmsEnabled } from '../../utils/agentSwarmsEnabled.js'
-import { logForDebugging } from '../../utils/debug.js'
 import {
   findInProcessTeammateTaskId,
   setAwaitingPlanApproval,
@@ -48,14 +46,8 @@ import {
   renderToolUseRejectedMessage,
 } from './UI.js'
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER')
-  ? (require('../../utils/permissions/autoModeState.js') as typeof import('../../utils/permissions/autoModeState.js'))
-  : null
-const permissionSetupModule = feature('TRANSCRIPT_CLASSIFIER')
-  ? (require('../../utils/permissions/permissionSetup.js') as typeof import('../../utils/permissions/permissionSetup.js'))
-  : null
-/* eslint-enable @typescript-eslint/no-require-imports */
+import { isAutoModeGateEnabled, transitionPermissionMode } from '../../utils/permissions/permissionSetup.js'
+import { hasLocalAutoApprovalConsent } from '../../utils/settings/settings.js'
 
 /**
  * Schema for prompt-based permission requests.
@@ -318,84 +310,21 @@ export const ExitPlanModeV2Tool: Tool<InputSchema, Output> = buildTool({
     // Ensure mode is changed when exiting plan mode.
     // This handles cases where permission flow didn't set the mode
     // (e.g., when PermissionRequest hook auto-approves without providing updatedPermissions).
-    const appState = context.getAppState()
-    // Compute gate-off fallback before setAppState so we can notify the user.
-    // Circuit breaker defense: if prePlanMode was an auto-like mode but the
-    // gate is now off (circuit breaker or settings disable), restore to
-    // 'default' instead. Without this, ExitPlanMode would bypass the circuit
-    // breaker by calling setAutoModeActive(true) directly.
-    let gateFallbackNotification: string | null = null
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      const prePlanRaw = appState.toolPermissionContext.prePlanMode ?? 'default'
-      if (
-        prePlanRaw === 'auto' &&
-        !(permissionSetupModule?.isAutoModeGateEnabled() ?? false)
-      ) {
-        const reason =
-          permissionSetupModule?.getAutoModeUnavailableReason() ??
-          'circuit-breaker'
-        gateFallbackNotification =
-          permissionSetupModule?.getAutoModeUnavailableNotification(reason) ??
-          'auto mode unavailable'
-        logForDebugging(
-          `[auto-mode gate @ ExitPlanModeV2Tool] prePlanMode=${prePlanRaw} ` +
-            `but gate is off (reason=${reason}) — falling back to default on plan exit`,
-          { level: 'warn' },
-        )
-      }
-    }
-    if (gateFallbackNotification) {
-      context.addNotification?.({
-        key: 'auto-mode-gate-plan-exit-fallback',
-        text: `plan exit → default · ${gateFallbackNotification}`,
-        priority: 'immediate',
-        color: 'warning',
-        timeoutMs: 10000,
-      })
-    }
-
     context.setAppState(prev => {
       if (prev.toolPermissionContext.mode !== 'plan') return prev
       setHasExitedPlanMode(true)
       setNeedsPlanModeExitAttachment(true)
       let restoreMode = prev.toolPermissionContext.prePlanMode ?? 'default'
-      if (feature('TRANSCRIPT_CLASSIFIER')) {
-        if (
-          restoreMode === 'auto' &&
-          !(permissionSetupModule?.isAutoModeGateEnabled() ?? false)
-        ) {
-          restoreMode = 'default'
-        }
-        const finalRestoringAuto = restoreMode === 'auto'
-        // Capture pre-restore state — isAutoModeActive() is the authoritative
-        // signal (prePlanMode/strippedDangerousRules are stale after
-        // transitionPlanAutoMode deactivates mid-plan).
-        const autoWasUsedDuringPlan =
-          autoModeStateModule?.isAutoModeActive() ?? false
-        autoModeStateModule?.setAutoModeActive(finalRestoringAuto)
-        if (autoWasUsedDuringPlan && !finalRestoringAuto) {
-          setNeedsAutoModeExitAttachment(true)
-        }
+      // Restoring a previous preference cannot substitute for local consent.
+      if (restoreMode === 'auto' &&
+          (!isAutoModeGateEnabled() || !hasLocalAutoApprovalConsent())) {
+        restoreMode = 'default'
       }
-      // If restoring to a non-auto mode and permissions were stripped (either
-      // from entering plan from auto, or from shouldPlanUseAutoMode),
-      // restore them. If restoring to auto, keep them stripped.
-      const restoringToAuto = restoreMode === 'auto'
-      let baseContext = prev.toolPermissionContext
-      if (restoringToAuto) {
-        baseContext =
-          permissionSetupModule?.stripDangerousPermissionsForAutoMode(
-            baseContext,
-          ) ?? baseContext
-      } else if (prev.toolPermissionContext.strippedDangerousRules) {
-        baseContext =
-          permissionSetupModule?.restoreDangerousPermissions(baseContext) ??
-          baseContext
-      }
+      const restoredContext = transitionPermissionMode('plan', restoreMode, prev.toolPermissionContext)
       return {
         ...prev,
         toolPermissionContext: {
-          ...baseContext,
+          ...restoredContext,
           mode: restoreMode,
           prePlanMode: undefined,
         },

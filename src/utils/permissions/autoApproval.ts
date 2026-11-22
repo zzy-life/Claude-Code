@@ -7,6 +7,7 @@ import { createSystemMessage } from '../messages.js'
 import { sideQuery, type SideQueryOptions } from '../sideQuery.js'
 import { modelSupportsStructuredOutputs } from '../betas.js'
 import { hasLocalAutoApprovalConsent } from '../settings/settings.js'
+import { isAutoModeGateEnabled } from './permissionSetup.js'
 import { buildAutoApprovalEvidence } from './autoApprovalContext.js'
 import { AUTO_APPROVAL_OUTPUT_SCHEMA, AUTO_APPROVAL_SYSTEM_PROMPT } from './autoApprovalPrompt.js'
 import { resolveAutoApprovalModel, recordAutoApprovalUsage } from './autoApprovalModel.js'
@@ -68,7 +69,8 @@ export const autoApprovalResultSchema = z.discriminatedUnion('decision', [
 export function usesLocalAutoApproval(context: ToolUseContext): boolean {
   return !!context.approvalTurnScope &&
     context.getAppState().toolPermissionContext.mode === 'auto' &&
-    !context.options.isNonInteractiveSession && hasLocalAutoApprovalConsent()
+    !context.options.isNonInteractiveSession &&
+    isAutoModeGateEnabled() && hasLocalAutoApprovalConsent()
 }
 
 function manualDecision(result: PermissionAskDecision, reason: string): PermissionAskDecision {

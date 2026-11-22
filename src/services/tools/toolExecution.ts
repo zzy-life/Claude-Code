@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle'
+import { isAutoModeGateEnabled } from '../../utils/permissions/permissionSetup.js'
 import type {
   ContentBlockParam,
   ToolResultBlockParam,
@@ -1261,6 +1262,8 @@ async function checkPermissionsAndCallTool(
       if (
         !scope || receipt.used || receipt.toolUseID !== toolUseID ||
         receipt.permissionRevision !== scope.permissionRevision ||
+        // A bridge can become enabled after the approval response arrived.
+        !isAutoModeGateEnabled() ||
         toolUseContext.getAppState().toolPermissionContext.mode !== 'auto' ||
         receipt.inputJSON !== JSON.stringify(callInput)
       ) {

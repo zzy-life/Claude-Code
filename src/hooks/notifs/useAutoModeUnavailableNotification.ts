@@ -1,4 +1,3 @@
-import { feature } from 'bun:bundle'
 import { useEffect, useRef } from 'react'
 import { useNotifications } from 'src/context/notifications.js'
 import { getIsRemoteMode } from '../../bootstrap/state.js'
@@ -8,13 +7,11 @@ import {
   getAutoModeUnavailableNotification,
   getAutoModeUnavailableReason,
 } from '../../utils/permissions/permissionSetup.js'
-import { hasAutoModeOptIn } from '../../utils/settings/settings.js'
+import { hasLocalAutoApprovalConsent } from '../../utils/settings/settings.js'
 
 /**
  * Shows a one-shot notification when the shift-tab carousel wraps past where
- * auto mode would have been. Covers all reasons (settings, circuit-breaker,
- * org-allowlist). The startup case (defaultMode: auto silently downgraded) is
- * handled by verifyAutoModeGateAccess → checkAndDisableAutoModeIfNeeded.
+ * auto mode would have been, using the current local policy and versioned consent.
  */
 export function useAutoModeUnavailableNotification(): void {
   const { addNotification } = useNotifications()
@@ -29,7 +26,6 @@ export function useAutoModeUnavailableNotification(): void {
     const prevMode = prevModeRef.current
     prevModeRef.current = mode
 
-    if (!feature('TRANSCRIPT_CLASSIFIER')) return
     if (getIsRemoteMode()) return
     if (shownRef.current) return
 
@@ -38,7 +34,7 @@ export function useAutoModeUnavailableNotification(): void {
       prevMode !== 'default' &&
       prevMode !== 'auto' &&
       !isAutoModeAvailable &&
-      hasAutoModeOptIn()
+      hasLocalAutoApprovalConsent()
 
     if (!wrappedPastAutoSlot) return
 

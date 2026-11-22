@@ -1,12 +1,32 @@
-// 第一、二阶段契约测试；注入模型响应，不调用真实 API，不执行工具动作。
+// 第一至三阶段契约测试；注入模型响应，不调用真实 API，不执行工具动作。
 const STOP_REASON = '测试：操作超出授权范围'
 const TOOL_USE_ID = 'approval-test-tool'
 const TEST_ROOT_MODEL = 'test-root-model'
 const TEST_REVIEW_MODEL = 'test-review-model'
+const MODE_CYCLE_CONTEXT: ToolPermissionContext = {
+  mode: 'default', additionalWorkingDirectories: new Map(),
+  alwaysAllowRules: {}, alwaysDenyRules: {}, alwaysAskRules: {},
+  isBypassPermissionsModeAvailable: false,
+  isAutoModeAvailable: false,
+}
+const MODE_CYCLE_CASES = [
+  { mode: 'default', bypassAvailable: false, expected: 'plan' },
+  { mode: 'default', bypassAvailable: true, expected: 'plan' },
+  { mode: 'plan', bypassAvailable: false, expected: 'acceptEdits' },
+  { mode: 'plan', bypassAvailable: true, expected: 'acceptEdits' },
+  { mode: 'acceptEdits', bypassAvailable: true, expected: 'bypassPermissions' },
+  { mode: 'acceptEdits', bypassAvailable: false, expected: 'default' },
+  { mode: 'auto', bypassAvailable: true, expected: 'bypassPermissions' },
+  { mode: 'auto', bypassAvailable: false, expected: 'default' },
+  { mode: 'bypassPermissions', bypassAvailable: true, expected: 'default' },
+  { mode: 'bypassPermissions', bypassAvailable: false, expected: 'default' },
+] as const
 
 import assert from 'node:assert/strict'
 import { ApprovalTurnScope, ApprovalTurnStoppedError } from './src/utils/permissions/approvalTurnScope.js'
-import type { Tool, ToolUseContext } from './src/Tool.js'
+import type { Tool, ToolPermissionContext, ToolUseContext } from './src/Tool.js'
+import { EXTERNAL_PERMISSION_MODES, INTERNAL_PERMISSION_MODES, PERMISSION_MODES } from './src/types/permissions.js'
+import { getNextPermissionMode } from './src/utils/permissions/getNextPermissionMode.js'
 import type { AssistantMessage } from './src/types/message.js'
 import { buildAutoApprovalEvidence } from './src/utils/permissions/autoApprovalContext.js'
 import { allowsAutomaticWorkspaceEdits, requiresHumanApproval, supportsLocalAutoApproval, reviewToolWithAutoApproval, autoApprovalResultSchema } from './src/utils/permissions/autoApproval.js'
@@ -184,4 +204,26 @@ if ('content' in provenance) {
   assert.equal(projected.host_verified_complete_question_answers[0].answer.text, '是，但不要发布')
 }
 console.log('PASS：第二阶段四态解析、一次请求共享、准确输入收据、权限失效及完整动作预算')
-console.log('未覆盖：真实模型判断、真实终端队列、后台任务 UI、阶段三模式切换（需后续集成验收）')
+
+// 第三阶段：内部可寻址模式包含 auto，但外部协议模式不得暴露 auto。
+assert.equal(INTERNAL_PERMISSION_MODES.includes('auto'), true)
+assert.equal(PERMISSION_MODES.includes('auto'), true)
+assert.equal(EXTERNAL_PERMISSION_MODES.some(mode => String(mode) === 'auto'), false)
+
+// 生产函数没有 gate 注入入口；不修改真实设置、环境或模块来强行开启 auto。
+// isAutoModeAvailable=false 保证 acceptEdits 无论实际 gate 如何都跳过 auto；
+// 其他被测分支不读取 gate。这里只覆盖稳定链路及不可用跳档，不声称完整循环。
+for (const { mode, bypassAvailable, expected } of MODE_CYCLE_CASES) {
+  const nextMode = getNextPermissionMode({
+    ...MODE_CYCLE_CONTEXT,
+    mode,
+    isBypassPermissionsModeAvailable: bypassAvailable,
+  })
+  assert.equal(
+    nextMode,
+    expected,
+    `模式切换：${mode}，autoAvailable=false，bypassAvailable=${bypassAvailable}`,
+  )
+}
+console.log('PASS：第三阶段内部/外部模式边界、default→plan→acceptEdits、auto→bypass→default 及 auto/bypass 不可用跳档')
+console.log('未覆盖：acceptEdits→auto（gate 无注入入口）、真实模型判断、真实终端队列、后台任务 UI；未提前开展第四阶段全量测试')

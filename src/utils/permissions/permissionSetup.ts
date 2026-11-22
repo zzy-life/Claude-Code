@@ -2,6 +2,8 @@ import { feature } from 'bun:bundle'
 import { relative } from 'path'
 import {
   getOriginalCwd,
+  getIsRemoteMode,
+  getIsNonInteractiveSession,
   handleAutoModeTransition,
   handlePlanModeTransition,
   setHasExitedPlanMode,
@@ -9,7 +11,6 @@ import {
 } from '../../bootstrap/state.js'
 import type {
   ToolPermissionContext,
-  ToolPermissionRulesBySource,
 } from '../../Tool.js'
 import { getCwd } from '../cwd.js'
 import { isEnvTruthy } from '../envUtils.js'
@@ -19,8 +20,7 @@ import {
   getSettings_DEPRECATED,
   getPermissionDefaultMode,
   getSettingsFilePathForSource,
-  getUseAutoModeDuringPlan,
-  hasAutoModeOptIn,
+  hasLocalAutoApprovalConsent,
 } from '../settings/settings.js'
 import {
   type PermissionMode,
@@ -38,8 +38,6 @@ import { resolve } from 'path'
 import {
   checkSecurityRestrictionGate,
   checkStatsigFeatureGate_CACHED_MAY_BE_STALE,
-  getDynamicConfig_BLOCKS_ON_INIT,
-  getFeatureValue_CACHED_MAY_BE_STALE,
 } from 'src/services/analytics/growthbook.js'
 import {
   addDirHelpMessage,
@@ -58,10 +56,9 @@ import {
   getFsImplementation,
   safeResolvePath,
 } from '../../utils/fsOperations.js'
-import { modelSupportsAutoMode } from '../betas.js'
+import { isTeammate } from '../teammate.js'
 import { logForDebugging } from '../debug.js'
 import { gracefulShutdown } from '../gracefulShutdown.js'
-import { getMainLoopModel } from '../model/model.js'
 import {
   CROSS_PLATFORM_CODE_EXEC,
   DANGEROUS_BASH_PATTERNS,
@@ -504,59 +501,8 @@ export function removeDangerousPermissions(
 }
 
 /**
- * Prepares a ToolPermissionContext for auto mode by stripping
- * dangerous permissions that would bypass the classifier.
- * Returns the cleaned context (with mode unchanged — caller sets the mode).
- */
-export function stripDangerousPermissionsForAutoMode(
-  context: ToolPermissionContext,
-): ToolPermissionContext {
-  const rules: PermissionRule[] = []
-  for (const [source, ruleStrings] of Object.entries(
-    context.alwaysAllowRules,
-  )) {
-    if (!ruleStrings) {
-      continue
-    }
-    for (const ruleString of ruleStrings) {
-      const ruleValue = permissionRuleValueFromString(ruleString)
-      rules.push({
-        source: source as PermissionRuleSource,
-        ruleBehavior: 'allow',
-        ruleValue,
-      })
-    }
-  }
-  const dangerousPermissions = findDangerousClassifierPermissions(rules, [])
-  if (dangerousPermissions.length === 0) {
-    return {
-      ...context,
-      strippedDangerousRules: context.strippedDangerousRules ?? {},
-    }
-  }
-  for (const permission of dangerousPermissions) {
-    logForDebugging(
-      `Ignoring dangerous permission ${permission.ruleDisplay} from ${permission.sourceDisplay} (bypasses classifier)`,
-    )
-  }
-  // Mirror removeDangerousPermissions' source filter so stash == what was actually removed.
-  const stripped: ToolPermissionRulesBySource = {}
-  for (const perm of dangerousPermissions) {
-    if (!isPermissionUpdateDestination(perm.source)) continue
-    ;(stripped[perm.source] ??= []).push(
-      permissionRuleValueToString(perm.ruleValue),
-    )
-  }
-  return {
-    ...removeDangerousPermissions(context, dangerousPermissions),
-    strippedDangerousRules: stripped,
-  }
-}
-
-/**
- * Restores dangerous allow rules previously stashed by
- * stripDangerousPermissionsForAutoMode. Called when leaving auto mode so that
- * the user's Bash(python:*), Agent(*), etc. rules work again in default mode.
+ * Restores allow rules stashed by the previous auto implementation.
+ * New auto approval respects existing allow rules and never creates this stash.
  * Clears the stash so a second exit is a no-op.
  */
 export function restoreDangerousPermissions(
@@ -586,7 +532,7 @@ export function restoreDangerousPermissions(
  *
  * Currently handles:
  * - Plan mode enter/exit attachments (via handlePlanModeTransition)
- * - Auto mode activation: setAutoModeActive, stripDangerousPermissionsForAutoMode
+ * - Local auto policy and consent checks; restoration of legacy stripped rules
  *
  * Returns the (possibly modified) context. Caller is responsible for setting
  * the mode on the returned context.
@@ -600,46 +546,38 @@ export function transitionPermissionMode(
   toMode: string,
   context: ToolPermissionContext,
 ): ToolPermissionContext {
-  // plan→plan (SDK set_permission_mode) would wrongly hit the leave branch below
+  // Validate before emitting transition side effects, including repeated auto requests.
+  if (toMode === 'auto') {
+    if (!isAutoModeGateEnabled()) {
+      throw new Error('Cannot transition to auto mode: local policy does not allow it')
+    }
+    if (!hasLocalAutoApprovalConsent()) {
+      throw new Error('Cannot transition to auto mode: local approval consent is required')
+    }
+  }
   if (fromMode === toMode) return context
 
   handlePlanModeTransition(fromMode, toMode)
   handleAutoModeTransition(fromMode, toMode)
 
-  if (fromMode === 'plan' && toMode !== 'plan') {
+  if (fromMode === 'plan') {
     setHasExitedPlanMode(true)
   }
 
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    if (toMode === 'plan' && fromMode !== 'plan') {
-      return prepareContextForPlanMode(context)
-    }
-
-    // Plan with auto active counts as using the classifier (for the leaving side).
-    // isAutoModeActive() is the authoritative signal — prePlanMode/strippedDangerousRules
-    // are unreliable proxies because auto can be deactivated mid-plan (non-opt-in
-    // entry, transitionPlanAutoMode) while those fields remain set/unset.
-    const fromUsesClassifier =
-      fromMode === 'auto' ||
-      (fromMode === 'plan' &&
-        (autoModeStateModule?.isAutoModeActive() ?? false))
-    const toUsesClassifier = toMode === 'auto' // plan entry handled above
-
-    if (toUsesClassifier && !fromUsesClassifier) {
-      if (!isAutoModeGateEnabled()) {
-        throw new Error('Cannot transition to auto mode: gate is not enabled')
-      }
-      autoModeStateModule?.setAutoModeActive(true)
-      context = stripDangerousPermissionsForAutoMode(context)
-    } else if (fromUsesClassifier && !toUsesClassifier) {
-      autoModeStateModule?.setAutoModeActive(false)
-      setNeedsAutoModeExitAttachment(true)
-      context = restoreDangerousPermissions(context)
-    }
+  if (fromMode === 'auto') {
+    autoModeStateModule?.setAutoModeActive(false)
+    setNeedsAutoModeExitAttachment(true)
+    context = restoreDangerousPermissions(context)
   }
 
-  // Only spread if there's something to clear (preserves ref equality)
-  if (fromMode === 'plan' && toMode !== 'plan' && context.prePlanMode) {
+  if (toMode === 'plan') {
+    // fromMode is authoritative; callers need not have updated context.mode yet.
+    return prepareContextForPlanMode({ ...context, mode: fromMode as PermissionMode })
+  }
+
+  // Old plan sessions may still carry classifier state and stripped allow rules.
+  if (fromMode === 'plan') {
+    context = transitionPlanAutoMode(context)
     return { ...context, prePlanMode: undefined }
   }
 
@@ -690,9 +628,11 @@ function isSymlinkTo({
 export function initialPermissionModeFromCLI({
   permissionModeCli,
   dangerouslySkipPermissions,
+  autoApprovalEnvironment,
 }: {
   permissionModeCli: string | undefined
   dangerouslySkipPermissions: boolean | undefined
+  autoApprovalEnvironment?: 'local-interactive' | 'headless' | 'teammate' | 'remote'
 }): { mode: PermissionMode; notification?: string } {
   const settings = getSettings_DEPRECATED() || {}
 
@@ -711,13 +651,11 @@ export function initialPermissionModeFromCLI({
     growthBookDisableBypassPermissionsMode ||
     settingsDisableBypassPermissionsMode
 
-  // Sync circuit-breaker check (cached GB read). Prevents the
-  // AutoModeOptInDialog from showing in showSetupScreens() when auto can't
-  // actually be entered. autoModeFlagCli still carries intent through to
-  // verifyAutoModeGateAccess, which notifies the user why.
-  const autoModeCircuitBrokenSync = feature('TRANSCRIPT_CLASSIFIER')
-    ? getAutoModeEnabledStateIfCached() === 'disabled'
-    : false
+  // Explicit environment can further restrict startup, never override runtime policy.
+  const autoEnvironmentSupported =
+    autoApprovalEnvironment === undefined ||
+    autoApprovalEnvironment === 'local-interactive'
+  const autoModeAvailable = autoEnvironmentSupported && isAutoModeGateEnabled()
 
   // Modes in order of priority
   const orderedModes: PermissionMode[] = []
@@ -728,18 +666,15 @@ export function initialPermissionModeFromCLI({
   }
   if (permissionModeCli) {
     const parsedMode = permissionModeFromString(permissionModeCli)
-    if (feature('TRANSCRIPT_CLASSIFIER') && parsedMode === 'auto') {
-      if (autoModeCircuitBrokenSync) {
-        logForDebugging(
-          'auto mode circuit breaker active (cached) — falling back to default',
-          { level: 'warn' },
-        )
-      } else {
-        orderedModes.push('auto')
+    if (parsedMode === 'auto' && !autoModeAvailable) {
+      let reason: AutoModeUnavailableReason = 'environment'
+      if (isAutoModeDisabledBySettings()) {
+        reason = 'settings'
       }
-    } else {
-      orderedModes.push(parsedMode)
+      throw new Error(getAutoModeUnavailableNotification(reason))
     }
+    // Local auto may await the startup consent dialog; parsing never activates it.
+    orderedModes.push(parsedMode)
   }
   const defaultMode = getPermissionDefaultMode()
   if (defaultMode) {
@@ -759,14 +694,9 @@ export function initialPermissionModeFromCLI({
         mode: settingsMode as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       })
     }
-    // auto from settings requires the same gate check as from CLI
-    else if (feature('TRANSCRIPT_CLASSIFIER') && settingsMode === 'auto') {
-      if (autoModeCircuitBrokenSync) {
-        logForDebugging(
-          'auto mode circuit breaker active (cached) — falling back to default',
-          { level: 'warn' },
-        )
-      } else {
+    // Unsupported defaults are ignored rather than granting auto outside local UI.
+    else if (settingsMode === 'auto') {
+      if (autoModeAvailable) {
         orderedModes.push('auto')
       }
     } else {
@@ -799,14 +729,6 @@ export function initialPermissionModeFromCLI({
 
   if (!result) {
     result = { mode: 'default', notification }
-  }
-
-  if (!result) {
-    result = { mode: 'default', notification }
-  }
-
-  if (feature('TRANSCRIPT_CLASSIFIER') && result.mode === 'auto') {
-    autoModeStateModule?.setAutoModeActive(true)
   }
 
   return result
@@ -892,8 +814,7 @@ export async function initializeToolPermissionContext({
   overlyBroadBashPermissions: DangerousPermissionInfo[]
 }> {
   // Parse comma-separated allowed and disallowed tools if provided
-  // Normalize legacy tool names (e.g., 'Task' → 'Agent') so that in-memory
-  // rule removal in stripDangerousPermissionsForAutoMode matches correctly.
+  // Normalize legacy tool names (e.g., 'Task' → 'Agent') for permission matching.
   const parsedAllowedToolsCli = parseToolListFromCLI(allowedToolsCli).map(
     rule => permissionRuleValueToString(permissionRuleValueFromString(rule)),
   )
@@ -966,16 +887,8 @@ export async function initializeToolPermissionContext({
     ]
   }
 
-  // Ant-only: Detect dangerous shell permissions for auto mode
-  // Dangerous permissions (like Bash(*), Bash(python:*), PowerShell(iex:*)) would auto-allow
-  // before the classifier can evaluate them, defeating the purpose of safer YOLO mode
-  let dangerousPermissions: DangerousPermissionInfo[] = []
-  if (feature('TRANSCRIPT_CLASSIFIER') && permissionMode === 'auto') {
-    dangerousPermissions = findDangerousClassifierPermissions(
-      rulesFromDisk,
-      parsedAllowedToolsCli,
-    )
-  }
+  // Preserve the return contract without re-reviewing existing allow rules.
+  const dangerousPermissions: DangerousPermissionInfo[] = []
 
   let toolPermissionContext = applyPermissionRulesToPermissionContext(
     {
@@ -985,9 +898,7 @@ export async function initializeToolPermissionContext({
       alwaysDenyRules: { cliArg: parsedDisallowedToolsCli },
       alwaysAskRules: {},
       isBypassPermissionsModeAvailable,
-      ...(feature('TRANSCRIPT_CLASSIFIER')
-        ? { isAutoModeAvailable: isAutoModeGateEnabled() }
-        : {}),
+      isAutoModeAvailable: isAutoModeGateEnabled(),
     },
     rulesFromDisk,
   )
@@ -1035,16 +946,12 @@ export async function initializeToolPermissionContext({
 }
 
 export type AutoModeGateCheckResult = {
-  // Transform function (not a pre-computed context) so callers can apply it
-  // inside setAppState(prev => ...) against the CURRENT context. Pre-computing
-  // the context here captured a stale snapshot: the async GrowthBook await
-  // below can be outrun by a mid-turn shift-tab, and returning
-  // { ...currentContext, ... } would overwrite the user's mode change.
+  // Apply to the current context inside setAppState so later mode changes survive.
   updateContext: (ctx: ToolPermissionContext) => ToolPermissionContext
   notification?: string
 }
 
-export type AutoModeUnavailableReason = 'settings' | 'circuit-breaker' | 'model'
+export type AutoModeUnavailableReason = 'settings' | 'environment'
 
 export function getAutoModeUnavailableNotification(
   reason: AutoModeUnavailableReason,
@@ -1054,11 +961,8 @@ export function getAutoModeUnavailableNotification(
     case 'settings':
       base = 'auto mode disabled by settings'
       break
-    case 'circuit-breaker':
-      base = 'auto mode is unavailable for your plan'
-      break
-    case 'model':
-      base = 'auto mode unavailable for this model'
+    case 'environment':
+      base = 'auto mode is only available in a local interactive session'
       break
   }
   return process.env.USER_TYPE === 'ant'
@@ -1067,198 +971,50 @@ export function getAutoModeUnavailableNotification(
 }
 
 /**
- * Async check of auto mode availability.
- *
- * Returns a transform function (not a pre-computed context) that callers
- * apply inside setAppState(prev => ...) against the CURRENT context. This
- * prevents the async GrowthBook await from clobbering mid-turn mode changes
- * (e.g., user shift-tabs to acceptEdits while this check is in flight).
- *
- * The transform re-checks mode/prePlanMode against the fresh ctx to avoid
- * kicking the user out of a mode they've already left during the await.
+ * Checks local auto availability while preserving the existing async API.
+ * The returned transform re-checks runtime policy against the current context;
+ * unrelated permission modes are never changed.
  */
 export async function verifyAutoModeGateAccess(
   currentContext: ToolPermissionContext,
-  // Runtime AppState.fastMode — passed from callers with AppState access so
-  // the disableFastMode circuit breaker reads current state, not stale
-  // settings.fastMode (which is intentionally sticky across /model auto-
-  // downgrades). Optional for callers without AppState (e.g. SDK init paths).
-  fastMode?: boolean,
+  // Retained for call-site compatibility; local availability is independent of speed.
+  _fastMode?: boolean,
 ): Promise<AutoModeGateCheckResult> {
-  // Auto-mode config — runs in ALL builds (circuit breaker, carousel, kick-out)
-  // Fresh read of tengu_auto_mode_config.enabled — this async check runs once
-  // after GrowthBook initialization and is the authoritative source for
-  // isAutoModeAvailable. The sync startup path uses stale cache; this
-  // corrects it. Circuit breaker (enabled==='disabled') takes effect here.
-  const autoModeConfig = await getDynamicConfig_BLOCKS_ON_INIT<{
-    enabled?: AutoModeEnabledState
-    disableFastMode?: boolean
-  }>('tengu_auto_mode_config', {})
-  const enabledState = parseAutoModeEnabledState(autoModeConfig?.enabled)
-  const disabledBySettings = isAutoModeDisabledBySettings()
-  // Treat settings-disable the same as GrowthBook 'disabled' for circuit-breaker
-  // semantics — blocks SDK/explicit re-entry via isAutoModeGateEnabled().
-  autoModeStateModule?.setAutoModeCircuitBroken(
-    enabledState === 'disabled' || disabledBySettings,
-  )
-
-  // Carousel availability: not circuit-broken, not disabled-by-settings,
-  // model supports it, disableFastMode breaker not firing, and (enabled or opted-in)
-  const mainModel = getMainLoopModel()
-  // Temp circuit breaker: tengu_auto_mode_config.disableFastMode blocks auto
-  // mode when fast mode is on. Checks runtime AppState.fastMode (if provided)
-  // and, for ants, model name '-fast' substring (ant-internal fast models
-  // like capybara-v2-fast[1m] encode speed in the model ID itself).
-  // Remove once auto+fast mode interaction is validated.
-  const disableFastModeBreakerFires =
-    !!autoModeConfig?.disableFastMode &&
-    (!!fastMode ||
-      (process.env.USER_TYPE === 'ant' &&
-        mainModel.toLowerCase().includes('-fast')))
-  const modelSupported =
-    modelSupportsAutoMode(mainModel) && !disableFastModeBreakerFires
-  let carouselAvailable = false
-  if (enabledState !== 'disabled' && !disabledBySettings && modelSupported) {
-    carouselAvailable =
-      enabledState === 'enabled' || hasAutoModeOptInAnySource()
-  }
-  // canEnterAuto gates explicit entry (--permission-mode auto, defaultMode: auto)
-  // — explicit entry IS an opt-in, so we only block on circuit breaker + settings + model
-  const canEnterAuto =
-    enabledState !== 'disabled' && !disabledBySettings && modelSupported
-  logForDebugging(
-    `[auto-mode] verifyAutoModeGateAccess: enabledState=${enabledState} disabledBySettings=${disabledBySettings} model=${mainModel} modelSupported=${modelSupported} disableFastModeBreakerFires=${disableFastModeBreakerFires} carouselAvailable=${carouselAvailable} canEnterAuto=${canEnterAuto}`,
-  )
-
-  // Capture CLI-flag intent now (doesn't depend on context).
-  const autoModeFlagCli = autoModeStateModule?.getAutoModeFlagCli() ?? false
-
-  // Return a transform function that re-evaluates context-dependent conditions
-  // against the CURRENT context at setAppState time. The async GrowthBook
-  // results above (canEnterAuto, carouselAvailable, enabledState, reason) are
-  // closure-captured — those don't depend on context. But mode, prePlanMode,
-  // and isAutoModeAvailable checks MUST use the fresh ctx or a mid-await
-  // shift-tab gets reverted (or worse, the user stays in auto despite the
-  // circuit breaker if they entered auto DURING the await — which is possible
-  // because setAutoModeCircuitBroken above runs AFTER the await).
-  const setAvailable = (
-    ctx: ToolPermissionContext,
-    available: boolean,
-  ): ToolPermissionContext => {
-    if (ctx.isAutoModeAvailable !== available) {
-      logForDebugging(
-        `[auto-mode] verifyAutoModeGateAccess setAvailable: ${ctx.isAutoModeAvailable} -> ${available}`,
-      )
-    }
-    return ctx.isAutoModeAvailable === available
-      ? ctx
-      : { ...ctx, isAutoModeAvailable: available }
-  }
-
-  if (canEnterAuto) {
-    return { updateContext: ctx => setAvailable(ctx, carouselAvailable) }
-  }
-
-  // Gate is off or circuit-broken — determine reason (context-independent).
-  let reason: AutoModeUnavailableReason
-  if (disabledBySettings) {
-    reason = 'settings'
-    logForDebugging('auto mode disabled: disableAutoMode in settings', {
-      level: 'warn',
-    })
-  } else if (enabledState === 'disabled') {
-    reason = 'circuit-breaker'
-    logForDebugging(
-      'auto mode disabled: tengu_auto_mode_config.enabled === "disabled" (circuit breaker)',
-      { level: 'warn' },
-    )
-  } else {
-    reason = 'model'
-    logForDebugging(
-      `auto mode disabled: model ${getMainLoopModel()} does not support auto mode`,
-      { level: 'warn' },
-    )
-  }
-  const notification = getAutoModeUnavailableNotification(reason)
-
-  // Unified kick-out transform. Re-checks the FRESH ctx and only fires
-  // side effects (setAutoModeActive(false), setNeedsAutoModeExitAttachment)
-  // when the kick-out actually applies. This keeps autoModeActive in sync
-  // with toolPermissionContext.mode even if the user changed modes during
-  // the await: if they already left auto on their own, handleCycleMode
-  // already deactivated the classifier and we don't fire again; if they
-  // ENTERED auto during the await (possible before setAutoModeCircuitBroken
-  // landed), we kick them out here.
-  const kickOutOfAutoIfNeeded = (
-    ctx: ToolPermissionContext,
-  ): ToolPermissionContext => {
-    const inAuto = ctx.mode === 'auto'
-    logForDebugging(
-      `[auto-mode] kickOutOfAutoIfNeeded applying: ctx.mode=${ctx.mode} ctx.prePlanMode=${ctx.prePlanMode} reason=${reason}`,
-    )
-    // Plan mode with auto active: either from prePlanMode='auto' (entered
-    // from auto) or from opt-in (strippedDangerousRules present).
-    const inPlanWithAutoActive =
-      ctx.mode === 'plan' &&
-      (ctx.prePlanMode === 'auto' || !!ctx.strippedDangerousRules)
-    if (!inAuto && !inPlanWithAutoActive) {
-      return setAvailable(ctx, false)
-    }
-    if (inAuto) {
-      autoModeStateModule?.setAutoModeActive(false)
-      setNeedsAutoModeExitAttachment(true)
-      return {
-        ...applyPermissionUpdate(restoreDangerousPermissions(ctx), {
+  const reason = getAutoModeUnavailableReason()
+  const updateContext = (ctx: ToolPermissionContext): ToolPermissionContext => {
+    // Re-read local policy when applying to the latest context.
+    const available = isAutoModeGateEnabled()
+    let updatedContext = ctx
+    if (!available) {
+      if (ctx.mode === 'auto') {
+        autoModeStateModule?.setAutoModeActive(false)
+        setNeedsAutoModeExitAttachment(true)
+        updatedContext = applyPermissionUpdate(restoreDangerousPermissions(ctx), {
           type: 'setMode',
           mode: 'default',
           destination: 'session',
-        }),
-        isAutoModeAvailable: false,
+        })
+      } else if (ctx.mode === 'plan') {
+        updatedContext = transitionPlanAutoMode(ctx)
+        if (updatedContext.prePlanMode === 'auto') {
+          updatedContext = { ...updatedContext, prePlanMode: 'default' }
+        }
       }
     }
-    // Plan with auto active: deactivate auto, restore permissions, defuse
-    // prePlanMode so ExitPlanMode goes to default.
-    autoModeStateModule?.setAutoModeActive(false)
-    setNeedsAutoModeExitAttachment(true)
-    return {
-      ...restoreDangerousPermissions(ctx),
-      prePlanMode: ctx.prePlanMode === 'auto' ? 'default' : ctx.prePlanMode,
-      isAutoModeAvailable: false,
+    if (updatedContext.isAutoModeAvailable === available) {
+      return updatedContext
     }
+    return { ...updatedContext, isAutoModeAvailable: available }
   }
 
-  // Notification decisions use the stale context — that's OK: we're deciding
-  // WHETHER to notify based on what the user WAS doing when this check started.
-  // (Side effects and mode mutation are decided inside the transform above,
-  // against the fresh ctx.)
-  const wasInAuto = currentContext.mode === 'auto'
-  // Auto was used during plan: entered from auto or opt-in auto active
-  const autoActiveDuringPlan =
-    currentContext.mode === 'plan' &&
-    (currentContext.prePlanMode === 'auto' ||
-      !!currentContext.strippedDangerousRules)
-  const wantedAuto = wasInAuto || autoActiveDuringPlan || autoModeFlagCli
-
-  if (!wantedAuto) {
-    // User didn't want auto at call time — no notification. But still apply
-    // the full kick-out transform: if they shift-tabbed INTO auto during the
-    // await (before setAutoModeCircuitBroken landed), we need to evict them.
-    return { updateContext: kickOutOfAutoIfNeeded }
+  if (
+    reason !== null &&
+    (currentContext.mode === 'auto' ||
+      (currentContext.mode === 'plan' && currentContext.prePlanMode === 'auto'))
+  ) {
+    return { updateContext, notification: getAutoModeUnavailableNotification(reason) }
   }
-
-  if (wasInAuto || autoActiveDuringPlan) {
-    // User was in auto or had auto active during plan — kick out + notify.
-    return { updateContext: kickOutOfAutoIfNeeded, notification }
-  }
-
-  // autoModeFlagCli only: defaultMode was auto but sync check rejected it.
-  // Suppress notification if isAutoModeAvailable is already false (already
-  // notified on a prior check; prevents repeat notifications on successive
-  // unsupported-model switches).
-  return {
-    updateContext: kickOutOfAutoIfNeeded,
-    notification: currentContext.isAutoModeAvailable ? notification : undefined,
-  }
+  return { updateContext }
 }
 
 /**
@@ -1278,92 +1034,66 @@ function isAutoModeDisabledBySettings(): boolean {
   )
 }
 
+// The local REPL registers a live AppState reader. Do not reuse getIsRemoteMode:
+// enabling local Remote Control does not turn the process into a remote worker.
+let localAutoApprovalBridgeStateReader: (() => boolean) | undefined
+
+export function setLocalAutoApprovalBridgeStateReader(
+  reader: (() => boolean) | undefined,
+): void {
+  localAutoApprovalBridgeStateReader = reader
+}
+
 /**
- * Checks if auto mode can be entered: circuit breaker is not active and settings
- * have not disabled it. Synchronous.
+ * Exposes auto only in local interactive sessions allowed by management policy.
+ * Consent is checked on entry, not here, so first-time users can select the UI.
  */
 export function isAutoModeGateEnabled(): boolean {
-  if (autoModeStateModule?.isAutoModeCircuitBroken() ?? false) return false
   if (isAutoModeDisabledBySettings()) return false
-  if (!modelSupportsAutoMode(getMainLoopModel())) return false
+  if (getIsRemoteMode()) return false
+  if (localAutoApprovalBridgeStateReader?.()) return false
+  if (getIsNonInteractiveSession()) return false
+  if (isTeammate()) return false
   return true
 }
 
 /**
  * Returns the reason auto mode is currently unavailable, or null if available.
- * Synchronous — uses state populated by verifyAutoModeGateAccess.
+ * Synchronous — reads only local settings and runtime environment.
  */
 export function getAutoModeUnavailableReason(): AutoModeUnavailableReason | null {
   if (isAutoModeDisabledBySettings()) return 'settings'
-  if (autoModeStateModule?.isAutoModeCircuitBroken() ?? false) {
-    return 'circuit-breaker'
-  }
-  if (!modelSupportsAutoMode(getMainLoopModel())) return 'model'
+  if (!isAutoModeGateEnabled()) return 'environment'
   return null
 }
 
 /**
- * The `enabled` field in the tengu_auto_mode_config GrowthBook JSON config.
- * Controls auto mode availability in UI surfaces (CLI, IDE, Desktop).
- * - 'enabled': auto mode is available in the shift-tab carousel (or equivalent)
- * - 'disabled': auto mode is fully unavailable — circuit breaker for incident response
- * - 'opt-in': auto mode is available only if the user has explicitly opted in
- *   (via --enable-auto-mode in CLI, or a settings toggle in IDE/Desktop)
+ * Legacy return type retained for callers. Local policy returns enabled/disabled;
+ * the opt-in member remains for source compatibility only.
  */
 export type AutoModeEnabledState = 'enabled' | 'disabled' | 'opt-in'
 
-const AUTO_MODE_ENABLED_DEFAULT: AutoModeEnabledState = 'disabled'
-
-function parseAutoModeEnabledState(value: unknown): AutoModeEnabledState {
-  if (value === 'enabled' || value === 'disabled' || value === 'opt-in') {
-    return value
-  }
-  return AUTO_MODE_ENABLED_DEFAULT
-}
-
-/**
- * Reads the `enabled` field from tengu_auto_mode_config (cached, may be stale).
- * Defaults to 'disabled' if GrowthBook is unavailable or the field is unset.
- * Other surfaces (IDE, Desktop) should call this to decide whether to surface
- * auto mode in their mode pickers.
- */
+/** Compatibility entry point backed by synchronous local policy, not experiments. */
 export function getAutoModeEnabledState(): AutoModeEnabledState {
-  const config = getFeatureValue_CACHED_MAY_BE_STALE<{
-    enabled?: AutoModeEnabledState
-  }>('tengu_auto_mode_config', {})
-  return parseAutoModeEnabledState(config?.enabled)
+  if (isAutoModeGateEnabled()) {
+    return 'enabled'
+  }
+  return 'disabled'
 }
 
-const NO_CACHED_AUTO_MODE_CONFIG = Symbol('no-cached-auto-mode-config')
-
-/**
- * Like getAutoModeEnabledState but returns undefined when no cached value
- * exists (cold start, before GrowthBook init). Used by the sync
- * circuit-breaker check in initialPermissionModeFromCLI, which must not
- * conflate "not yet fetched" with "fetched and disabled" — the former
- * defers to verifyAutoModeGateAccess, the latter blocks immediately.
- */
+/** Local policy is always available; no remote cache is needed. */
 export function getAutoModeEnabledStateIfCached():
   | AutoModeEnabledState
   | undefined {
-  const config = getFeatureValue_CACHED_MAY_BE_STALE<
-    { enabled?: AutoModeEnabledState } | typeof NO_CACHED_AUTO_MODE_CONFIG
-  >('tengu_auto_mode_config', NO_CACHED_AUTO_MODE_CONFIG)
-  if (config === NO_CACHED_AUTO_MODE_CONFIG) return undefined
-  return parseAutoModeEnabledState(config?.enabled)
+  return getAutoModeEnabledState()
 }
 
 /**
- * Returns true if the user has opted in to auto mode via any trusted mechanism:
- * - CLI flag (--enable-auto-mode / --permission-mode auto) — session-scoped
- *   availability request; the startup dialog in showSetupScreens enforces
- *   persistent consent before the REPL renders.
- * - skipAutoPermissionPrompt setting (persistent; set by accepting the opt-in
- *   dialog or by IDE/Desktop settings toggle)
+ * Compatibility entry point for versioned local approval consent.
+ * CLI intent and the old skipAutoPermissionPrompt flag do not constitute consent.
  */
 export function hasAutoModeOptInAnySource(): boolean {
-  if (autoModeStateModule?.getAutoModeFlagCli() ?? false) return true
-  return hasAutoModeOptIn()
+  return hasLocalAutoApprovalConsent()
 }
 
 /**
@@ -1433,101 +1163,42 @@ export async function checkAndDisableBypassPermissions(
 }
 
 export function isDefaultPermissionModeAuto(): boolean {
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    return getPermissionDefaultMode() === 'auto'
-  }
-  return false
+  return getPermissionDefaultMode() === 'auto'
 }
 
 /**
- * Whether plan mode should use auto mode semantics (classifier runs during
- * plan). True when the user has opted in to auto mode and the gate is enabled.
- * Evaluated at permission-check time so it's reactive to config changes.
+ * Plan mode never enables automatic AI approval, regardless of consent.
  */
 export function shouldPlanUseAutoMode(): boolean {
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    return (
-      hasAutoModeOptIn() &&
-      isAutoModeGateEnabled() &&
-      getUseAutoModeDuringPlan()
-    )
-  }
   return false
 }
 
 /**
  * Centralized plan-mode entry. Stashes the current mode as prePlanMode so
- * ExitPlanMode can restore it. When the user has opted in to auto mode,
- * auto semantics stay active during plan mode.
+ * ExitPlanMode can restore it. Restore any legacy stripped allow rules without
+ * activating automatic approval.
  */
 export function prepareContextForPlanMode(
   context: ToolPermissionContext,
 ): ToolPermissionContext {
-  const currentMode = context.mode
-  if (currentMode === 'plan') return context
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    const planAutoMode = shouldPlanUseAutoMode()
-    if (currentMode === 'auto') {
-      if (planAutoMode) {
-        return { ...context, prePlanMode: 'auto' }
-      }
-      autoModeStateModule?.setAutoModeActive(false)
-      setNeedsAutoModeExitAttachment(true)
-      return {
-        ...restoreDangerousPermissions(context),
-        prePlanMode: 'auto',
-      }
-    }
-    if (planAutoMode && currentMode !== 'bypassPermissions') {
-      autoModeStateModule?.setAutoModeActive(true)
-      return {
-        ...stripDangerousPermissionsForAutoMode(context),
-        prePlanMode: currentMode,
-      }
-    }
+  if (context.mode === 'plan') return context
+  return {
+    ...restoreDangerousPermissions(context),
+    prePlanMode: context.mode,
   }
-  logForDebugging(
-    `[prepareContextForPlanMode] plain plan entry, prePlanMode=${currentMode}`,
-    { level: 'info' },
-  )
-  return { ...context, prePlanMode: currentMode }
 }
 
 /**
- * Reconciles auto-mode state during plan mode after a settings change.
- * Compares desired state (shouldPlanUseAutoMode) against actual state
- * (isAutoModeActive) and activates/deactivates auto accordingly. No-op when
- * not in plan mode. Called from applySettingsChange so that toggling
- * useAutoModeDuringPlan mid-plan takes effect immediately.
+ * Cleans up legacy classifier state during plan mode after settings changes.
+ * Never activates auto or removes user allow rules.
  */
 export function transitionPlanAutoMode(
   context: ToolPermissionContext,
 ): ToolPermissionContext {
-  if (!feature('TRANSCRIPT_CLASSIFIER')) return context
   if (context.mode !== 'plan') return context
-  // Mirror prepareContextForPlanMode's entry-time exclusion — never activate
-  // auto mid-plan when the user entered from a dangerous mode.
-  if (context.prePlanMode === 'bypassPermissions') {
-    return context
+  if (autoModeStateModule?.isAutoModeActive()) {
+    autoModeStateModule.setAutoModeActive(false)
+    setNeedsAutoModeExitAttachment(true)
   }
-
-  const want = shouldPlanUseAutoMode()
-  const have = autoModeStateModule?.isAutoModeActive() ?? false
-
-  if (want && have) {
-    // syncPermissionRulesFromDisk (called before us in applySettingsChange)
-    // re-adds dangerous rules from disk without touching strippedDangerousRules.
-    // Re-strip so the classifier isn't bypassed by prefix-rule allow matches.
-    return stripDangerousPermissionsForAutoMode(context)
-  }
-  if (!want && !have) return context
-
-  if (want) {
-    autoModeStateModule?.setAutoModeActive(true)
-    setNeedsAutoModeExitAttachment(false)
-    return stripDangerousPermissionsForAutoMode(context)
-  }
-  autoModeStateModule?.setAutoModeActive(false)
-  setNeedsAutoModeExitAttachment(true)
   return restoreDangerousPermissions(context)
 }

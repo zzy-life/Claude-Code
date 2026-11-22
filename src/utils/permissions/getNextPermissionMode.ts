@@ -1,4 +1,5 @@
-import { feature } from 'bun:bundle'
+import { getIsRemoteMode } from '../../bootstrap/state.js'
+import { isInProcessTeammate } from '../teammateContext.js'
 import type { ToolPermissionContext } from '../../Tool.js'
 import { logForDebugging } from '../debug.js'
 import type { PermissionMode } from './PermissionMode.js'
@@ -8,24 +9,20 @@ import {
   transitionPermissionMode,
 } from './permissionSetup.js'
 
-// Checks both the cached isAutoModeAvailable (set at startup by
-// verifyAutoModeGateAccess) and the live isAutoModeGateEnabled() — these can
-// diverge if the circuit breaker or settings change mid-session. The
-// live check prevents transitionPermissionMode from throwing
-// (permissionSetup.ts:~559), which would silently crash the shift+tab handler
-// and leave the user stuck at the current mode.
+// Availability follows the local policy, not classifier entitlement or consent.
+// Consent is checked separately immediately before actual activation.
 function canCycleToAuto(ctx: ToolPermissionContext): boolean {
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    const gateEnabled = isAutoModeGateEnabled()
-    const can = !!ctx.isAutoModeAvailable && gateEnabled
-    if (!can) {
-      logForDebugging(
-        `[auto-mode] canCycleToAuto=false: ctx.isAutoModeAvailable=${ctx.isAutoModeAvailable} isAutoModeGateEnabled=${gateEnabled} reason=${getAutoModeUnavailableReason()}`,
-      )
-    }
-    return can
+  if (isInProcessTeammate() || getIsRemoteMode()) {
+    return false
   }
-  return false
+  const gateEnabled = isAutoModeGateEnabled()
+  const can = !!ctx.isAutoModeAvailable && gateEnabled
+  if (!can) {
+    logForDebugging(
+      `[auto-mode] canCycleToAuto=false: ctx.isAutoModeAvailable=${ctx.isAutoModeAvailable} isAutoModeGateEnabled=${gateEnabled} reason=${getAutoModeUnavailableReason()}`,
+    )
+  }
+  return can
 }
 
 /**
@@ -37,34 +34,27 @@ export function getNextPermissionMode(
 ): PermissionMode {
   switch (toolPermissionContext.mode) {
     case 'default':
-      // Ants skip acceptEdits and plan — auto mode replaces them
-      if (process.env.USER_TYPE === 'ant') {
-        if (toolPermissionContext.isBypassPermissionsModeAvailable) {
-          return 'bypassPermissions'
-        }
-        if (canCycleToAuto(toolPermissionContext)) {
-          return 'auto'
-        }
-        return 'default'
-      }
-      return 'acceptEdits'
-
-    case 'acceptEdits':
       return 'plan'
 
     case 'plan':
+      return 'acceptEdits'
+
+    case 'acceptEdits':
+      if (canCycleToAuto(toolPermissionContext)) {
+        return 'auto'
+      }
       if (toolPermissionContext.isBypassPermissionsModeAvailable) {
         return 'bypassPermissions'
       }
-      if (canCycleToAuto(toolPermissionContext)) {
-        return 'auto'
+      return 'default'
+
+    case 'auto':
+      if (toolPermissionContext.isBypassPermissionsModeAvailable) {
+        return 'bypassPermissions'
       }
       return 'default'
 
     case 'bypassPermissions':
-      if (canCycleToAuto(toolPermissionContext)) {
-        return 'auto'
-      }
       return 'default'
 
     case 'dontAsk':
@@ -73,17 +63,16 @@ export function getNextPermissionMode(
 
 
     default:
-      // Covers auto (when TRANSCRIPT_CLASSIFIER is enabled) and any future modes — always fall back to default
+      // Future modes always fall back to the normal permission flow.
       return 'default'
   }
 }
 
 /**
  * Computes the next permission mode and prepares the context for it.
- * Handles any context cleanup needed for the target mode (e.g., stripping
- * dangerous permissions when entering auto mode).
+ * Applies the shared transition policy without activating a mode before consent.
  *
- * @returns The next mode and the context to use (with dangerous permissions stripped if needed)
+ * @returns The next mode and its prepared permission context
  */
 export function cyclePermissionMode(
   toolPermissionContext: ToolPermissionContext,

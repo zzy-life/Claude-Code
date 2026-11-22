@@ -79,7 +79,7 @@ const kairosGate = feature('KAIROS') ? require('./assistant/gate.js') as typeof 
 import { relative, resolve } from 'path';
 import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
-import { getOriginalCwd, setAdditionalDirectoriesForClaudeMd, setIsRemoteMode, setMainLoopModelOverride, setMainThreadAgentType, setTeleportedSessionInfo } from './bootstrap/state.js';
+import { getIsRemoteMode, getOriginalCwd, setAdditionalDirectoriesForClaudeMd, setIsRemoteMode, setMainLoopModelOverride, setMainThreadAgentType, setTeleportedSessionInfo } from './bootstrap/state.js';
 import { filterCommandsForRemoteMode, getCommands } from './commands.js';
 import type { StatsStore } from './context/stats.js';
 import { launchAssistantInstallWizard, launchAssistantSessionChooser, launchInvalidSettingsDialog, launchResumeChooser, launchSnapshotUpdateDialog, launchTeleportRepoMismatchDialog, launchTeleportResumeWrapper } from './dialogLaunchers.js';
@@ -112,7 +112,7 @@ import { getModelDeprecationWarning } from './utils/model/deprecation.js';
 import { getDefaultMainLoopModel, getUserSpecifiedModelSetting, parseUserSpecifiedModel } from './utils/model/model.js';
 import { ensureModelStringsInitialized } from './utils/model/modelStrings.js';
 import { PERMISSION_MODES } from './utils/permissions/PermissionMode.js';
-import { checkAndDisableBypassPermissions, getAutoModeEnabledStateIfCached, initializeToolPermissionContext, initialPermissionModeFromCLI, isDefaultPermissionModeAuto, parseToolListFromCLI, removeDangerousPermissions, stripDangerousPermissionsForAutoMode, verifyAutoModeGateAccess } from './utils/permissions/permissionSetup.js';
+import { checkAndDisableBypassPermissions, initializeToolPermissionContext, initialPermissionModeFromCLI, parseToolListFromCLI, removeDangerousPermissions } from './utils/permissions/permissionSetup.js';
 import { cleanupOrphanedPluginVersionsInBackground } from './utils/plugins/cacheUtils.js';
 import { initializeVersionedPlugins } from './utils/plugins/installedPluginsManager.js';
 import { getManagedPluginNames } from './utils/plugins/managedPlugins.js';
@@ -161,8 +161,6 @@ import { plural } from 'src/utils/stringUtils.js';
 import { type ChannelEntry, getInitialMainLoopModel, getIsNonInteractiveSession, getSdkBetas, getSessionId, getUserMsgOptIn, setAllowedChannels, setAllowedSettingSources, setChromeFlagOverride, setClientType, setCwdState, setDirectConnectServerUrl, setFlagSettingsPath, setInitialMainLoopModel, setInlinePlugins, setIsInteractive, setKairosActive, setOriginalCwd, setQuestionPreviewFormat, setSdkBetas, setSessionBypassPermissionsMode, setSessionPersistenceDisabled, setSessionSource, setUserMsgOptIn, switchSession } from './bootstrap/state.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
-const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER') ? require('./utils/permissions/autoModeState.js') as typeof import('./utils/permissions/autoModeState.js') : null;
-
 // TeleportRepoMismatchDialog, TeleportResumeWrapper dynamically imported at call sites
 import { migrateAutoUpdatesToSettings } from './migrations/migrateAutoUpdatesToSettings.js';
 import { migrateBypassPermissionsAcceptedToSettings } from './migrations/migrateBypassPermissionsAcceptedToSettings.js';
@@ -173,7 +171,6 @@ import { migrateOpusToOpus1m } from './migrations/migrateOpusToOpus1m.js';
 import { migrateReplBridgeEnabledToRemoteControlAtStartup } from './migrations/migrateReplBridgeEnabledToRemoteControlAtStartup.js';
 import { migrateSonnet1mToSonnet45 } from './migrations/migrateSonnet1mToSonnet45.js';
 import { migrateSonnet45ToSonnet46 } from './migrations/migrateSonnet45ToSonnet46.js';
-import { resetAutoModeOptInForDefaultOffer } from './migrations/resetAutoModeOptInForDefaultOffer.js';
 import { resetProToOpusDefault } from './migrations/resetProToOpusDefault.js';
 import { createRemoteSessionConfig } from './remote/RemoteSessionManager.js';
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -295,9 +292,6 @@ function runMigrations(): void {
     migrateSonnet45ToSonnet46();
     migrateOpusToOpus1m();
     migrateReplBridgeEnabledToRemoteControlAtStartup();
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      resetAutoModeOptInForDefaultOffer();
-    }
     if ("external" === 'ant') {
       migrateFennecToOpus();
     }
@@ -1344,29 +1338,36 @@ async function run(): Promise<CommanderCommand> {
       const addendum = getTeammatePromptAddendum().TEAMMATE_SYSTEM_PROMPT_ADDENDUM;
       appendSystemPrompt = appendSystemPrompt ? `${appendSystemPrompt}\n\n${addendum}` : addendum;
     }
+    // Resolve the execution environment before applying either CLI or settings auto mode.
+    // Standalone teammates have their own process, so the in-process teammate check is insufficient.
+    let autoApprovalEnvironment: 'local-interactive' | 'headless' | 'teammate' | 'remote';
+    if (storedTeammateOpts?.agentId) {
+      autoApprovalEnvironment = 'teammate';
+    } else if (isNonInteractiveSession) {
+      autoApprovalEnvironment = 'headless';
+    } else if (
+      getIsRemoteMode() || sdkUrl || remote !== null ||
+      _pendingConnect?.url || _pendingSSH?.host || _pendingAssistantChat?.sessionId || _pendingAssistantChat?.discover ||
+      isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) || process.env.CLAUDE_CODE_ENTRYPOINT === 'remote' ||
+      process.env.CLAUDE_CODE_ENVIRONMENT_KIND === 'bridge' || process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN ||
+      process.env.CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR
+    ) {
+      // A requested --remote-control flag alone is not an active remote session.
+      autoApprovalEnvironment = 'remote';
+    } else {
+      autoApprovalEnvironment = 'local-interactive';
+    }
     const {
       mode: permissionMode,
       notification: permissionModeNotification
     } = initialPermissionModeFromCLI({
       permissionModeCli,
-      dangerouslySkipPermissions
+      dangerouslySkipPermissions,
+      autoApprovalEnvironment
     });
 
     // Store session bypass permissions mode for trust dialog check
     setSessionBypassPermissionsMode(permissionMode === 'bypassPermissions');
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      // autoModeFlagCli is the "did the user intend auto this session" signal.
-      // Set when: --enable-auto-mode, --permission-mode auto, resolved mode
-      // is auto, OR settings defaultMode is auto but the gate denied it
-      // (permissionMode resolved to default with no explicit CLI override).
-      // Used by verifyAutoModeGateAccess to decide whether to notify on
-      // auto-unavailable, and by tengu_auto_mode_config opt-in carousel.
-      if ((options as {
-        enableAutoMode?: boolean;
-      }).enableAutoMode || permissionModeCli === 'auto' || permissionMode === 'auto' || !permissionModeCli && isDefaultPermissionModeAuto()) {
-        autoModeStateModule?.setAutoModeFlagCli(true);
-      }
-    }
 
     // Parse the MCP config files/strings if provided
     let dynamicMcpConfig: Record<string, ScopedMcpServerConfig> = {};
@@ -1670,7 +1671,6 @@ async function run(): Promise<CommanderCommand> {
     let toolPermissionContext = initResult.toolPermissionContext;
     const {
       warnings,
-      dangerousPermissions,
       overlyBroadBashPermissions
     } = initResult;
 
@@ -1680,9 +1680,6 @@ async function run(): Promise<CommanderCommand> {
         logForDebugging(`Ignoring overly broad shell permission ${permission.ruleDisplay} from ${permission.sourceDisplay}`);
       }
       toolPermissionContext = removeDangerousPermissions(toolPermissionContext, overlyBroadBashPermissions);
-    }
-    if (feature('TRANSCRIPT_CLASSIFIER') && dangerousPermissions.length > 0) {
-      toolPermissionContext = stripDangerousPermissionsForAutoMode(toolPermissionContext);
     }
 
     // Print any warnings from initialization
@@ -2521,23 +2518,6 @@ async function run(): Promise<CommanderCommand> {
       // This runs in parallel to the code below, to avoid blocking the main loop.
       if (toolPermissionContext.mode === 'bypassPermissions' || allowDangerouslySkipPermissions) {
         void checkAndDisableBypassPermissions(toolPermissionContext);
-      }
-
-      // Async check of auto mode gate — corrects state and disables auto if needed.
-      // Gated on TRANSCRIPT_CLASSIFIER (not USER_TYPE) so GrowthBook kill switch runs for external builds too.
-      if (feature('TRANSCRIPT_CLASSIFIER')) {
-        void verifyAutoModeGateAccess(toolPermissionContext, headlessStore.getState().fastMode).then(({
-          updateContext
-        }) => {
-          headlessStore.setState(prev => {
-            const nextCtx = updateContext(prev.toolPermissionContext);
-            if (nextCtx === prev.toolPermissionContext) return prev;
-            return {
-              ...prev,
-              toolPermissionContext: nextCtx
-            };
-          });
-        });
       }
 
       // Set global state for session persistence
@@ -3592,9 +3572,6 @@ async function run(): Promise<CommanderCommand> {
     }));
     program.addOption(new Option('--tasks [id]', '[ANT-ONLY] Tasks mode: watch for tasks and auto-process them. Optional id is used as both the task list ID and agent ID (defaults to "tasklist").').argParser(String).hideHelp());
   }
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    program.addOption(new Option('--enable-auto-mode', 'Opt in to auto mode').hideHelp());
-  }
   if (feature('PROACTIVE') || feature('KAIROS')) {
     program.addOption(new Option('--proactive', 'Start in proactive autonomous mode'));
   }
@@ -4093,35 +4070,6 @@ async function run(): Promise<CommanderCommand> {
     await agentsHandler();
     process.exit(0);
   });
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    // Skip when tengu_auto_mode_config.enabled === 'disabled' (circuit breaker).
-    // Reads from disk cache — GrowthBook isn't initialized at registration time.
-    if (getAutoModeEnabledStateIfCached() !== 'disabled') {
-      const autoModeCmd = program.command('auto-mode').description('Inspect auto mode classifier configuration');
-      autoModeCmd.command('defaults').description('Print the default auto mode environment, allow, and deny rules as JSON').action(async () => {
-        const {
-          autoModeDefaultsHandler
-        } = await import('./cli/handlers/autoMode.js');
-        autoModeDefaultsHandler();
-        process.exit(0);
-      });
-      autoModeCmd.command('config').description('Print the effective auto mode config as JSON: your settings where set, defaults otherwise').action(async () => {
-        const {
-          autoModeConfigHandler
-        } = await import('./cli/handlers/autoMode.js');
-        autoModeConfigHandler();
-        process.exit(0);
-      });
-      autoModeCmd.command('critique').description('Get AI feedback on your custom auto mode rules').option('--model <model>', 'Override which model is used').action(async options => {
-        const {
-          autoModeCritiqueHandler
-        } = await import('./cli/handlers/autoMode.js');
-        await autoModeCritiqueHandler(options);
-        process.exit();
-      });
-    }
-  }
-
   // Remote Control command — connect local environment to claude.ai/code.
   // The actual command is intercepted by the fast-path in cli.tsx before
   // Commander.js runs, so this registration exists only for help output.

@@ -223,11 +223,6 @@ function buildInheritedCliFlags(options?: {
     flags.push('--dangerously-skip-permissions')
   } else if (permissionMode === 'acceptEdits') {
     flags.push('--permission-mode acceptEdits')
-  } else if (permissionMode === 'auto') {
-    // Teammates inherit auto mode so the classifier auto-approves their tool
-    // calls too. The teammate's own startup (permissionSetup.ts) handles
-    // GrowthBook gate checks and setAutoModeActive(true) independently.
-    flags.push('--permission-mode auto')
   }
 
   // Propagate --model if explicitly set via CLI
