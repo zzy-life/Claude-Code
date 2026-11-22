@@ -91,14 +91,6 @@ export function getClaudeSocketName(): string {
 }
 
 /**
- * Gets the socket path if the socket has been initialized.
- * Returns null if not yet initialized.
- */
-export function getClaudeSocketPath(): string | null {
-  return socketPath
-}
-
-/**
  * Sets socket info after initialization.
  * Called after the tmux session is created.
  */
@@ -160,15 +152,6 @@ export async function checkTmuxAvailable(): Promise<boolean> {
     tmuxAvailabilityChecked = true
   }
   return tmuxAvailable
-}
-
-/**
- * Returns the cached tmux availability status.
- * Returns false if availability hasn't been checked yet.
- * Use checkTmuxAvailable() to perform the check.
- */
-export function isTmuxAvailable(): boolean {
-  return tmuxAvailabilityChecked && tmuxAvailable
 }
 
 /**
@@ -387,15 +370,4 @@ async function doInitialize(): Promise<void> {
   throw new Error(
     `Failed to get socket info for ${socket}: primary="${infoResult.stderr}", fallback="${pidResult.stderr}"`,
   )
-}
-
-// For testing purposes
-export function resetSocketState(): void {
-  socketName = null
-  socketPath = null
-  serverPid = null
-  isInitializing = false
-  initPromise = null
-  tmuxAvailabilityChecked = false
-  tmuxAvailable = false
 }

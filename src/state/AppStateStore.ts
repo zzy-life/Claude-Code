@@ -281,12 +281,6 @@ export type AppState = DeepImmutable<{
     acceptedAt: number
     generationRequestId: string | null
   }
-  skillImprovement: {
-    suggestion: {
-      skillName: string
-      updates: { section: string; change: string; reason: string }[]
-    } | null
-  }
   // Auth version - incremented on login/logout to trigger re-fetching of auth-dependent data
   authVersion: number
   // Initial message to process (from CLI args or plan mode exit)
@@ -428,9 +422,6 @@ export function getDefaultAppState(): AppState {
       shownAt: 0,
       acceptedAt: 0,
       generationRequestId: null,
-    },
-    skillImprovement: {
-      suggestion: null,
     },
     authVersion: 0,
     initialMessage: null,

@@ -2898,9 +2898,6 @@ async function run(): Promise<CommanderCommand> {
         acceptedAt: 0,
         generationRequestId: null
       },
-      skillImprovement: {
-        suggestion: null
-      },
       workerSandboxPermissions: {
         queue: [],
         selectedIndex: 0

@@ -26,7 +26,7 @@
 | 已闭环 | `f229ef9` | 精简命令入口并统一 effort 判断 | 已在工作区移除 effort 无消费类型成员、三档循环与冗余缓存、旧 callout 字段及局部命令死分支，修正说明；独立回归通过，共享成本／Bridge／effort 链路保留 | **已完成** |
 | 已闭环 | `f778ee1` | 移除部分 ant 内部功能 | 已清理无生产者权限标记及既有 insights 导出、空横幅、恒假 ccshare 分支与失效引导；共享权限与报告保留 | **已完成** |
 | 已闭环 | `98f539b` | 移除 `/commit`、`/commit-push-pr` 与 `/verify` | 已清理贡献统计结果生成及 generatedFiles 死链、过期命令文档；贡献追踪恢复及自定义技能保留 | **已完成** |
-| 已闭环 | `cc1bf62` | 移除统计上传并使用纯本地功能配置 | 已清理用户资料预取与无入口问卷；Git email、SkillImprovement 校验、默认值接口和用户 OTEL 保留 | **已完成** |
+| 已闭环 | `cc1bf62` | 移除统计上传并使用纯本地功能配置 | 已清理用户资料预取与无入口问卷；Git email、默认值接口和用户 OTEL 保留；当时保留的 SkillImprovement 校验已在后续 `9bcc4e5` 审查中清理 | **已完成** |
 | 已闭环 | `3385a66` | 移除远程埋点，仅保留本地错误日志 | 已清理确认的文件哈希、启动／上下文采集、缓存统计、成功事件附加信息和孤立元数据富集；不扩大到所有空埋点 | **已完成** |
 | 已闭环 | `6561d1b` | 移除 web-setup、设置同步和遥测开关 | 同步主体无残留；已清理后续变恒假的 token-sync 分支及共享遥测孤儿仓库哈希；实际远程 App 检查保留 | **已完成** |
 | 已闭环 | `e07fd2d` | 移除云端深度规划 ultraplan | 已清理无生产者的环境／模型／权限覆盖接线及旧云端消息排版；共享远程任务和正常计划模式保留 | **已完成** |
@@ -36,11 +36,11 @@
 | P2 | `1dceb42` | 优化计划模式权限及工具注入 | 检查旧权限分支、重复工具注入、策略辅助函数和上下文状态 | 待审查 |
 | P2 | `1c12e86` | 引入延迟工具摘要与暴露策略 | 检查旧工具列表生成／缓存及摘要路径；保护 Prompt Cache 和动态工具暴露语义 | 待审查 |
 | P2 | `c068397` | 移除团队模式实验开关 | 检查旧 gate 查询、分支、配置及提示词残留；保留 `/team` 显式控制链路 | 待审查 |
-| P2 | `0151e68` | 移除 OverflowTestTool | 检查工具实现、注册、权限表、提示词、类型及专用资源 | 待审查 |
-| P2 | `57473d6` | 移除 TungstenTool 并调整 tmux 隔离 | 检查专用工具接线及 tmux 旧分支；区分仍有效的终端／工作树隔离 | 待审查 |
+| 已闭环 | `0151e68` | 移除 OverflowTestTool | 工具实现、注册、权限引用及 CtxInspect 删除闭环，未发现相关残留；仍有消费者的 CONTEXT_COLLAPSE 保留 | **已完成** |
+| 已闭环 | `57473d6` | 移除 TungstenTool 并调整 tmux 隔离 | Tungsten 专用接线无残留；已清理 tmux 三个既有孤立接口，保留 Bash 隔离、可用性检查及退出清理，回归通过 | **已完成** |
 | P2 | `e9ecfec` | 调整 Agent 工作树清理与遗留工作树支持 | 检查被替换的元数据处理和清理辅助函数；不得绕过防误删判断 | 待审查 |
-| P2 | `9bcc4e5` | 移除 REPL 问卷及自动 `/issue` 逻辑 | 回查其他专用问卷／自动反馈残留；`autoRunIssue.tsx` 已在本轮清理，不等于整个提交已审查 | 待审查 |
-| P2 | `f4193d5` | 移除编辑工具提示中的内部用户条件 | 检查旧提示词构造参数、条件和专用导出；保留正常编辑授权 | 待审查 |
+| 已闭环 | `9bcc4e5` | 移除 REPL 问卷及自动 `/issue` 逻辑 | 已清理技能改进问卷五个孤立模块、后台初始化及状态接线；普通问卷和 autoRunIssue 已由此前清理处理，回归通过 | **已完成** |
+| 已闭环 | `f4193d5` | 移除编辑工具提示中的内部用户条件 | 提示词常量、描述函数及 FileEdit 注册链仍有效，未发现相关死代码；正常编辑授权保留 | **已完成** |
 
 ## 最近三个提交：完成记录
 
@@ -209,7 +209,7 @@ node test-summarize-up-to.mjs
 git diff --check
 ```
 
-人工验收：读取／编辑／写入文件正常；工具权限确认及 deny/ask 规则正常；`/insights` 生成本地 HTML；普通 session resume 正常。用户 OTEL、显式启动 profiling、远程任务与 SkillImprovementSurvey 仅在具备相应环境时选测。上述静态和抽取函数验证不代替完整终端运行验收。
+人工验收：读取／编辑／写入文件正常；工具权限确认及 deny/ask 规则正常；`/insights` 生成本地 HTML；普通 session resume 正常。用户 OTEL、显式启动 profiling 与远程任务仅在具备相应环境时选测。SkillImprovementSurvey 已在后续 `9bcc4e5` 审查中确认无入口并清理，不再作为验收项。上述静态和抽取函数验证不代替完整终端运行验收。
 
 **以下保留原调查归因与最小边界，清理结果以上述实施记录为准。**
 
@@ -311,6 +311,38 @@ git diff --check
 - 新增无外部依赖一键测试 `test-no-ultraplan-haiku-residue.mjs`，配置常量在顶部；静态核查删除边界和保留接线，抽取实际代码执行环境选择及 Haiku 选项生成，核查渲染缓存槽位连续性。
 - `node test-no-ultraplan-haiku-residue.mjs` 与 `git diff --check` 已通过。Node 类型擦除 API 的实验性提示不影响通过；未调用真实 API，不替代完整终端运行验收。
 - 人工可验证：普通本地命令输出及错误仍正常展示；`/model` 中 Haiku 标准／1M 和自定义模型按现有配置正常显示。远程会话环境选择和初始消息仅在具备对应环境时选测。
+
+## Overflow、Tungsten、问卷与编辑提示：审查及清理记录（2026-11-22）
+
+审查基准为 HEAD `db5bd6c` 及当前工作区。已对照四个提交差异，并追踪当前调用、注册及状态消费链；随后按用户要求完成清理。本节源码改动及测试更新尚未提交，不代表此前各轮清理仍全部未提交。
+
+### `0151e68` — 未发现相关残留
+
+- OverflowTest 工具实现、注册及权限引用已删除；CtxInspect 无遗留引用。
+- CONTEXT_COLLAPSE 仍用于查询、压缩、会话恢复与上下文展示，不能因工具删除而整条清理。
+
+### `57473d6` — tmux 既有孤立接口已清理
+
+- 删除 `src/utils/tmuxSocket.ts` 的 `getClaudeSocketPath()`、同步缓存查询 `isTmuxAvailable()` 和无现存测试消费者的 `resetSocketState()`。
+- 三者为相关清理后仍保留的既有孤立接口，不归为本提交新引入的死代码；其他模块的同名 `isTmuxAvailable()` 不在删除范围。
+- Tungsten 专用工具、监视器、footer 和状态接线未发现残留。保留 Bash 的 `ensureSocketInitialized()`／`getClaudeTmuxEnv()`、实际 `checkTmuxAvailable()`、底层 socket 状态及 `registerCleanup(killTmuxServer)`。
+
+### `9bcc4e5` — 技能改进问卷完整死链已清理
+
+- 删除 `src/hooks/useSkillImprovementSurvey.ts`、`src/components/SkillImprovementSurvey.tsx`、`src/components/FeedbackSurvey/FeedbackSurveyView.tsx`、`src/components/FeedbackSurvey/utils.ts` 和 `src/utils/hooks/skillImprovement.ts` 五个孤立模块。
+- 移除 `backgroundHousekeeping.ts` 的初始化导入与调用、`AppStateStore.ts` 的状态类型及默认值、`main.tsx` 的初始状态字段。
+- 归因：本提交删除了 REPL 中技能问卷 Hook 的调用入口，却保留其下游；问卷 UI 的恒假条件在父版本已存在。后台注册在当前默认值门控下不会执行，不能描述为清理前仍会额外请求模型。
+- 普通问卷与 `autoRunIssue.tsx` 已由此前清理处理，不重复计为本轮删除。此前五项清理记录中的“保留技能问卷响应类型与校验”是当时边界，本轮确认其最后消费者也已孤立，现已一并删除。
+
+### `f4193d5` — 未发现相关残留
+
+- `minimalUniquenessHint` 仍插入编辑提示，`getEditToolDescription()` 仍由 FileEditTool 调用，工具注册链完整，无需修改源码。
+
+### 验证与人工验收
+
+- 更新现有独立脚本 `test-dead-code-cleanup.mjs`，新增技能问卷符号／模块无残留检查；将过时的问卷校验保留断言替换为 tmux 删除边界与隔离接线保留检查。原有权限决策、快照恢复及 profiling 行为检查继续保留。
+- `node test-dead-code-cleanup.mjs` 与 `git diff --check` 已通过；Node 类型擦除 API 的实验性提示不影响通过。未构建、未调用真实 API、未提交。
+- 人工可验证：正常启动、对话及文件编辑不受影响；具备 tmux 隔离适用环境时，可选验证 Bash 中 tmux 命令和退出清理。删除项由静态回归核查，不要求人工验证源码符号；静态接线检查不替代实际 tmux 运行验收。
 
 ## 后续每个提交的审查步骤
 
