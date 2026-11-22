@@ -43,6 +43,13 @@ export const PERMISSION_MODES = INTERNAL_PERMISSION_MODES
 
 export type PermissionBehavior = 'allow' | 'deny' | 'ask'
 
+// An approval never rewrites tool input or grants permissions to future calls.
+export type AiApprovalResult =
+  | { decision: 'allow' }
+  | { decision: 'retryable_deny'; reason: string; saferAlternative?: string }
+  | { decision: 'hard_deny'; reason: string }
+  | { decision: 'needs_user'; reason: string }
+
 // ============================================================================
 // Permission Rules
 // ============================================================================

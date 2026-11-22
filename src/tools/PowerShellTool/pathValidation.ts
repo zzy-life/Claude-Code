@@ -7,6 +7,7 @@
  */
 
 import { homedir } from 'os'
+import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/aiApproval.js'
 import { isAbsolute, resolve } from 'path'
 import type { ToolPermissionContext } from '../../Tool.js'
 import type { PermissionRule } from '../../types/permissions.js'
@@ -921,7 +922,7 @@ function isPathAllowed(
     precomputedPathsToCheck,
   )
   if (isInWorkingDir) {
-    if (operationType === 'read' || context.mode === 'acceptEdits') {
+    if (operationType === 'read' || allowsAutomaticWorkspaceEdits(context.mode)) {
       return { allowed: true }
     }
   }

@@ -1,4 +1,5 @@
 import type { z } from 'zod/v4'
+import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/aiApproval.js'
 import type { ToolPermissionContext } from '../../Tool.js'
 import { splitCommand_DEPRECATED } from '../../utils/bash/commands.js'
 import type { PermissionResult } from '../../utils/permissions/PermissionResult.js'
@@ -36,7 +37,7 @@ function validateCommandForMode(
 
   // In Accept Edits mode, auto-allow filesystem operations
   if (
-    toolPermissionContext.mode === 'acceptEdits' &&
+    allowsAutomaticWorkspaceEdits(toolPermissionContext.mode) &&
     isFilesystemCommand(baseCmd)
   ) {
     return {
@@ -44,7 +45,7 @@ function validateCommandForMode(
       updatedInput: { command: cmd },
       decisionReason: {
         type: 'mode',
-        mode: 'acceptEdits',
+        mode: toolPermissionContext.mode,
       },
     }
   }
@@ -111,5 +112,5 @@ export function checkPermissionMode(
 export function getAutoAllowedCommands(
   mode: ToolPermissionContext['mode'],
 ): readonly string[] {
-  return mode === 'acceptEdits' ? ACCEPT_EDITS_ALLOWED_COMMANDS : []
+  return allowsAutomaticWorkspaceEdits(mode) ? ACCEPT_EDITS_ALLOWED_COMMANDS : []
 }

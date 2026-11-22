@@ -1,7 +1,7 @@
 {
   "bundleDependencies": false,
   "name": "@zzy1998/claude-code",
-  "version": "999.0.18",
+  "version": "999.0.19",
   "description": "Restored Claude Code source tree reconstructed from source maps.",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",

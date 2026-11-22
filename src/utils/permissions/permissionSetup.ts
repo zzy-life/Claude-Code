@@ -17,6 +17,7 @@ import type { SettingSource } from '../settings/constants.js'
 import { SETTING_SOURCES } from '../settings/constants.js'
 import {
   getSettings_DEPRECATED,
+  getPermissionDefaultMode,
   getSettingsFilePathForSource,
   getUseAutoModeDuringPlan,
   hasAutoModeOptIn,
@@ -740,8 +741,9 @@ export function initialPermissionModeFromCLI({
       orderedModes.push(parsedMode)
     }
   }
-  if (settings.permissions?.defaultMode) {
-    const settingsMode = settings.permissions.defaultMode as PermissionMode
+  const defaultMode = getPermissionDefaultMode()
+  if (defaultMode) {
+    const settingsMode = defaultMode as PermissionMode
     // CCR only supports acceptEdits and plan — ignore other defaultModes from
     // settings (e.g. bypassPermissions would otherwise silently grant full
     // access in a remote environment).
@@ -1432,8 +1434,7 @@ export async function checkAndDisableBypassPermissions(
 
 export function isDefaultPermissionModeAuto(): boolean {
   if (feature('TRANSCRIPT_CLASSIFIER')) {
-    const settings = getSettings_DEPRECATED() || {}
-    return settings.permissions?.defaultMode === 'auto'
+    return getPermissionDefaultMode() === 'auto'
   }
   return false
 }

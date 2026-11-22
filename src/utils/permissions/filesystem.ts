@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle'
+import { allowsAutomaticWorkspaceEdits } from './aiApproval.js'
 import { randomBytes } from 'crypto'
 import ignore from 'ignore'
 import memoize from 'lodash-es/memoize.js'
@@ -1382,7 +1383,7 @@ export function checkWritePermissionForTool<Input extends AnyObject>(
     toolPermissionContext,
     pathsToCheck,
   )
-  if (toolPermissionContext.mode === 'acceptEdits' && isInWorkingDir) {
+  if (allowsAutomaticWorkspaceEdits(toolPermissionContext.mode) && isInWorkingDir) {
     return {
       behavior: 'allow',
       updatedInput: input,

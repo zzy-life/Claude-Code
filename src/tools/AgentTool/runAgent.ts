@@ -412,6 +412,7 @@ export async function* runAgent({
   // Override permission mode if agent defines one
   // However, don't override if parent is in bypassPermissions or acceptEdits mode - those should always take precedence
   // For async agents, also set shouldAvoidPermissionPrompts since they can't show UI
+  toolUseContext.approvalTurnScope?.throwIfStopped()
   const agentPermissionMode = agentDefinition.permissionMode
   const agentGetAppState = () => {
     const state = toolUseContext.getAppState()
@@ -422,10 +423,7 @@ export async function* runAgent({
       agentPermissionMode &&
       state.toolPermissionContext.mode !== 'bypassPermissions' &&
       state.toolPermissionContext.mode !== 'acceptEdits' &&
-      !(
-        feature('TRANSCRIPT_CLASSIFIER') &&
-        state.toolPermissionContext.mode === 'auto'
-      )
+      state.toolPermissionContext.mode !== 'auto'
     ) {
       toolPermissionContext = {
         ...toolPermissionContext,
@@ -526,6 +524,14 @@ export async function* runAgent({
     : isAsync
       ? new AbortController()
       : toolUseContext.abortController
+
+  // Background controllers remain independent of ESC, but not of a safety stop.
+  const unregisterSafetyController =
+    toolUseContext.approvalTurnScope?.registerController(agentAbortController)
+  using safetyRegistration = {
+    [Symbol.dispose]() { unregisterSafetyController?.() },
+  }
+  toolUseContext.approvalTurnScope?.throwIfStopped()
 
   // Execute SubagentStart hooks and collect additional context
   const additionalContexts: string[] = []

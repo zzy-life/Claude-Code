@@ -152,9 +152,24 @@ export class StreamingToolExecutor {
 
   private createSyntheticErrorMessage(
     toolUseId: string,
-    reason: 'sibling_error' | 'user_interrupted' | 'streaming_fallback',
+    reason: 'sibling_error' | 'user_interrupted' | 'streaming_fallback' | 'approval_stopped',
     assistantMessage: AssistantMessage,
   ): Message {
+    if (reason === 'approval_stopped') {
+      const message = `已阻止并停止本轮：${this.toolUseContext.approvalTurnScope?.stop?.reason}`
+      return createUserMessage({
+        content: [
+          {
+            type: 'tool_result',
+            content: message,
+            is_error: true,
+            tool_use_id: toolUseId,
+          },
+        ],
+        toolUseResult: message,
+        sourceToolAssistantUUID: assistantMessage.uuid,
+      })
+    }
     // For user interruptions (ESC to reject), use REJECT_MESSAGE so the UI shows
     // "User rejected edit" instead of "Error editing file"
     if (reason === 'user_interrupted') {
@@ -209,7 +224,10 @@ export class StreamingToolExecutor {
    */
   private getAbortReason(
     tool: TrackedTool,
-  ): 'sibling_error' | 'user_interrupted' | 'streaming_fallback' | null {
+  ): 'sibling_error' | 'user_interrupted' | 'streaming_fallback' | 'approval_stopped' | null {
+    if (this.toolUseContext.approvalTurnScope?.stop) {
+      return 'approval_stopped'
+    }
     if (this.discarded) {
       return 'streaming_fallback'
     }

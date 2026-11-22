@@ -1155,6 +1155,7 @@ async function hasPermissionsToUseToolInner(
   input: { [key: string]: unknown },
   context: ToolUseContext,
 ): Promise<PermissionDecision> {
+  context.approvalTurnScope?.throwIfStopped()
   if (context.abortController.signal.aborted) {
     throw new AbortError()
   }

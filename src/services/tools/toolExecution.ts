@@ -457,6 +457,7 @@ export async function* runToolUse(
 
   const toolInput = toolUse.input as { [key: string]: string }
   try {
+    toolUseContext.approvalTurnScope?.throwIfStopped()
     if (toolUseContext.abortController.signal.aborted) {
       logEvent('tengu_tool_use_cancelled', {
         toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -1249,6 +1250,11 @@ async function checkPermissionsAndCallTool(
     callInput = processedInput
   }
   try {
+    // Approval/hook waits may have outlived the turn; never dispatch a late allow.
+    toolUseContext.approvalTurnScope?.throwIfStopped()
+    if (toolUseContext.abortController.signal.aborted) {
+      throw new AbortError()
+    }
     const result = await tool.call(
       callInput,
       {

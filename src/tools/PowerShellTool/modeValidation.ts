@@ -7,6 +7,7 @@
  */
 
 import type { ToolPermissionContext } from '../../Tool.js'
+import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/aiApproval.js'
 import type { PermissionResult } from '../../utils/permissions/PermissionResult.js'
 import type { ParsedPowerShellCommand } from '../../utils/powershell/parser.js'
 import {
@@ -145,7 +146,7 @@ export function checkPermissionMode(
     }
   }
 
-  if (toolPermissionContext.mode !== 'acceptEdits') {
+  if (!allowsAutomaticWorkspaceEdits(toolPermissionContext.mode)) {
     return {
       behavior: 'passthrough',
       message: 'No mode-specific validation required',
@@ -398,7 +399,7 @@ export function checkPermissionMode(
     updatedInput: input,
     decisionReason: {
       type: 'mode',
-      mode: 'acceptEdits',
+      mode: toolPermissionContext.mode,
     },
   }
 }

@@ -888,11 +888,34 @@ export function hasSkipDangerousModePermissionPrompt(): boolean {
   )
 }
 
-/**
- * Returns true if any trusted settings source has accepted the auto
- * mode opt-in dialog. projectSettings is intentionally excluded —
- * a malicious project could otherwise auto-bypass the dialog (RCE risk).
- */
+/** New-protocol consent is accepted only from user or managed settings. */
+export function hasLocalAutoApprovalConsent(): boolean {
+  // Old skipAutoPermissionPrompt never implies acceptance of the new protocol.
+  return (
+    getSettingsForSource('policySettings')?.autoModeConsentVersion === 1 ||
+    getSettingsForSource('userSettings')?.autoModeConsentVersion === 1
+  )
+}
+
+/** Filter only untrusted auto defaults; preserve all other modes and source precedence. */
+export function getPermissionDefaultMode(): NonNullable<SettingsJson['permissions']>['defaultMode'] {
+  let mode: NonNullable<SettingsJson['permissions']>['defaultMode']
+  for (const source of getEnabledSettingSources()) {
+    const candidate = getSettingsForSource(source)?.permissions?.defaultMode
+    if (candidate === undefined) continue
+    if (
+      candidate === 'auto' &&
+      source !== 'userSettings' &&
+      source !== 'policySettings'
+    ) {
+      continue
+    }
+    mode = candidate
+  }
+  return mode
+}
+
+/** Legacy classifier consent; never used as new-protocol consent. */
 export function hasAutoModeOptIn(): boolean {
   if (feature('TRANSCRIPT_CLASSIFIER')) {
     const user = getSettingsForSource('userSettings')?.skipAutoPermissionPrompt

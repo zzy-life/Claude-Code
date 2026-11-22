@@ -399,6 +399,8 @@ export function createSubagentContext(
         ? cloneContentReplacementState(parentContext.contentReplacementState)
         : undefined),
 
+    // Ordinary descendants retain the root turn even with an independent controller.
+    approvalTurnScope: parentContext.approvalTurnScope,
     // AbortController
     abortController,
 

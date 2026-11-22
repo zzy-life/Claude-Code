@@ -1,4 +1,5 @@
 import memoize from 'lodash-es/memoize.js'
+import { allowsAutomaticWorkspaceEdits } from './aiApproval.js'
 import { homedir } from 'os'
 import { dirname, isAbsolute, resolve } from 'path'
 import type { ToolPermissionContext } from '../../Tool.js'
@@ -204,7 +205,7 @@ export function isPathAllowed(
     precomputedPathsToCheck,
   )
   if (isInWorkingDir) {
-    if (operationType === 'read' || context.mode === 'acceptEdits') {
+    if (operationType === 'read' || allowsAutomaticWorkspaceEdits(context.mode)) {
       return { allowed: true }
     }
     // Write/create without acceptEdits mode falls through to check allow rules

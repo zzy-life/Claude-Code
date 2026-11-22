@@ -11,6 +11,7 @@ import type { z } from 'zod/v4'
 import type { Command } from './commands.js'
 import type { CanUseToolFn } from './hooks/useCanUseTool.js'
 import type { ThinkingConfig } from './utils/thinking.js'
+import type { ApprovalTurnScope } from './utils/permissions/approvalTurnScope.js'
 
 export type ToolInputJSONSchema = {
   [x: string]: unknown
@@ -178,6 +179,8 @@ export type ToolUseContext = {
     refreshTools?: () => Tools
   }
   abortController: AbortController
+  /** Root-turn safety stop, shared with ordinary local descendants, not teammates. */
+  approvalTurnScope?: ApprovalTurnScope
   readFileState: FileStateCache
   getAppState(): AppState
   setAppState(f: (prev: AppState) => AppState): void

@@ -1,4 +1,5 @@
 import type { ToolPermissionContext } from '../../Tool.js'
+import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/aiApproval.js'
 import { splitCommand_DEPRECATED } from '../../utils/bash/commands.js'
 import { tryParseShellCommand } from '../../utils/bash/shellQuote.js'
 import type { PermissionResult } from '../../utils/permissions/PermissionResult.js'
@@ -656,7 +657,7 @@ export function checkSedConstraints(
     }
 
     // In acceptEdits mode, allow file writes (-i flag) but still block dangerous operations
-    const allowFileWrites = toolPermissionContext.mode === 'acceptEdits'
+    const allowFileWrites = allowsAutomaticWorkspaceEdits(toolPermissionContext.mode)
 
     const isAllowed = sedCommandIsAllowedByAllowlist(trimmed, {
       allowFileWrites,

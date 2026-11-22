@@ -232,7 +232,14 @@ export async function* query(
   Terminal
 > {
   const consumedCommandUuids: string[] = []
-  const terminal = yield* queryLoop(params, consumedCommandUuids)
+  const scope = params.toolUseContext.approvalTurnScope
+  const unregister = scope?.registerController(params.toolUseContext.abortController)
+  let terminal: Terminal
+  try {
+    terminal = yield* queryLoop(params, consumedCommandUuids)
+  } finally {
+    unregister?.()
+  }
   // Only reached if queryLoop returned normally. Skipped on throw (error
   // propagates through yield*) and on .return() (Return completion closes
   // both generators). This gives the same asymmetric started-without-completed
@@ -314,6 +321,9 @@ async function* queryLoop(
     // is reassigned within an iteration (queryTracking, messages updates);
     // the rest are read-only between continue sites.
     let { toolUseContext } = state
+    if (toolUseContext.approvalTurnScope?.stop) {
+      return { reason: 'aborted_tools' }
+    }
     const {
       messages,
       autoCompactTracking,
@@ -1067,12 +1077,17 @@ async function* queryLoop(
       } else {
         yield* yieldMissingToolResultBlocks(
           assistantMessages,
-          'Interrupted by user',
+          toolUseContext.approvalTurnScope?.stop
+            ? `已阻止并停止本轮：${toolUseContext.approvalTurnScope.stop.reason}`
+            : 'Interrupted by user',
         )
       }
       // Skip the interruption message for submit-interrupts — the queued
       // user message that follows provides sufficient context.
-      if (toolUseContext.abortController.signal.reason !== 'interrupt') {
+      if (
+        !toolUseContext.approvalTurnScope?.stop &&
+        toolUseContext.abortController.signal.reason !== 'interrupt'
+      ) {
         yield createUserInterruptionMessage({
           toolUse: false,
         })
@@ -1510,6 +1525,10 @@ async function* queryLoop(
         .catch(() => null)
     }
 
+    // A safety stop is not a user cancellation, and must never trigger model continuation.
+    if (toolUseContext.approvalTurnScope?.stop) {
+      return { reason: 'aborted_tools' }
+    }
     // We were aborted during tool calls
     if (toolUseContext.abortController.signal.aborted) {
       // Skip the interruption message for submit-interrupts — the queued

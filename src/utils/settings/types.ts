@@ -912,6 +912,10 @@ export const SettingsSchema = lazySchema(() =>
         .describe(
           'Show thinking summaries in the transcript view (ctrl+o). Default: false.',
         ),
+      autoModeConsentVersion: z
+        .literal(1)
+        .optional()
+        .describe('Consent to local AI approval, additional model requests, and turn-level safety stops'),
       skipDangerousModePermissionPrompt: z
         .boolean()
         .optional()
