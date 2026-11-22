@@ -5,8 +5,6 @@ import type {
 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { createHash } from 'crypto'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from 'src/constants/prompts.js'
-import { getSystemContext, getUserContext } from 'src/context.js'
-import { isAnalyticsDisabled } from 'src/services/analytics/config.js'
 import {
   checkStatsigFeatureGate_CACHED_MAY_BE_STALE,
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -15,8 +13,6 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from 'src/services/analytics/index.js'
-import { prefetchAllMcpResources } from 'src/services/mcp/client.js'
-import type { ScopedMcpServerConfig } from 'src/services/mcp/types.js'
 import { BashTool } from 'src/tools/BashTool/BashTool.js'
 import { FileEditTool } from 'src/tools/FileEditTool/FileEditTool.js'
 import {
@@ -24,11 +20,9 @@ import {
   stripTrailingWhitespace,
 } from 'src/tools/FileEditTool/utils.js'
 import { FileWriteTool } from 'src/tools/FileWriteTool/FileWriteTool.js'
-import { getTools } from 'src/tools.js'
 import type { AgentId } from 'src/types/ids.js'
 import type { z } from 'zod/v4'
 import { CLI_SYSPROMPT_PREFIXES } from '../constants/system.js'
-import { roughTokenCountEstimation } from '../services/tokenEstimation.js'
 import type { Tool, ToolPermissionContext, Tools } from '../Tool.js'
 import { AGENT_TOOL_NAME } from '../tools/AgentTool/constants.js'
 import type { AgentDefinition } from '../tools/AgentTool/loadAgentsDir.js'
@@ -49,16 +43,11 @@ import {
   isFirstPartyAnthropicBaseUrl,
 } from './model/providers.js'
 import {
-  getFileReadIgnorePatterns,
-  normalizePatternsToPath,
-} from './permissions/filesystem.js'
-import {
   getPlan,
   getPlanFilePath,
   persistFileSnapshotIfRemote,
 } from './plans.js'
 import { getPlatform } from './platform.js'
-import { countFilesRoundedRg } from './ripgrep.js'
 import { jsonStringify } from './slowOperations.js'
 import type { SystemPrompt } from './systemPromptType.js'
 import { getToolSchemaCache } from './toolSchemaCache.js'
@@ -471,95 +460,6 @@ export function prependUserContext(
     }),
     ...messages,
   ]
-}
-
-/**
- * Log metrics about context and system prompt size
- */
-export async function logContextMetrics(
-  mcpConfigs: Record<string, ScopedMcpServerConfig>,
-  toolPermissionContext: ToolPermissionContext,
-): Promise<void> {
-  // Early return if logging is disabled
-  if (isAnalyticsDisabled()) {
-    return
-  }
-  const [{ tools: mcpTools }, tools, userContext, systemContext] =
-    await Promise.all([
-      prefetchAllMcpResources(mcpConfigs),
-      getTools(toolPermissionContext),
-      getUserContext(),
-      getSystemContext(),
-    ])
-  // Extract individual context sizes and calculate total
-  const gitStatusSize = systemContext.gitStatus?.length ?? 0
-  const claudeMdSize = userContext.claudeMd?.length ?? 0
-
-  // Calculate total context size
-  const totalContextSize = gitStatusSize + claudeMdSize
-
-  // Get file count using ripgrep (rounded to nearest power of 10 for privacy)
-  const currentDir = getCwd()
-  const ignorePatternsByRoot = getFileReadIgnorePatterns(toolPermissionContext)
-  const normalizedIgnorePatterns = normalizePatternsToPath(
-    ignorePatternsByRoot,
-    currentDir,
-  )
-  const fileCount = await countFilesRoundedRg(
-    currentDir,
-    AbortSignal.timeout(1000),
-    normalizedIgnorePatterns,
-  )
-
-  // Calculate tool metrics
-  let mcpToolsCount = 0
-  let mcpServersCount = 0
-  let mcpToolsTokens = 0
-  let nonMcpToolsCount = 0
-  let nonMcpToolsTokens = 0
-
-  const nonMcpTools = tools.filter(tool => !tool.isMcp)
-  mcpToolsCount = mcpTools.length
-  nonMcpToolsCount = nonMcpTools.length
-
-  // Extract unique server names from MCP tool names (format: mcp__servername__toolname)
-  const serverNames = new Set<string>()
-  for (const tool of mcpTools) {
-    const parts = tool.name.split('__')
-    if (parts.length >= 3 && parts[1]) {
-      serverNames.add(parts[1])
-    }
-  }
-  mcpServersCount = serverNames.size
-
-  // Estimate tool tokens locally for analytics (avoids N API calls per session)
-  // Use inputJSONSchema (plain JSON Schema) when available, otherwise convert Zod schema
-  for (const tool of mcpTools) {
-    const schema =
-      'inputJSONSchema' in tool && tool.inputJSONSchema
-        ? tool.inputJSONSchema
-        : zodToJsonSchema(tool.inputSchema)
-    mcpToolsTokens += roughTokenCountEstimation(jsonStringify(schema))
-  }
-  for (const tool of nonMcpTools) {
-    const schema =
-      'inputJSONSchema' in tool && tool.inputJSONSchema
-        ? tool.inputJSONSchema
-        : zodToJsonSchema(tool.inputSchema)
-    nonMcpToolsTokens += roughTokenCountEstimation(jsonStringify(schema))
-  }
-
-  logEvent('tengu_context_size', {
-    git_status_size: gitStatusSize,
-    claude_md_size: claudeMdSize,
-    total_context_size: totalContextSize,
-    project_file_count_rounded: fileCount,
-    mcp_tools_count: mcpToolsCount,
-    mcp_servers_count: mcpServersCount,
-    mcp_tools_tokens: mcpToolsTokens,
-    non_mcp_tools_count: nonMcpToolsCount,
-    non_mcp_tools_tokens: nonMcpToolsTokens,
-  })
 }
 
 // TODO: Generalize this to all tools

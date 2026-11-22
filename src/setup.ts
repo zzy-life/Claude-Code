@@ -361,9 +361,9 @@ export async function setup(
       ) // Start team memory sync watcher
     }
   }
-  initSinks() // Attach error log + analytics sinks and drain queued events
+  initSinks() // Attach the error log sink
 
-  // Session-success-rate denominator. Emit immediately after the analytics
+  // Session-success-rate denominator. Emit immediately after the error log
   // sink is attached — before any parsing, fetching, or I/O that could throw.
   // inc-3694 (P0 CHANGELOG crash) threw at checkForReleaseNotes below; every
   // event after this point was dead. This beacon is the earliest reliable

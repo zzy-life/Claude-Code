@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { getOauthConfig } from 'src/constants/oauth.js'
 import { getOrganizationUUID } from 'src/services/oauth/client.js'
-import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../../services/analytics/growthbook.js'
 import {
   checkAndRefreshOAuthTokenIfNeeded,
   getClaudeAIOAuthTokens,
@@ -157,66 +156,11 @@ export async function checkGithubAppInstalled(
   }
 }
 
-/**
- * Checks if the user has synced their GitHub credentials with the remote service
- * @returns true if GitHub token is synced, false otherwise
- */
-export async function checkGithubTokenSynced(): Promise<boolean> {
-  try {
-    const accessToken = getClaudeAIOAuthTokens()?.accessToken
-    if (!accessToken) {
-      logForDebugging('checkGithubTokenSynced: No access token found')
-      return false
-    }
-
-    const orgUUID = await getOrganizationUUID()
-    if (!orgUUID) {
-      logForDebugging('checkGithubTokenSynced: No org UUID found')
-      return false
-    }
-
-    const url = `${getOauthConfig().BASE_API_URL}/api/oauth/organizations/${orgUUID}/sync/github/auth`
-    const headers = {
-      ...getOAuthHeaders(accessToken),
-      'x-organization-uuid': orgUUID,
-    }
-
-    logForDebugging('Checking if GitHub token is synced with the remote service')
-
-    const response = await axios.get(url, {
-      headers,
-      timeout: 15000,
-    })
-
-    const synced =
-      response.status === 200 && response.data?.is_authenticated === true
-    logForDebugging(
-      `GitHub token synced: ${synced} (status=${response.status}, data=${JSON.stringify(response.data)})`,
-    )
-    return synced
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status
-      if (status && status >= 400 && status < 500) {
-        logForDebugging(
-          `checkGithubTokenSynced: Got ${status}, token not synced`,
-        )
-        return false
-      }
-    }
-
-    logForDebugging(`checkGithubTokenSynced error: ${errorMessage(error)}`)
-    return false
-  }
-}
-
-type RepoAccessMethod = 'github-app' | 'token-sync' | 'none'
+type RepoAccessMethod = 'github-app' | 'none'
 
 /**
- * Tiered check for whether a GitHub repo is accessible for remote operations.
- * 1. GitHub App installed on the repo
- * 2. GitHub token synced with the remote service
- * 3. Neither — caller should prompt user to set up access
+ * Checks whether the GitHub App grants repo access for remote operations.
+ * If it is not installed, the caller should prompt the user to set up access.
  */
 export async function checkRepoForRemoteAccess(
   owner: string,
@@ -224,12 +168,6 @@ export async function checkRepoForRemoteAccess(
 ): Promise<{ hasAccess: boolean; method: RepoAccessMethod }> {
   if (await checkGithubAppInstalled(owner, repo)) {
     return { hasAccess: true, method: 'github-app' }
-  }
-  if (
-    getFeatureValue_CACHED_MAY_BE_STALE('tengu_cobalt_lantern', false) &&
-    (await checkGithubTokenSynced())
-  ) {
-    return { hasAccess: true, method: 'token-sync' }
   }
   return { hasAccess: false, method: 'none' }
 }

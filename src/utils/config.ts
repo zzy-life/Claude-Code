@@ -45,11 +45,6 @@ import type { ImageDimensions } from './imageResizer.js'
 import type { ModelOption } from './model/modelOptions.js'
 import { jsonParse, jsonStringify } from './slowOperations.js'
 
-// Re-entrancy guard: prevents getConfig → logEvent → getGlobalConfig → getConfig
-// infinite recursion when the config file is corrupted. logEvent's sampling check
-// reads GrowthBook features from the global config, which calls getConfig again.
-let insideGetConfig = false
-
 // Image dimension info for coordinate mapping (only set when image was resized)
 export type PastedContent = {
   id: number // Sequential numeric ID
@@ -826,26 +821,6 @@ let globalConfigCache: { config: GlobalConfig | null; mtime: number } = {
 
 // Tracking for config file operations (telemetry)
 let lastReadFileStats: { mtime: number; size: number } | null = null
-let configCacheHits = 0
-let configCacheMisses = 0
-function reportConfigCacheStats(): void {
-  const total = configCacheHits + configCacheMisses
-  if (total > 0) {
-    logEvent('tengu_config_cache_stats', {
-      cache_hits: configCacheHits,
-      cache_misses: configCacheMisses,
-      hit_rate: configCacheHits / total,
-    })
-  }
-  configCacheHits = 0
-  configCacheMisses = 0
-}
-
-// Register cleanup to report cache stats at session end
-// eslint-disable-next-line custom-rules/no-top-level-side-effects
-registerCleanup(async () => {
-  reportConfigCacheStats()
-})
 
 /**
  * Migrates old autoUpdaterStatus to new installMethod and autoUpdates fields
@@ -992,14 +967,12 @@ export function getGlobalConfig(): GlobalConfig {
   // writes go write-through and other instances' writes are picked up by the
   // background freshness watcher (never blocks this path).
   if (globalConfigCache.config) {
-    configCacheHits++
     return globalConfigCache.config
   }
 
   // Slow path: startup load. Sync I/O here is acceptable because it runs
   // exactly once, before any UI is rendered. Stat before read so any race
   // self-corrects (old mtime + new content → watcher re-reads next tick).
-  configCacheMisses++
   try {
     let stats: { mtimeMs: number; size: number } | null = null
     try {
@@ -1410,31 +1383,7 @@ function getConfig<A>(
         { level: 'error' },
       )
 
-      // Guard: logEvent → shouldSampleEvent → getGlobalConfig → getConfig
-      // causes infinite recursion when the config file is corrupted, because
-      // the sampling check reads a GrowthBook feature from global config.
-      // Only log analytics on the outermost call.
-      if (!insideGetConfig) {
-        insideGetConfig = true
-        try {
-          // Log the error for monitoring
-          logError(error)
-
-          // Log analytics event for config corruption
-          let hasBackup = false
-          try {
-            fs.statSync(`${file}.backup`)
-            hasBackup = true
-          } catch {
-            // No backup
-          }
-          logEvent('tengu_config_parse_error', {
-            has_backup: hasBackup,
-          })
-        } finally {
-          insideGetConfig = false
-        }
-      }
+      logError(error)
 
       process.stderr.write(
         `\nClaude configuration file at ${file} is corrupted: ${error.message}\n`,

@@ -37,7 +37,6 @@ import {
   getFileModificationTimeAsync,
   suggestPathUnderCwd,
 } from '../../utils/file.js'
-import { logFileOperation } from '../../utils/fileOperationAnalytics.js'
 import { formatFileSize } from '../../utils/format.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
 import {
@@ -852,13 +851,6 @@ async function callInner(
       file: { filePath: file_path, cells },
     }
 
-    logFileOperation({
-      operation: 'read',
-      tool: 'FileReadTool',
-      filePath: fullFilePath,
-      content: cellsJson,
-    })
-
     return { data }
   }
 
@@ -868,13 +860,6 @@ async function callInner(
     // don't apply the text maxSizeBytes cap.
     const data = await readImageWithTokenBudget(resolvedFilePath, maxTokens)
     context.nestedMemoryAttachmentTriggers?.add(fullFilePath)
-
-    logFileOperation({
-      operation: 'read',
-      tool: 'FileReadTool',
-      filePath: fullFilePath,
-      content: data.file.base64,
-    })
 
     const metadataText = data.file.dimensions
       ? createImageMetadataText(data.file.dimensions)
@@ -906,12 +891,6 @@ async function callInner(
         pageCount: extractResult.data.file.count,
         fileSize: extractResult.data.file.originalSize,
         hasPageRange: true,
-      })
-      logFileOperation({
-        operation: 'read',
-        tool: 'FileReadTool',
-        filePath: fullFilePath,
-        content: `PDF pages ${pages}`,
       })
       const entries = await readdir(extractResult.data.file.outputDir)
       const imageFiles = entries.filter(f => f.endsWith('.jpg')).sort()
@@ -989,12 +968,6 @@ async function callInner(
       throw new Error(readResult.error.message)
     }
     const pdfData = readResult.data
-    logFileOperation({
-      operation: 'read',
-      tool: 'FileReadTool',
-      filePath: fullFilePath,
-      content: pdfData.file.base64,
-    })
 
     return {
       data: pdfData,
@@ -1056,13 +1029,6 @@ async function callInner(
   if (isAutoMemFile(fullFilePath)) {
     memoryFileMtimes.set(data, mtimeMs)
   }
-
-  logFileOperation({
-    operation: 'read',
-    tool: 'FileReadTool',
-    filePath: fullFilePath,
-    content,
-  })
 
   const sessionFileType = detectSessionFileType(fullFilePath)
   const analyticsExt = getFileExtensionForAnalytics(fullFilePath)

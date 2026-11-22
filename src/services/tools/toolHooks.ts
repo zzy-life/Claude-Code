@@ -323,7 +323,7 @@ export async function* runPostToolUseFailureHooks<Input extends AnyObject>(
  *
  * Encapsulates the invariant that hook 'allow' does NOT bypass settings.json
  * deny/ask rules — checkRuleBasedPermissions still applies (inc-4788 analog).
- * Also handles the requiresUserInteraction/requireCanUseTool guards and the
+ * Also handles the requiresUserInteraction guard and the
  * 'ask' forceDecision passthrough.
  *
  * Shared by toolExecution.ts (main query loop) and REPLTool/toolWrappers.ts
@@ -342,7 +342,6 @@ export async function resolveHookPermissionDecision(
   input: Record<string, unknown>
 }> {
   const requiresInteraction = tool.requiresUserInteraction?.()
-  const requireCanUseTool = toolUseContext.requireCanUseTool
 
   if (hookPermissionResult?.behavior === 'allow') {
     const hookInput = hookPermissionResult.updatedInput ?? input
@@ -353,7 +352,7 @@ export async function resolveHookPermissionDecision(
     const interactionSatisfied =
       requiresInteraction && hookPermissionResult.updatedInput !== undefined
 
-    if ((requiresInteraction && !interactionSatisfied) || requireCanUseTool) {
+    if (requiresInteraction && !interactionSatisfied) {
       logForDebugging(
         `Hook approved tool use for ${tool.name}, but canUseTool is required`,
       )

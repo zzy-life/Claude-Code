@@ -34,8 +34,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 |------|------|
 | `/backfill-sessions` | 回填历史会话数据。 |
 | `/bughunter` | 内部 Bug 诊断工具。 |
-| `/commit` | 创建 Git 提交。 |
-| `/commit-push-pr` | 执行内部提交、推送和创建 Pull Request 工作流。 |
 | `/ctx_viz` | 上下文占用可视化。 |
 | `/good-claude` | 提交内部正向反馈。 |
 | `/issue` | 内部 issue 工作流。 |

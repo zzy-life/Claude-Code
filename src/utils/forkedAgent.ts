@@ -294,8 +294,6 @@ export type SubagentContextOverrides = {
   shareAbortController?: boolean
   /** Critical system reminder to re-inject at every user turn */
   criticalSystemReminder_EXPERIMENTAL?: string
-  /** When true, canUseTool must always be called even when hooks auto-approve. */
-  requireCanUseTool?: boolean
   /** Override replacement state — used by resumeAgentBackground to thread
    * state reconstructed from the resumed sidechain so the same results
    * are re-replaced (prompt cache stability). */
@@ -453,7 +451,6 @@ export function createSubagentContext(
     userModified: parentContext.userModified,
     criticalSystemReminder_EXPERIMENTAL:
       overrides?.criticalSystemReminder_EXPERIMENTAL,
-    requireCanUseTool: overrides?.requireCanUseTool,
   }
 }
 
