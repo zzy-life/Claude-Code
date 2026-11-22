@@ -61,7 +61,7 @@ function getDisabledReasonMessage(
       return 'Fast mode has been disabled by your organization'
     case 'extra_usage_disabled':
       // Only OAuth users can have extra_usage_disabled; console users don't have this concept
-      return 'Fast mode requires extra usage billing · /extra-usage to enable'
+      return 'Fast mode requires extra usage billing'
     case 'network_error':
       return 'Fast mode unavailable due to network connectivity issues'
     case 'unknown':
@@ -277,7 +277,7 @@ function getOverageDisabledMessage(reason: string | null): string {
       return 'Fast mode disabled · extra usage not available for your plan'
     case 'overage_not_provisioned':
     case 'no_limits_configured':
-      return 'Fast mode requires extra usage billing · /extra-usage to enable'
+      return 'Fast mode requires extra usage billing'
     default:
       return 'Fast mode disabled · extra usage not available'
   }

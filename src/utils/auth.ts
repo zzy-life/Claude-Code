@@ -1612,32 +1612,6 @@ export function getOauthAccountInfo(): AccountInfo | undefined {
   return isAnthropicAuthEnabled() ? getGlobalConfig().oauthAccount : undefined
 }
 
-/**
- * Checks if overage/extra usage provisioning is allowed for this organization.
- * This mirrors the logic in apps/claude-ai `useIsOverageProvisioningAllowed` hook as closely as possible.
- */
-export function isOverageProvisioningAllowed(): boolean {
-  const accountInfo = getOauthAccountInfo()
-  const billingType = accountInfo?.billingType
-
-  // Must be a Claude subscriber with a supported subscription type
-  if (!isClaudeAISubscriber() || !billingType) {
-    return false
-  }
-
-  // only allow Stripe and mobile billing types to purchase extra usage
-  if (
-    billingType !== 'stripe_subscription' &&
-    billingType !== 'stripe_subscription_contracted' &&
-    billingType !== 'apple_subscription' &&
-    billingType !== 'google_play_subscription'
-  ) {
-    return false
-  }
-
-  return true
-}
-
 // Returns whether the user has Opus access at all, regardless of whether they
 // are a subscriber or PayG.
 export function hasOpusAccess(): boolean {

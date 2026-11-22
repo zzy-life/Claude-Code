@@ -22,7 +22,7 @@ export const CHANNEL_ARROW = '\u2190' // ← - inbound channel message indicator
 export const INJECTED_ARROW = '\u2192' // → - cross-session injected message indicator
 export const FORK_GLYPH = '\u2442' // ⑂ - fork directive indicator
 
-// Review status indicators (ultrareview diamond states)
+// Remote task status indicators (diamond states)
 export const DIAMOND_OPEN = '\u25c7' // ◇ - running
 export const DIAMOND_FILLED = '\u25c6' // ◆ - completed/failed
 export const REFERENCE_MARK = '\u203b' // ※ - komejirushi, away-summary recap marker

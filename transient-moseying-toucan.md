@@ -35,7 +35,7 @@
 - 删除 `/privacy-settings` 的主动设置入口；检查 `src/components/grove/Grove.tsx` 中 `PrivacySettingsDialog` 等命令专属导出。
 - **保留** Grove 隐私/条款告知、登录/交互初始化、print 模式检查和 logout 缓存处理所需的 API 与组件，不能整目录删除 Grove。
 
-## 阶段 3：额外用量操作入口
+## 阶段 3：额外用量操作入口（已完成）
 
 涉及 `src/commands/extra-usage/`、`src/commands/rate-limit-options/rate-limit-options.tsx` 及额度提示调用方。
 
@@ -45,7 +45,7 @@
 - 复核管理员申请、赠送额度等 API 的实际消费者，只删本次变为无消费者的部分。
 - **保留** usage API 返回结构、余额/额度读取、Fast Mode/1M 权限判断、限流处理及实际计费语义；不把“移除操作入口”变成“禁用或忽略服务端额外用量”。
 
-## 阶段 4：Ultrareview 专属远程审查
+## 阶段 4：Ultrareview 专属远程审查（已完成）
 
 涉及 `src/commands/review.ts`、`src/commands/review/`、`src/services/api/ultrareviewQuota.ts`。
 
@@ -53,6 +53,14 @@
 - 删除远程 bughunter 发起、配额/overage 对话框及专属开关。
 - 清理 `src/components/PromptInput/PromptInput.tsx` 的 ultrareview 关键词高亮；检查远程任务详情/进度、`RemoteAgentTask` 和图标中的专属展示分支。
 - **保留** 通用远程任务创建、轮询、进度展示、会话 API 和其他远程任务类型；历史任务记录不删除，展示回归需覆盖旧记录。
+
+### 第三、四阶段交付记录
+
+- 第三阶段：已删除额外用量命令、菜单操作、管理员申请 API 与专属访问标记；保留真实用量/余额、赠送额度读取、权限和计费判断，失效命令提示改为账户设置说明。
+- 第四阶段：已删除远程审查发起、配额/付费确认、关键词展示、专属环境请求及审查状态机；本地 `/review` 提示词和通用远程任务链路保留。
+- 历史审查：只在恢复入口识别旧类型/标记，保留 sidecar 和远程会话，在 `/tasks` 中提供历史详情与会话链接；不请求状态、不恢复轮询、不归档远程会话、不伪报成功，也不计入活跃任务。历史恢复时间不当作审查运行时长。
+- 独立检查：`node check-phase3-removal.mjs`、`node check-phase4-removal.mjs`；此前两阶段脚本同步调整保留命令清单。仅验证静态约束与提取的纯逻辑，不替代运行验收。
+- 未运行构建、未执行 Git 提交/推送。账户限流菜单、Fast Mode/1M 拒绝场景、历史远程记录真实展示和 Remote Control 仍需按环境人工验收。
 
 ## 阶段 5：Advisor 全链路与最终收敛
 

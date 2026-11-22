@@ -55,22 +55,6 @@ export function getCachedOverageCreditGrant(): OverageCreditGrantInfo | null {
 }
 
 /**
- * Drop the current org's cached entry so the next read refetches.
- * Leaves other orgs' entries intact.
- */
-export function invalidateOverageCreditGrantCache(): void {
-  const orgId = getOauthAccountInfo()?.organizationUuid
-  if (!orgId) return
-  const cache = getGlobalConfig().overageCreditGrantCache
-  if (!cache || !(orgId in cache)) return
-  saveGlobalConfig(prev => {
-    const next = { ...prev.overageCreditGrantCache }
-    delete next[orgId]
-    return { ...prev, overageCreditGrantCache: next }
-  })
-}
-
-/**
  * Fetch and cache grant info. Fire-and-forget; call when an upsell surface
  * is about to render and the cache is empty.
  */
