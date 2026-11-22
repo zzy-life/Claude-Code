@@ -2618,9 +2618,21 @@ export function REPL({
       return;
     }
     const toolUseContext = getToolUseContext(messagesIncludingNewMessages, newMessages, abortController, mainLoopModelParam);
-    toolUseContext.approvalTurnScope = new ApprovalTurnScope(stop => {
-      setMessages(prev => [...prev, createSystemMessage(`已阻止并停止本轮（${stop.toolUseID}）：${stop.reason}`, 'warning')]);
+    const approvalScope = new ApprovalTurnScope(stop => {
+      setMessages(prev => [...prev, createSystemMessage(`Turn blocked and stopped: ${stop.reason} (toolUseID: ${stop.toolUseID})`, 'warning')]);
     });
+    toolUseContext.approvalTurnScope = approvalScope;
+    toolUseContext.requestLocalApproval = canUseTool;
+    approvalScope.rootMessages = messagesIncludingNewMessages;
+    approvalScope.updatePermissions(store.getState().toolPermissionContext);
+    const unsubscribeApprovalPermissions = store.subscribe(() => {
+      approvalScope.updatePermissions(store.getState().toolPermissionContext);
+    });
+    approvalScope.trackPermissions(unsubscribeApprovalPermissions);
+    const releaseApprovalTurn = approvalScope.retain();
+    using approvalPermissionSubscription = {
+      [Symbol.dispose]() { releaseApprovalTurn(); }
+    };
     // getToolUseContext reads tools/mcpClients fresh from store.getState()
     // (via computeTools/mergeClients). Use those rather than the closure-
     // captured `tools`/`mcpClients` — useManageMCPConnections may have
@@ -2663,6 +2675,7 @@ export function REPL({
       appendSystemPrompt
     });
     toolUseContext.renderedSystemPrompt = systemPrompt;
+    approvalScope.constraints = baseUserContext;
     queryCheckpoint('query_query_start');
     for await (const event of query({
       messages: messagesIncludingNewMessages,

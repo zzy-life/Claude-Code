@@ -44,7 +44,7 @@ export const PERMISSION_MODES = INTERNAL_PERMISSION_MODES
 export type PermissionBehavior = 'allow' | 'deny' | 'ask'
 
 // An approval never rewrites tool input or grants permissions to future calls.
-export type AiApprovalResult =
+export type AutoApprovalResult =
   | { decision: 'allow' }
   | { decision: 'retryable_deny'; reason: string; saferAlternative?: string }
   | { decision: 'hard_deny'; reason: string }
@@ -188,6 +188,13 @@ export type PermissionAllowDecision<
   toolUseID?: string
   acceptFeedback?: string
   contentBlocks?: ContentBlockParam[]
+  /** Host-only receipt, consumed once immediately before tool dispatch. */
+  autoApprovalReceipt?: {
+    toolUseID: string
+    inputJSON: string
+    permissionRevision: number
+    used: boolean
+  }
 }
 
 /**
@@ -225,6 +232,8 @@ export type PermissionAskDecision<
    * The classifier may auto-approve the permission before the user responds.
    */
   pendingClassifierCheck?: PendingClassifierCheck
+  /** New approval already exhausted hooks/AI; only the local user may resolve it. */
+  autoApprovalNeedsUser?: boolean
   /**
    * Optional content blocks (e.g., images) to include alongside the rejection
    * message in the tool result. Used when users paste images as feedback.

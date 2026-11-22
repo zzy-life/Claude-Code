@@ -790,7 +790,22 @@ export function setSdkBetas(betas: string[] | undefined): void {
   STATE.sdkBetas = betas
 }
 
+const autoApprovalResponses = new Set<string>()
+const autoApprovalUsage = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, costUSD: 0 }
+
+export function getAutoApprovalUsage() {
+  return autoApprovalUsage
+}
+
+export function claimAutoApprovalUsage(responseId: string): boolean {
+  if (autoApprovalResponses.has(responseId)) return false
+  autoApprovalResponses.add(responseId)
+  return true
+}
+
 export function resetCostState(): void {
+  autoApprovalResponses.clear()
+  Object.assign(autoApprovalUsage, { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, costUSD: 0 })
   STATE.totalCostUSD = 0
   STATE.totalAPIDuration = 0
   STATE.totalAPIDurationWithoutRetries = 0

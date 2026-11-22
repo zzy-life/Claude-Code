@@ -25,7 +25,7 @@ function stringsForDecisionReason(reason: PermissionDecisionReason | undefined, 
   if ((feature('BASH_CLASSIFIER') || feature('TRANSCRIPT_CLASSIFIER')) && reason.type === 'classifier') {
     if (reason.classifier === 'auto-mode') {
       return {
-        reasonString: `Auto mode classifier requires confirmation for this ${toolType}.\n${reason.reason}`,
+        reasonString: `AI approval classifier requires confirmation for this ${toolType}.\n${reason.reason}`,
         configString: undefined,
         themeColor: 'error'
       };

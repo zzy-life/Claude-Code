@@ -401,6 +401,8 @@ export function createSubagentContext(
 
     // Ordinary descendants retain the root turn even with an independent controller.
     approvalTurnScope: parentContext.approvalTurnScope,
+    requestLocalApproval: parentContext.requestLocalApproval,
+    appendSystemMessage: parentContext.appendSystemMessage,
     // AbortController
     abortController,
 

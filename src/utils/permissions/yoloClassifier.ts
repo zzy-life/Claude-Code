@@ -909,7 +909,7 @@ async function classifyYoloActionXml(
     }
   } catch (error) {
     if (signal.aborted) {
-      logForDebugging('Auto mode classifier (XML): aborted by user')
+      logForDebugging('AI approval classifier (XML): aborted by user')
       logAutoModeOutcome('interrupted', model, { classifierType })
       return {
         shouldBlock: true,
@@ -922,7 +922,7 @@ async function classifyYoloActionXml(
     }
     const tooLong = detectPromptTooLong(error)
     logForDebugging(
-      `Auto mode classifier (XML) error: ${errorMessage(error)}`,
+      `AI approval classifier (XML) error: ${errorMessage(error)}`,
       {
         level: 'warn',
       },
@@ -1164,7 +1164,7 @@ export async function classifyYoloAction(
     )
 
     if (!toolUseBlock) {
-      logForDebugging('Auto mode classifier: No tool use block found', {
+      logForDebugging('AI approval classifier: No tool use block found', {
         level: 'warn',
       })
       logAutoModeOutcome('parse_failure', model, { failureKind: 'no_tool_use' })
@@ -1186,7 +1186,7 @@ export async function classifyYoloAction(
       yoloClassifierResponseSchema(),
     )
     if (!parsed) {
-      logForDebugging('Auto mode classifier: Invalid response schema', {
+      logForDebugging('AI approval classifier: Invalid response schema', {
         level: 'warn',
       })
       logAutoModeOutcome('parse_failure', model, {
@@ -1227,7 +1227,7 @@ export async function classifyYoloAction(
     return classifierResult
   } catch (error) {
     if (signal.aborted) {
-      logForDebugging('Auto mode classifier: aborted by user')
+      logForDebugging('AI approval classifier: aborted by user')
       logAutoModeOutcome('interrupted', model)
       return {
         shouldBlock: true,
@@ -1237,7 +1237,7 @@ export async function classifyYoloAction(
       }
     }
     const tooLong = detectPromptTooLong(error)
-    logForDebugging(`Auto mode classifier error: ${errorMessage(error)}`, {
+    logForDebugging(`AI approval classifier error: ${errorMessage(error)}`, {
       level: 'warn',
     })
     const errorDumpPath =

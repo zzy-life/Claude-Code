@@ -61,6 +61,7 @@ import {
 import { generateToolUseSummary } from './services/toolUseSummary/toolUseSummaryGenerator.js'
 import { prependUserContext, appendSystemContext } from './utils/api.js'
 import {
+  type Attachment,
   createAttachmentMessage,
   filterDuplicateMemoryAttachments,
   getAttachmentMessages,
@@ -592,6 +593,9 @@ async function* queryLoop(
         doesMostRecentAssistantMessageExceed200k(messagesForQuery),
     })
 
+    if (!toolUseContext.agentId && toolUseContext.approvalTurnScope) {
+      toolUseContext.approvalTurnScope.rootModel = currentModel
+    }
     queryCheckpoint('query_setup_end')
 
     // Create fetch wrapper once per query session to avoid memory retention.
@@ -962,6 +966,9 @@ async function* queryLoop(
           if (innerError instanceof FallbackTriggeredError && fallbackModel) {
             // Fallback was triggered - switch model and retry
             currentModel = fallbackModel
+            if (!toolUseContext.agentId && toolUseContext.approvalTurnScope) {
+              toolUseContext.approvalTurnScope.rootModel = currentModel
+            }
             attemptWithFallback = true
 
             // Clear assistant messages since we'll retry the entire request
@@ -1078,7 +1085,7 @@ async function* queryLoop(
         yield* yieldMissingToolResultBlocks(
           assistantMessages,
           toolUseContext.approvalTurnScope?.stop
-            ? `已阻止并停止本轮：${toolUseContext.approvalTurnScope.stop.reason}`
+            ? `Turn blocked and stopped: ${toolUseContext.approvalTurnScope.stop.reason}`
             : 'Interrupted by user',
         )
       }
@@ -1622,6 +1629,13 @@ async function* queryLoop(
     )) {
       yield attachment
       toolResults.push(attachment)
+      if (!toolUseContext.agentId && toolUseContext.approvalTurnScope && attachment.type === 'attachment') {
+        const queued = attachment.attachment as Attachment | undefined
+        if (queued?.type === 'queued_command' && !queued.origin && !queued.isMeta && queued.commandMode !== 'task-notification') {
+          toolUseContext.approvalTurnScope.rootMessages = [...toolUseContext.approvalTurnScope.rootMessages, attachment]
+          toolUseContext.approvalTurnScope.invalidateApprovals()
+        }
+      }
     }
 
     // Memory prefetch consume: only if settled and not already consumed on

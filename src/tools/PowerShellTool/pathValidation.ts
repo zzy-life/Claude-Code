@@ -7,7 +7,7 @@
  */
 
 import { homedir } from 'os'
-import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/aiApproval.js'
+import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/autoApproval.js'
 import { isAbsolute, resolve } from 'path'
 import type { ToolPermissionContext } from '../../Tool.js'
 import type { PermissionRule } from '../../types/permissions.js'

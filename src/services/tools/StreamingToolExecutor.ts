@@ -156,7 +156,7 @@ export class StreamingToolExecutor {
     assistantMessage: AssistantMessage,
   ): Message {
     if (reason === 'approval_stopped') {
-      const message = `已阻止并停止本轮：${this.toolUseContext.approvalTurnScope?.stop?.reason}`
+      const message = `Turn blocked and stopped: ${this.toolUseContext.approvalTurnScope?.stop?.reason}`
       return createUserMessage({
         content: [
           {

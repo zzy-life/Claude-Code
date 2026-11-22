@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle'
+import { reviewToolWithAutoApproval, usesLocalAutoApproval } from './autoApproval.js'
 import { APIUserAbortError } from '@anthropic-ai/sdk'
 import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
 import {
@@ -420,6 +421,10 @@ async function runPermissionRequestHooksForHeadlessAgent(
       const decision = hookResult.permissionRequestResult
       if (decision.behavior === 'allow') {
         const finalInput = decision.updatedInput ?? input
+        if (usesLocalAutoApproval(context)) {
+          const checked = await hasPermissionsToUseToolInner(tool, finalInput, context)
+          if (checked.behavior === 'deny') return checked
+        }
         // Persist permission updates if provided
         if (decision.updatedPermissions?.length) {
           persistPermissionUpdates(decision.updatedPermissions)
@@ -513,6 +518,35 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         },
         message: DONT_ASK_REJECT_MESSAGE(tool.name),
       }
+    }
+    if (usesLocalAutoApproval(context)) {
+      const finalInput = result.updatedInput ?? input
+      const scope = context.approvalTurnScope!
+      let hooks = scope.hookDecisions.get(toolUseID)
+      if (!hooks) {
+        hooks = runPermissionRequestHooksForHeadlessAgent(
+          tool, finalInput, toolUseID, context, 'auto', result.suggestions,
+        )
+        scope.hookDecisions.set(toolUseID, hooks)
+      }
+      const hookDecision = await hooks
+      scope.throwIfStopped()
+      if (context.abortController.signal.aborted) throw new AbortError()
+      if (hookDecision) return hookDecision
+      if (!usesLocalAutoApproval(context)) {
+        return { ...result, autoApprovalNeedsUser: true, pendingClassifierCheck: undefined, message: 'User approval required: The mode or authorization changed while the hook was running' }
+      }
+      const reviewed = await reviewToolWithAutoApproval({
+        tool, input: finalInput, context, assistantMessage, toolUseID, result,
+        recheck: () => hasPermissionsToUseToolInner(tool, finalInput, context),
+      })
+      if (reviewed.behavior === 'ask' && context.agentId) {
+        if (context.requestLocalApproval) {
+          return context.requestLocalApproval(tool, finalInput, context, assistantMessage, toolUseID, reviewed)
+        }
+        return { behavior: 'deny', message: 'User approval required: The root session local approval queue is unavailable', decisionReason: { type: 'asyncAgent', reason: reviewed.message } }
+      }
+      return reviewed
     }
     // Apply auto mode: use AI classifier instead of prompting user
     // Check this BEFORE shouldAvoidPermissionPrompts so classifiers work in headless mode
@@ -708,7 +742,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
       ) {
         context.addNotification({
           key: 'auto-mode-error-dump',
-          text: `Auto mode classifier error — prompts dumped to ${classifierResult.errorDumpPath} (included in /share)`,
+          text: `AI approval classifier error — prompts dumped to ${classifierResult.errorDumpPath} (included in /share)`,
           priority: 'immediate',
           color: 'error',
         })
@@ -823,7 +857,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
             )
           }
           logForDebugging(
-            'Auto mode classifier transcript too long, falling back to normal permission handling',
+            'AI approval classifier transcript too long, falling back to normal permission handling',
             { level: 'warn' },
           )
           return {
@@ -831,7 +865,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
             decisionReason: {
               type: 'other',
               reason:
-                'Auto mode classifier transcript exceeded context window — falling back to manual approval',
+                'AI approval classifier transcript exceeded context window — falling back to manual approval',
             },
           }
         }
@@ -846,7 +880,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
             )
           ) {
             logForDebugging(
-              'Auto mode classifier unavailable, denying with retry guidance (fail closed)',
+              'AI approval classifier unavailable, denying with retry guidance (fail closed)',
               { level: 'warn' },
             )
             return {
@@ -864,7 +898,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
           }
           // Fail open: fall back to normal permission handling
           logForDebugging(
-            'Auto mode classifier unavailable, falling back to normal permission handling (fail open)',
+            'AI approval classifier unavailable, falling back to normal permission handling (fail open)',
             { level: 'warn' },
           )
           return result
@@ -875,7 +909,7 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         persistDenialState(context, newDenialState)
 
         logForDebugging(
-          `Auto mode classifier blocked action: ${classifierResult.reason}`,
+          `AI approval classifier blocked action: ${classifierResult.reason}`,
           { level: 'warn' },
         )
 
@@ -1150,7 +1184,7 @@ export async function checkRuleBasedPermissions(
   return null
 }
 
-async function hasPermissionsToUseToolInner(
+export async function hasPermissionsToUseToolInner(
   tool: Tool,
   input: { [key: string]: unknown },
   context: ToolUseContext,

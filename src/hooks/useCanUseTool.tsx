@@ -17,7 +17,8 @@ import { logForDebugging } from '../utils/debug.js';
 import { AbortError } from '../utils/errors.js';
 import { logError } from '../utils/log.js';
 import type { PermissionDecision } from '../utils/permissions/PermissionResult.js';
-import { hasPermissionsToUseTool } from '../utils/permissions/permissions.js';
+import { hasPermissionsToUseTool, hasPermissionsToUseToolInner } from '../utils/permissions/permissions.js';
+import { usesLocalAutoApproval } from '../utils/permissions/autoApproval.js';
 import { jsonStringify } from '../utils/slowOperations.js';
 import { handleCoordinatorPermission } from './toolPermission/handlers/coordinatorHandler.js';
 import { handleInteractivePermission } from './toolPermission/handlers/interactiveHandler.js';
@@ -34,7 +35,14 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
       if (ctx.resolveIfAborted(resolve)) {
         return;
       }
-      const decisionPromise = forceDecision !== undefined ? Promise.resolve(forceDecision) : hasPermissionsToUseTool(tool, input, toolUseContext, assistantMessage, toolUseID);
+      const decisionPromise = forceDecision !== undefined ? (async () => {
+        if (forceDecision.behavior === 'ask' && usesLocalAutoApproval(toolUseContext) && !forceDecision.autoApprovalNeedsUser) {
+          const checked = await hasPermissionsToUseToolInner(tool, forceDecision.updatedInput ?? input, toolUseContext);
+          if (checked.behavior === 'deny') return checked;
+          return { ...forceDecision, message: `User approval required: ${forceDecision.message}`, autoApprovalNeedsUser: true, pendingClassifierCheck: undefined };
+        }
+        return forceDecision;
+      })() : hasPermissionsToUseTool(tool, input, toolUseContext, assistantMessage, toolUseID);
       return decisionPromise.then(async result => {
         if (result.behavior === "allow") {
           if (ctx.resolveIfAborted(resolve)) {
@@ -47,9 +55,12 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
             decision: "accept",
             source: "config"
           });
-          resolve(ctx.buildAllow(result.updatedInput ?? input, {
-            decisionReason: result.decisionReason
-          }));
+          resolve({
+            ...ctx.buildAllow(result.updatedInput ?? input, {
+              decisionReason: result.decisionReason
+            }),
+            autoApprovalReceipt: result.autoApprovalReceipt
+          });
           return;
         }
         const appState = toolUseContext.getAppState();
@@ -92,6 +103,13 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
             }
           case "ask":
             {
+              if (result.autoApprovalNeedsUser) {
+                handleInteractivePermission({
+                  ctx, description, result,
+                  awaitAutomatedChecksBeforeDialog: true
+                }, resolve);
+                return;
+              }
               if (appState.toolPermissionContext.awaitAutomatedChecksBeforeDialog) {
                 const coordinatorDecision = await handleCoordinatorPermission({
                   ctx,

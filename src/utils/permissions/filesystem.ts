@@ -1,5 +1,5 @@
 import { feature } from 'bun:bundle'
-import { allowsAutomaticWorkspaceEdits } from './aiApproval.js'
+import { allowsAutomaticWorkspaceEdits } from './autoApproval.js'
 import { randomBytes } from 'crypto'
 import ignore from 'ignore'
 import memoize from 'lodash-es/memoize.js'

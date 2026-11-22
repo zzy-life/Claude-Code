@@ -648,7 +648,7 @@ export function getAssistantMessageFromError(
     error.message.includes('anthropic-beta')
   ) {
     return createAssistantAPIErrorMessage({
-      content: 'Auto mode is unavailable for your plan',
+      content: 'AI approval is unavailable for your plan',
       error: 'invalid_request',
     })
   }

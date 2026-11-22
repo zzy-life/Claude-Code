@@ -67,7 +67,11 @@ function handleInteractivePermission(
     channelCallbacks,
   } = params
 
-  const { resolve: resolveOnce, isResolved, claim } = createResolveOnce(resolve)
+  let cleanupLocalAbort = () => {}
+  const { resolve: resolveOnce, isResolved, claim } = createResolveOnce<PermissionDecision>(decision => {
+    cleanupLocalAbort()
+    resolve(decision)
+  })
   let userInteracted = false
   let checkmarkTransitionTimer: ReturnType<typeof setTimeout> | undefined
   // Hoisted so onDismissCheckmark (Esc during checkmark window) can also
@@ -136,6 +140,13 @@ function handleInteractivePermission(
     },
     onAbort() {
       if (!claim()) return
+      if (ctx.toolUseContext.approvalTurnScope?.stop) {
+        ctx.removeFromQueue()
+        resolveOnce(ctx.buildDeny(`Turn blocked and stopped: ${ctx.toolUseContext.approvalTurnScope.stop.reason}`, {
+          type: 'other', reason: 'auto_approval_hard_deny',
+        }))
+        return
+      }
       if (bridgeCallbacks && bridgeRequestId) {
         bridgeCallbacks.sendResponse(bridgeRequestId, {
           behavior: 'deny',
@@ -158,6 +169,16 @@ function handleInteractivePermission(
       contentBlocks?: ContentBlockParam[],
     ) {
       if (!claim()) return // atomic check-and-mark before await
+      if (ctx.resolveIfAborted(resolveOnce)) return
+      const approvalScope = ctx.toolUseContext.approvalTurnScope
+      if (ctx.tool.requiresUserInteraction?.() && approvalScope) {
+        approvalScope.verifiedAnswers.push({
+          toolUseID: ctx.toolUseID, toolName: ctx.tool.name,
+          question: JSON.parse(JSON.stringify(displayInput)), answer: JSON.parse(JSON.stringify(updatedInput)),
+        })
+        // 新问答可能收紧授权，不能让其他审批继续采用旧证据。
+        approvalScope.invalidateApprovals()
+      }
 
       if (bridgeCallbacks && bridgeRequestId) {
         bridgeCallbacks.sendResponse(bridgeRequestId, {
@@ -202,7 +223,7 @@ function handleInteractivePermission(
       resolveOnce(ctx.cancelAndAbort(feedback, undefined, contentBlocks))
     },
     async recheckPermission() {
-      if (isResolved()) return
+      if (isResolved() || result.autoApprovalNeedsUser) return
       const freshResult = await hasPermissionsToUseTool(
         ctx.tool,
         ctx.input,
@@ -226,10 +247,29 @@ function handleInteractivePermission(
         channelUnsubscribe?.()
         ctx.removeFromQueue()
         ctx.logDecision({ decision: 'accept', source: 'config' })
-        resolveOnce(ctx.buildAllow(freshResult.updatedInput ?? ctx.input))
+        resolveOnce({
+          ...ctx.buildAllow(freshResult.updatedInput ?? ctx.input),
+          autoApprovalReceipt: freshResult.autoApprovalReceipt,
+        })
       }
     },
   })
+
+  if (result.autoApprovalNeedsUser) {
+    const signal = ctx.toolUseContext.abortController.signal
+    const cancelPending = () => {
+      if (!claim()) return
+      ctx.removeFromQueue()
+      if (!ctx.resolveIfAborted(resolveOnce)) {
+        resolveOnce(ctx.cancelAndAbort(undefined, true))
+      }
+    }
+    signal.addEventListener('abort', cancelPending, { once: true })
+    cleanupLocalAbort = () => signal.removeEventListener('abort', cancelPending)
+    if (signal.aborted) cancelPending()
+    // New AI has finished. No hook, classifier, channel or bridge may race this local fallback.
+    return
+  }
 
   // Race 4: Bridge permission response from CCR (claude.ai)
   // When the bridge is connected, send the permission request to CCR and

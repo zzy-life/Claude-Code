@@ -526,10 +526,14 @@ export async function* runAgent({
       : toolUseContext.abortController
 
   // Background controllers remain independent of ESC, but not of a safety stop.
+  const releaseSafetyScope = toolUseContext.approvalTurnScope?.retain()
   const unregisterSafetyController =
     toolUseContext.approvalTurnScope?.registerController(agentAbortController)
   using safetyRegistration = {
-    [Symbol.dispose]() { unregisterSafetyController?.() },
+    [Symbol.dispose]() {
+      unregisterSafetyController?.()
+      releaseSafetyScope?.()
+    },
   }
   toolUseContext.approvalTurnScope?.throwIfStopped()
 

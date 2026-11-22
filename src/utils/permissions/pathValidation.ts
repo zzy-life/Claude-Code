@@ -1,5 +1,5 @@
 import memoize from 'lodash-es/memoize.js'
-import { allowsAutomaticWorkspaceEdits } from './aiApproval.js'
+import { allowsAutomaticWorkspaceEdits } from './autoApproval.js'
 import { homedir } from 'os'
 import { dirname, isAbsolute, resolve } from 'path'
 import type { ToolPermissionContext } from '../../Tool.js'

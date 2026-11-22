@@ -1,5 +1,6 @@
 import type { BetaUsage as Usage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import chalk from 'chalk'
+import { getAutoApprovalUsage } from './bootstrap/state.js'
 import {
   addToTotalCostState,
   addToTotalLinesChanged,
@@ -227,13 +228,18 @@ export function formatTotalCost(): string {
       : '')
 
   const modelUsageDisplay = formatModelUsage()
+  const approval = getAutoApprovalUsage()
+  let approvalDisplay = ''
+  if (approval.calls > 0) {
+    approvalDisplay = `\nAI approval (included): ${approval.calls} calls, ${approval.input} input, ${approval.output} output, ${approval.cacheRead} cache read, ${approval.cacheWrite} cache write (${formatCost(approval.costUSD)})`
+  }
 
   return chalk.dim(
     `Total cost:            ${costDisplay}\n` +
       `Total duration (API):  ${formatDuration(getTotalAPIDuration())}
 Total duration (wall): ${formatDuration(getTotalDuration())}
 Total code changes:    ${getTotalLinesAdded()} ${getTotalLinesAdded() === 1 ? 'line' : 'lines'} added, ${getTotalLinesRemoved()} ${getTotalLinesRemoved() === 1 ? 'line' : 'lines'} removed
-${modelUsageDisplay}`,
+${modelUsageDisplay}${approvalDisplay}`,
   )
 }
 

@@ -1,3 +1,4 @@
+import type { ApprovalTurnScope } from '../../utils/permissions/approvalTurnScope.js';
 import { getSdkAgentProgressSummariesEnabled } from '../../bootstrap/state.js';
 import { OUTPUT_FILE_TAG, STATUS_TAG, SUMMARY_TAG, TASK_ID_TAG, TASK_NOTIFICATION_TAG, TOOL_USE_ID_TAG, WORKTREE_BRANCH_TAG, WORKTREE_PATH_TAG, WORKTREE_TAG } from '../../constants/xml.js';
 import type { AppState } from '../../state/AppState.js';
@@ -121,6 +122,7 @@ export type LocalAgentTaskState = TaskStateBase & {
   model?: string;
   abortController?: AbortController;
   unregisterCleanup?: () => void;
+  approvalTurnId?: string;
   error?: string;
   result?: AgentToolResult;
   progress?: AgentProgress;
@@ -273,7 +275,30 @@ export const LocalAgentTask: Task = {
 /**
  * Kill an agent task. No-op if already killed/completed.
  */
+const approvalTaskSubscriptions = new Map<string, () => void>();
+
+function bindApprovalTurnTask(taskId: string, scope: ApprovalTurnScope | undefined, setAppState: SetAppState): void {
+  if (!scope) return;
+  const stop = () => {
+    killAsyncAgent(taskId, setAppState);
+    updateTaskState<LocalAgentTaskState>(taskId, setAppState, task => ({
+      ...task,
+      error: `Turn blocked and stopped: ${scope.stop?.reason}`,
+    }));
+  };
+  if (scope.stop) {
+    stop();
+    return;
+  }
+  scope.signal.addEventListener('abort', stop, { once: true });
+  approvalTaskSubscriptions.set(taskId, () => {
+    scope.signal.removeEventListener('abort', stop);
+    approvalTaskSubscriptions.delete(taskId);
+  });
+}
+
 export function killAsyncAgent(taskId: string, setAppState: SetAppState): void {
+  approvalTaskSubscriptions.get(taskId)?.();
   let killed = false;
   updateTaskState<LocalAgentTaskState>(taskId, setAppState, task => {
     if (task.status !== 'running') {
@@ -406,6 +431,7 @@ export function updateAgentSummary(taskId: string, summary: string, setAppState:
  */
 export function completeAgentTask(result: AgentToolResult, setAppState: SetAppState): void {
   const taskId = result.agentId;
+  approvalTaskSubscriptions.get(taskId)?.();
   updateTaskState<LocalAgentTaskState>(taskId, setAppState, task => {
     if (task.status !== 'running') {
       return task;
@@ -430,6 +456,7 @@ export function completeAgentTask(result: AgentToolResult, setAppState: SetAppSt
  * Fail an agent task with error.
  */
 export function failAgentTask(taskId: string, error: string, setAppState: SetAppState): void {
+  approvalTaskSubscriptions.get(taskId)?.();
   updateTaskState<LocalAgentTaskState>(taskId, setAppState, task => {
     if (task.status !== 'running') {
       return task;
@@ -465,6 +492,7 @@ export function registerAsyncAgent({
   selectedAgent,
   setAppState,
   parentAbortController,
+  approvalTurnScope,
   toolUseId
 }: {
   agentId: string;
@@ -473,6 +501,7 @@ export function registerAsyncAgent({
   selectedAgent: AgentDefinition;
   setAppState: SetAppState;
   parentAbortController?: AbortController;
+  approvalTurnScope?: ApprovalTurnScope;
   toolUseId?: string;
 }): LocalAgentTaskState {
   void initTaskOutputAsSymlink(agentId, getAgentTranscriptPath(asAgentId(agentId)));
@@ -504,8 +533,10 @@ export function registerAsyncAgent({
   });
   taskState.unregisterCleanup = unregisterCleanup;
 
-  // Register task in AppState
+  // Register task in AppState before binding: an already-stopped scope kills it immediately.
+  taskState.approvalTurnId = approvalTurnScope?.turnId;
   registerTask(taskState, setAppState);
+  bindApprovalTurnTask(agentId, approvalTurnScope, setAppState);
   return taskState;
 }
 
@@ -525,6 +556,7 @@ export function registerAgentForeground({
   selectedAgent,
   setAppState,
   autoBackgroundMs,
+  approvalTurnScope,
   toolUseId
 }: {
   agentId: string;
@@ -533,6 +565,7 @@ export function registerAgentForeground({
   selectedAgent: AgentDefinition;
   setAppState: SetAppState;
   autoBackgroundMs?: number;
+  approvalTurnScope?: ApprovalTurnScope;
   toolUseId?: string;
 }): {
   taskId: string;
@@ -570,7 +603,9 @@ export function registerAgentForeground({
     resolveBackgroundSignal = resolve;
   });
   backgroundSignalResolvers.set(agentId, resolveBackgroundSignal!);
+  taskState.approvalTurnId = approvalTurnScope?.turnId;
   registerTask(taskState, setAppState);
+  bindApprovalTurnTask(agentId, approvalTurnScope, setAppState);
 
   // Auto-background after timeout if configured
   let cancelAutoBackground: (() => void) | undefined;
@@ -661,6 +696,7 @@ export function unregisterAgentForeground(taskId: string, setAppState: SetAppSta
     }
 
     // Capture cleanup function to call outside of updater
+    approvalTaskSubscriptions.get(taskId)?.();
     cleanupFn = task.unregisterCleanup;
     const {
       [taskId]: removed,

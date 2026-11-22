@@ -181,6 +181,8 @@ export type ToolUseContext = {
   abortController: AbortController
   /** Root-turn safety stop, shared with ordinary local descendants, not teammates. */
   approvalTurnScope?: ApprovalTurnScope
+  /** Local root queue, shared only with ordinary descendants. */
+  requestLocalApproval?: CanUseToolFn
   readFileState: FileStateCache
   getAppState(): AppState
   setAppState(f: (prev: AppState) => AppState): void

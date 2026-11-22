@@ -1,5 +1,5 @@
 import type { z } from 'zod/v4'
-import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/aiApproval.js'
+import { allowsAutomaticWorkspaceEdits } from '../../utils/permissions/autoApproval.js'
 import type { ToolPermissionContext } from '../../Tool.js'
 import { splitCommand_DEPRECATED } from '../../utils/bash/commands.js'
 import type { PermissionResult } from '../../utils/permissions/PermissionResult.js'

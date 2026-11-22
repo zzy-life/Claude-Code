@@ -146,6 +146,12 @@ function createPermissionContext(
       return updates.some(update => supportsPersistence(update.destination))
     },
     resolveIfAborted(resolve: (decision: PermissionDecision) => void) {
+      if (toolUseContext.approvalTurnScope?.stop) {
+        resolve(this.buildDeny(`Turn blocked and stopped: ${toolUseContext.approvalTurnScope.stop.reason}`, {
+          type: 'other', reason: 'auto_approval_hard_deny',
+        }))
+        return true
+      }
       if (!toolUseContext.abortController.signal.aborted) return false
       this.logCancelled()
       resolve(this.cancelAndAbort(undefined, true))
@@ -309,6 +315,16 @@ function createPermissionContext(
         ? !tool.inputsEquivalent(input, updatedInput)
         : false
       const trimmedFeedback = feedback?.trim()
+      const approvalScope = toolUseContext.approvalTurnScope
+      if (trimmedFeedback && approvalScope) {
+        approvalScope.verifiedAnswers.push({
+          toolUseID, toolName: tool.name,
+          question: { input, updatedInput },
+          answer: { feedback: trimmedFeedback },
+        })
+        // 人工补充的限制立即使同轮在途审批和未消费收据失效。
+        approvalScope.invalidateApprovals()
+      }
       return this.buildAllow(updatedInput, {
         userModified,
         decisionReason,

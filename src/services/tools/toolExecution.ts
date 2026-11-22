@@ -1255,6 +1255,19 @@ async function checkPermissionsAndCallTool(
     if (toolUseContext.abortController.signal.aborted) {
       throw new AbortError()
     }
+    if (permissionDecision.autoApprovalReceipt) {
+      const receipt = permissionDecision.autoApprovalReceipt
+      const scope = toolUseContext.approvalTurnScope
+      if (
+        !scope || receipt.used || receipt.toolUseID !== toolUseID ||
+        receipt.permissionRevision !== scope.permissionRevision ||
+        toolUseContext.getAppState().toolPermissionContext.mode !== 'auto' ||
+        receipt.inputJSON !== JSON.stringify(callInput)
+      ) {
+        throw new Error('AI approval is no longer valid: The execution input, permissions, or turn changed; the action was not executed')
+      }
+      receipt.used = true
+    }
     const result = await tool.call(
       callInput,
       {
