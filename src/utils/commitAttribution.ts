@@ -11,67 +11,10 @@ import { logForDebugging } from './debug.js'
 import { execFileNoThrowWithCwd } from './execFileNoThrow.js'
 import { getFsImplementation } from './fsOperations.js'
 import { isGeneratedFile } from './generatedFiles.js'
-import { getRemoteUrlForDir, resolveGitDir } from './git/gitFilesystem.js'
+import { resolveGitDir } from './git/gitFilesystem.js'
 import { findGitRoot, gitExe } from './git.js'
 import { logError } from './log.js'
 import { getCanonicalName, type ModelName } from './model/model.js'
-import { sequential } from './sequential.js'
-
-/**
- * List of repos where internal model names are allowed in trailers.
- * Includes both SSH and HTTPS URL formats.
- *
- * NOTE: This is intentionally a repo allowlist, not an org-wide check.
- * The anthropics and anthropic-experimental orgs contain PUBLIC repos
- * (e.g. anthropics/claude-code, anthropic-experimental/sandbox-runtime).
- * Only add repos here that are confirmed PRIVATE.
- */
-const INTERNAL_MODEL_REPOS = [
-  'github.com:anthropics/claude-cli-internal',
-  'github.com/anthropics/claude-cli-internal',
-  'github.com:anthropics/anthropic',
-  'github.com/anthropics/anthropic',
-  'github.com:anthropics/apps',
-  'github.com/anthropics/apps',
-  'github.com:anthropics/casino',
-  'github.com/anthropics/casino',
-  'github.com:anthropics/dbt',
-  'github.com/anthropics/dbt',
-  'github.com:anthropics/dotfiles',
-  'github.com/anthropics/dotfiles',
-  'github.com:anthropics/terraform-config',
-  'github.com/anthropics/terraform-config',
-  'github.com:anthropics/hex-export',
-  'github.com/anthropics/hex-export',
-  'github.com:anthropics/feedback-v2',
-  'github.com/anthropics/feedback-v2',
-  'github.com:anthropics/labs',
-  'github.com/anthropics/labs',
-  'github.com:anthropics/argo-rollouts',
-  'github.com/anthropics/argo-rollouts',
-  'github.com:anthropics/starling-configs',
-  'github.com/anthropics/starling-configs',
-  'github.com:anthropics/ts-tools',
-  'github.com/anthropics/ts-tools',
-  'github.com:anthropics/ts-capsules',
-  'github.com/anthropics/ts-capsules',
-  'github.com:anthropics/feldspar-testing',
-  'github.com/anthropics/feldspar-testing',
-  'github.com:anthropics/trellis',
-  'github.com/anthropics/trellis',
-  'github.com:anthropics/claude-for-hiring',
-  'github.com/anthropics/claude-for-hiring',
-  'github.com:anthropics/forge-web',
-  'github.com/anthropics/forge-web',
-  'github.com:anthropics/infra-manifests',
-  'github.com/anthropics/infra-manifests',
-  'github.com:anthropics/mycro_manifests',
-  'github.com/anthropics/mycro_manifests',
-  'github.com:anthropics/mycro_configs',
-  'github.com/anthropics/mycro_configs',
-  'github.com:anthropics/mobile-apps',
-  'github.com/anthropics/mobile-apps',
-]
 
 /**
  * Get the repo root for attribution operations.
@@ -82,72 +25,6 @@ const INTERNAL_MODEL_REPOS = [
 export function getAttributionRepoRoot(): string {
   const cwd = getCwd()
   return findGitRoot(cwd) ?? getOriginalCwd()
-}
-
-// Cache for repo classification result. Primed once per process.
-// 'internal' = remote matches INTERNAL_MODEL_REPOS allowlist
-// 'external' = has a remote, not on allowlist (public/open-source repo)
-// 'none'     = no remote URL (not a git repo, or no remote configured)
-let repoClassCache: 'internal' | 'external' | 'none' | null = null
-
-/**
- * Check if the current repo is in the allowlist for internal model names.
- * Memoized - only checks once per process.
- */
-export const isInternalModelRepo = sequential(async (): Promise<boolean> => {
-  if (repoClassCache !== null) {
-    return repoClassCache === 'internal'
-  }
-
-  const cwd = getAttributionRepoRoot()
-  const remoteUrl = await getRemoteUrlForDir(cwd)
-
-  if (!remoteUrl) {
-    repoClassCache = 'none'
-    return false
-  }
-  const isInternal = INTERNAL_MODEL_REPOS.some(repo => remoteUrl.includes(repo))
-  repoClassCache = isInternal ? 'internal' : 'external'
-  return isInternal
-})
-
-/**
- * Sanitize a surface key to use public model names.
- * Converts internal model variants to their public equivalents.
- */
-export function sanitizeSurfaceKey(surfaceKey: string): string {
-  // Split surface key into surface and model parts (e.g., "cli/opus-4-5-fast" -> ["cli", "opus-4-5-fast"])
-  const slashIndex = surfaceKey.lastIndexOf('/')
-  if (slashIndex === -1) {
-    return surfaceKey
-  }
-
-  const surface = surfaceKey.slice(0, slashIndex)
-  const model = surfaceKey.slice(slashIndex + 1)
-  const sanitizedModel = sanitizeModelName(model)
-
-  return `${surface}/${sanitizedModel}`
-}
-
-// @[MODEL LAUNCH]: Add a mapping for the new model ID so git commit trailers show the public name.
-/**
- * Sanitize a model name to its public equivalent.
- * Maps internal variants to their public names based on model family.
- */
-export function sanitizeModelName(shortName: string): string {
-  // Map internal variants to public equivalents based on model family
-  if (shortName.includes('opus-4-6')) return 'claude-opus-4-6'
-  if (shortName.includes('opus-4-5')) return 'claude-opus-4-5'
-  if (shortName.includes('opus-4-1')) return 'claude-opus-4-1'
-  if (shortName.includes('opus-4')) return 'claude-opus-4'
-  if (shortName.includes('sonnet-4-6')) return 'claude-sonnet-4-6'
-  if (shortName.includes('sonnet-4-5')) return 'claude-sonnet-4-5'
-  if (shortName.includes('sonnet-4')) return 'claude-sonnet-4'
-  if (shortName.includes('sonnet-3-7')) return 'claude-sonnet-3-7'
-  if (shortName.includes('haiku-4-5')) return 'claude-haiku-4-5'
-  if (shortName.includes('haiku-3-5')) return 'claude-haiku-3-5'
-  // Unknown models get a generic name
-  return 'claude'
 }
 
 /**
@@ -816,9 +693,6 @@ export async function getStagedFiles(): Promise<string[]> {
 
   return []
 }
-
-// formatAttributionTrailer moved to attributionTrailer.ts for tree-shaking
-// (contains excluded strings that should not be in external builds)
 
 /**
  * Check if we're in a transient git state (rebase, merge, cherry-pick).

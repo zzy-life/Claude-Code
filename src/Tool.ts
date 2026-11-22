@@ -207,11 +207,6 @@ export type ToolUseContext = {
   appendSystemMessage?: (
     msg: Exclude<SystemMessage, SystemLocalCommandMessage>,
   ) => void
-  /** Send an OS-level notification (iTerm2, Kitty, Ghostty, bell, etc.) */
-  sendOSNotification?: (opts: {
-    message: string
-    notificationType: string
-  }) => void
   nestedMemoryAttachmentTriggers?: Set<string>
   /**
    * CLAUDE.md paths already injected as nested_memory attachments this

@@ -80,7 +80,7 @@ export function applySettingsChange(
       settings: newSettings,
       toolPermissionContext: newContext,
       // Only propagate a defined new value — when the disk key is absent
-      // (e.g. /effort max for non-ants writes undefined; --effort CLI flag),
+      // (e.g. a session uses --effort without a persisted effortLevel),
       // prev.settings.effortLevel can be stale (internal writes suppress the
       // watcher that would resync AppState.settings), so effortChanged would
       // be true and we'd wipe a session-scoped value held in effortValue.

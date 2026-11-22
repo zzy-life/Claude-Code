@@ -2371,9 +2371,6 @@ export function REPL({
       setToolJSX,
       addNotification,
       appendSystemMessage: msg => setMessages(prev => [...prev, msg]),
-      sendOSNotification: opts => {
-        void sendNotification(opts, terminal);
-      },
       onChangeDynamicMcpConfig,
       onInstallIDEExtension: setIDEToInstallExtension,
       nestedMemoryAttachmentTriggers: new Set<string>(),
@@ -4322,7 +4319,7 @@ export function REPL({
   // pane (▔ divider, ModalContext). Pane/Dialog inside detect the context
   // and skip their own top-level frame. Non-fullscreen keeps the inline
   // render paths below. Commands that used to route through bottom
-  // (immediate: /model, /mcp, /btw, ...) and scrollable (non-immediate:
+  // (immediate: /mcp, /btw, ...) and scrollable (non-immediate:
   // /config, /theme, /diff, ...) both go here now.
   const toolJsxCentered = isFullscreenEnvEnabled() && toolJSX?.isLocalJSXCommand === true;
   const centeredModal: React.ReactNode = toolJsxCentered ? toolJSX!.jsx : null;

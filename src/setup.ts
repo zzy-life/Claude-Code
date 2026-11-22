@@ -333,8 +333,8 @@ export async function setup(
       m.setupPluginHookHotReload() // Set up hot reload for plugin hooks when settings change
     }
   })
-  // --bare: skip attribution hook install + repo classification +
-  // session-file-access analytics + team memory watcher. These are background
+  // --bare: skip attribution hook install + session-file-access analytics +
+  // team memory watcher. These are background
   // bookkeeping for commit attribution + usage metrics — scripted calls don't
   // commit code, and the 49ms attribution hook stat check (measured) is pure
   // overhead. NOT an early-return: the --dangerously-skip-permissions safety

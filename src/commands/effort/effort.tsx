@@ -4,7 +4,7 @@ import { useMainLoopModel } from '../../hooks/useMainLoopModel.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from '../../services/analytics/index.js';
 import { useAppState, useSetAppState } from '../../state/AppState.js';
 import type { LocalJSXCommandOnDone } from '../../types/command.js';
-import { type EffortValue, getDisplayedEffortLevel, getEffortEnvOverride, getEffortValueDescription, isEffortLevel, toPersistableEffort } from '../../utils/effort.js';
+import { type EffortLevel, type EffortValue, getDisplayedEffortLevel, getEffortEnvOverride, getEffortValueDescription, isEffortLevel } from '../../utils/effort.js';
 import { updateSettingsForSource } from '../../utils/settings/settings.js';
 const COMMON_HELP_ARGS = ['help', '-h', '--help'];
 type EffortCommandResult = {
@@ -13,17 +13,15 @@ type EffortCommandResult = {
     value: EffortValue | undefined;
   };
 };
-function setEffortValue(effortValue: EffortValue): EffortCommandResult {
-  const persistable = toPersistableEffort(effortValue);
-  if (persistable !== undefined) {
-    const result = updateSettingsForSource('userSettings', {
-      effortLevel: persistable
-    });
-    if (result.error) {
-      return {
-        message: `Failed to set effort level: ${result.error.message}`
-      };
-    }
+function setEffortValue(effortValue: EffortLevel): EffortCommandResult {
+  // executeEffort only passes named levels, all of which are persistable.
+  const result = updateSettingsForSource('userSettings', {
+    effortLevel: effortValue
+  });
+  if (result.error) {
+    return {
+      message: `Failed to set effort level: ${result.error.message}`
+    };
   }
   logEvent('tengu_effort_command', {
     effort: effortValue as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
@@ -35,14 +33,6 @@ function setEffortValue(effortValue: EffortValue): EffortCommandResult {
   const envOverride = getEffortEnvOverride();
   if (envOverride !== undefined && envOverride !== effortValue) {
     const envRaw = process.env.CLAUDE_CODE_EFFORT_LEVEL;
-    if (persistable === undefined) {
-      return {
-        message: `Not applied: CLAUDE_CODE_EFFORT_LEVEL=${envRaw} overrides effort this session, and ${effortValue} is session-only (nothing saved)`,
-        effortUpdate: {
-          value: effortValue
-        }
-      };
-    }
     return {
       message: `CLAUDE_CODE_EFFORT_LEVEL=${envRaw} overrides this session — clear it and ${effortValue} takes over`,
       effortUpdate: {
@@ -51,9 +41,8 @@ function setEffortValue(effortValue: EffortValue): EffortCommandResult {
     };
   }
   const description = getEffortValueDescription(effortValue);
-  const suffix = persistable !== undefined ? '' : ' (this session only)';
   return {
-    message: `Set effort level to ${effortValue}${suffix}: ${description}`,
+    message: `Set effort level to ${effortValue}: ${description}`,
     effortUpdate: {
       value: effortValue
     }

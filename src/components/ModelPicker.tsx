@@ -37,7 +37,7 @@ export type Props = {
 };
 const NO_PREFERENCE = '__NO_PREFERENCE__';
 export function ModelPicker(t0) {
-  const $ = _c(82);
+  const $ = _c(80);
   const {
     initial,
     sessionModel,
@@ -145,85 +145,79 @@ export function ModelPicker(t0) {
   }
   const focusedModelName = t7;
   let focusedSupportsEffort;
-  let t8;
   if ($[20] !== focusedValue) {
     const focusedModel = resolveOptionModel(focusedValue);
     // All models expose four levels; upstream validates actual support.
     focusedSupportsEffort = Boolean(focusedModel);
-    t8 = Boolean(focusedModel);
     $[20] = focusedValue;
     $[21] = focusedSupportsEffort;
-    $[22] = t8;
   } else {
     focusedSupportsEffort = $[21];
-    t8 = $[22];
   }
-  const focusedSupportsMax = t8;
   let t9;
-  if ($[23] !== focusedValue) {
+  if ($[22] !== focusedValue) {
     t9 = getDefaultEffortLevelForOption(focusedValue);
-    $[23] = focusedValue;
-    $[24] = t9;
+    $[22] = focusedValue;
+    $[23] = t9;
   } else {
-    t9 = $[24];
+    t9 = $[23];
   }
   const focusedDefaultEffort = t9;
   const displayEffort = effort;
   let t10;
-  if ($[25] !== effortValue || $[26] !== hasToggledEffort) {
+  if ($[24] !== effortValue || $[25] !== hasToggledEffort) {
     t10 = value => {
       setFocusedValue(value);
       if (!hasToggledEffort && effortValue === undefined) {
         setEffort(getDefaultEffortLevelForOption(value));
       }
     };
-    $[25] = effortValue;
-    $[26] = hasToggledEffort;
-    $[27] = t10;
+    $[24] = effortValue;
+    $[25] = hasToggledEffort;
+    $[26] = t10;
   } else {
-    t10 = $[27];
+    t10 = $[26];
   }
   const handleFocus = t10;
   let t11;
-  if ($[28] !== focusedDefaultEffort || $[29] !== focusedSupportsEffort || $[30] !== focusedSupportsMax) {
+  if ($[27] !== focusedDefaultEffort || $[28] !== focusedSupportsEffort) {
     t11 = direction => {
       if (!focusedSupportsEffort) {
         return;
       }
-      setEffort(prev => cycleEffortLevel(prev ?? focusedDefaultEffort, direction, focusedSupportsMax));
+      setEffort(prev => cycleEffortLevel(prev ?? focusedDefaultEffort, direction));
       setHasToggledEffort(true);
     };
-    $[28] = focusedDefaultEffort;
-    $[29] = focusedSupportsEffort;
-    $[30] = focusedSupportsMax;
-    $[31] = t11;
+    $[27] = focusedDefaultEffort;
+    $[28] = focusedSupportsEffort;
+    $[29] = t11;
   } else {
-    t11 = $[31];
+    t11 = $[29];
   }
   const handleCycleEffort = t11;
   let t12;
-  if ($[32] !== handleCycleEffort) {
+  if ($[30] !== handleCycleEffort) {
     t12 = {
       "modelPicker:decreaseEffort": () => handleCycleEffort("left"),
       "modelPicker:increaseEffort": () => handleCycleEffort("right")
     };
-    $[32] = handleCycleEffort;
-    $[33] = t12;
+    $[30] = handleCycleEffort;
+    $[31] = t12;
   } else {
-    t12 = $[33];
+    t12 = $[31];
   }
   let t13;
-  if ($[34] === Symbol.for("react.memo_cache_sentinel")) {
+  if ($[32] === Symbol.for("react.memo_cache_sentinel")) {
     t13 = {
       context: "ModelPicker"
     };
-    $[34] = t13;
+    $[32] = t13;
   } else {
-    t13 = $[34];
+    t13 = $[32];
   }
   useKeybindings(t12, t13);
   let t14;
-  if ($[35] !== effort || $[36] !== hasToggledEffort || $[37] !== onSelect || $[38] !== setAppState || $[39] !== skipSettingsWrite) {
+  if ($[33] !== effort || $[34] !== hasToggledEffort || $[35] !== onSelect || $[36] !== setAppState || $[37] !== skipSettingsWrite) {
     t14 = function handleSelect(value_0) {
       logEvent("tengu_model_command_menu_effort", {
         effort: effort as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
@@ -249,140 +243,140 @@ export function ModelPicker(t0) {
       }
       onSelect(value_0, selectedEffort);
     };
-    $[35] = effort;
-    $[36] = hasToggledEffort;
-    $[37] = onSelect;
-    $[38] = setAppState;
-    $[39] = skipSettingsWrite;
-    $[40] = t14;
+    $[33] = effort;
+    $[34] = hasToggledEffort;
+    $[35] = onSelect;
+    $[36] = setAppState;
+    $[37] = skipSettingsWrite;
+    $[38] = t14;
   } else {
-    t14 = $[40];
+    t14 = $[38];
   }
   const handleSelect = t14;
   let t15;
-  if ($[41] === Symbol.for("react.memo_cache_sentinel")) {
+  if ($[39] === Symbol.for("react.memo_cache_sentinel")) {
     t15 = <Text color="remember" bold={true}>Select model</Text>;
-    $[41] = t15;
+    $[39] = t15;
   } else {
-    t15 = $[41];
+    t15 = $[39];
   }
   const t16 = headerText ?? "Switch between Claude models. Applies to this session and future Claude Code sessions. For other/previous model names, specify with --model.";
   let t17;
-  if ($[42] !== t16) {
+  if ($[40] !== t16) {
     t17 = <Text dimColor={true}>{t16}</Text>;
-    $[42] = t16;
-    $[43] = t17;
+    $[40] = t16;
+    $[41] = t17;
   } else {
-    t17 = $[43];
+    t17 = $[41];
   }
   let t18;
-  if ($[44] !== sessionModel) {
+  if ($[42] !== sessionModel) {
     t18 = sessionModel && <Text dimColor={true}>Currently using {modelDisplayString(sessionModel)} for this session (set by plan mode). Selecting a model will undo this.</Text>;
-    $[44] = sessionModel;
-    $[45] = t18;
+    $[42] = sessionModel;
+    $[43] = t18;
   } else {
-    t18 = $[45];
+    t18 = $[43];
   }
   let t19;
-  if ($[46] !== t17 || $[47] !== t18) {
+  if ($[44] !== t17 || $[45] !== t18) {
     t19 = <Box marginBottom={1} flexDirection="column">{t15}{t17}{t18}</Box>;
-    $[46] = t17;
-    $[47] = t18;
-    $[48] = t19;
+    $[44] = t17;
+    $[45] = t18;
+    $[46] = t19;
   } else {
-    t19 = $[48];
+    t19 = $[46];
   }
   const t20 = onCancel ?? _temp4;
   let t21;
-  if ($[49] !== handleFocus || $[50] !== handleSelect || $[51] !== initialFocusValue || $[52] !== initialValue || $[53] !== selectOptions || $[54] !== t20 || $[55] !== visibleCount) {
+  if ($[47] !== handleFocus || $[48] !== handleSelect || $[49] !== initialFocusValue || $[50] !== initialValue || $[51] !== selectOptions || $[52] !== t20 || $[53] !== visibleCount) {
     t21 = <Box flexDirection="column"><Select defaultValue={initialValue} defaultFocusValue={initialFocusValue} options={selectOptions} onChange={handleSelect} onFocus={handleFocus} onCancel={t20} visibleOptionCount={visibleCount} /></Box>;
-    $[49] = handleFocus;
-    $[50] = handleSelect;
-    $[51] = initialFocusValue;
-    $[52] = initialValue;
-    $[53] = selectOptions;
-    $[54] = t20;
-    $[55] = visibleCount;
-    $[56] = t21;
+    $[47] = handleFocus;
+    $[48] = handleSelect;
+    $[49] = initialFocusValue;
+    $[50] = initialValue;
+    $[51] = selectOptions;
+    $[52] = t20;
+    $[53] = visibleCount;
+    $[54] = t21;
   } else {
-    t21 = $[56];
+    t21 = $[54];
   }
   let t22;
-  if ($[57] !== hiddenCount) {
+  if ($[55] !== hiddenCount) {
     t22 = hiddenCount > 0 && <Box paddingLeft={3}><Text dimColor={true}>and {hiddenCount} more…</Text></Box>;
-    $[57] = hiddenCount;
-    $[58] = t22;
+    $[55] = hiddenCount;
+    $[56] = t22;
   } else {
-    t22 = $[58];
+    t22 = $[56];
   }
   let t23;
-  if ($[59] !== t21 || $[60] !== t22) {
+  if ($[57] !== t21 || $[58] !== t22) {
     t23 = <Box flexDirection="column" marginBottom={1}>{t21}{t22}</Box>;
-    $[59] = t21;
-    $[60] = t22;
-    $[61] = t23;
+    $[57] = t21;
+    $[58] = t22;
+    $[59] = t23;
   } else {
-    t23 = $[61];
+    t23 = $[59];
   }
   let t24;
-  if ($[62] !== displayEffort || $[63] !== focusedDefaultEffort || $[64] !== focusedModelName || $[65] !== focusedSupportsEffort) {
+  if ($[60] !== displayEffort || $[61] !== focusedDefaultEffort || $[62] !== focusedModelName || $[63] !== focusedSupportsEffort) {
     t24 = <Box marginBottom={1} flexDirection="column">{focusedSupportsEffort ? <Text dimColor={true}><EffortLevelIndicator effort={displayEffort} />{" "}{capitalize(displayEffort)} effort{displayEffort === focusedDefaultEffort ? " (default)" : ""}{" "}<Text color="subtle">← → to adjust</Text></Text> : <Text color="subtle"><EffortLevelIndicator effort={undefined} /> Effort not supported{focusedModelName ? ` for ${focusedModelName}` : ""}</Text>}</Box>;
-    $[62] = displayEffort;
-    $[63] = focusedDefaultEffort;
-    $[64] = focusedModelName;
-    $[65] = focusedSupportsEffort;
-    $[66] = t24;
+    $[60] = displayEffort;
+    $[61] = focusedDefaultEffort;
+    $[62] = focusedModelName;
+    $[63] = focusedSupportsEffort;
+    $[64] = t24;
   } else {
-    t24 = $[66];
+    t24 = $[64];
   }
   let t25;
-  if ($[67] !== showFastModeNotice) {
+  if ($[65] !== showFastModeNotice) {
     t25 = isFastModeEnabled() ? showFastModeNotice ? <Box marginBottom={1}><Text dimColor={true}>Fast mode is <Text bold={true}>ON</Text> and available with{" "}{FAST_MODE_MODEL_DISPLAY} only (/fast). Switching to other models turn off fast mode.</Text></Box> : isFastModeAvailable() && !isFastModeCooldown() ? <Box marginBottom={1}><Text dimColor={true}>Use <Text bold={true}>/fast</Text> to turn on Fast mode ({FAST_MODE_MODEL_DISPLAY} only).</Text></Box> : null : null;
-    $[67] = showFastModeNotice;
-    $[68] = t25;
+    $[65] = showFastModeNotice;
+    $[66] = t25;
   } else {
-    t25 = $[68];
+    t25 = $[66];
   }
   let t26;
-  if ($[69] !== t19 || $[70] !== t23 || $[71] !== t24 || $[72] !== t25) {
+  if ($[67] !== t19 || $[68] !== t23 || $[69] !== t24 || $[70] !== t25) {
     t26 = <Box flexDirection="column">{t19}{t23}{t24}{t25}</Box>;
-    $[69] = t19;
-    $[70] = t23;
-    $[71] = t24;
-    $[72] = t25;
-    $[73] = t26;
+    $[67] = t19;
+    $[68] = t23;
+    $[69] = t24;
+    $[70] = t25;
+    $[71] = t26;
   } else {
-    t26 = $[73];
+    t26 = $[71];
   }
   let t27;
-  if ($[74] !== exitState || $[75] !== isStandaloneCommand) {
+  if ($[72] !== exitState || $[73] !== isStandaloneCommand) {
     t27 = isStandaloneCommand && <Text dimColor={true} italic={true}>{exitState.pending ? <>Press {exitState.keyName} again to exit</> : <Byline><KeyboardShortcutHint shortcut="Enter" action="confirm" /><ConfigurableShortcutHint action="select:cancel" context="Select" fallback="Esc" description="exit" /></Byline>}</Text>;
-    $[74] = exitState;
-    $[75] = isStandaloneCommand;
-    $[76] = t27;
+    $[72] = exitState;
+    $[73] = isStandaloneCommand;
+    $[74] = t27;
   } else {
-    t27 = $[76];
+    t27 = $[74];
   }
   let t28;
-  if ($[77] !== t26 || $[78] !== t27) {
+  if ($[75] !== t26 || $[76] !== t27) {
     t28 = <Box flexDirection="column">{t26}{t27}</Box>;
-    $[77] = t26;
-    $[78] = t27;
-    $[79] = t28;
+    $[75] = t26;
+    $[76] = t27;
+    $[77] = t28;
   } else {
-    t28 = $[79];
+    t28 = $[77];
   }
   const content = t28;
   if (!isStandaloneCommand) {
     return content;
   }
   let t29;
-  if ($[80] !== content) {
+  if ($[78] !== content) {
     t29 = <Pane color="permission">{content}</Pane>;
-    $[80] = content;
-    $[81] = t29;
+    $[78] = content;
+    $[79] = t29;
   } else {
-    t29 = $[81];
+    t29 = $[79];
   }
   return t29;
 }
@@ -429,8 +423,8 @@ function EffortLevelIndicator(t0) {
   }
   return t4;
 }
-function cycleEffortLevel(current: EffortLevel, direction: 'left' | 'right', includeMax: boolean): EffortLevel {
-  const levels: EffortLevel[] = includeMax ? ['low', 'medium', 'high', 'max'] : ['low', 'medium', 'high'];
+function cycleEffortLevel(current: EffortLevel, direction: 'left' | 'right'): EffortLevel {
+  const levels: EffortLevel[] = ['low', 'medium', 'high', 'max'];
   // Unknown levels restart from high before cycling.
   const idx = levels.indexOf(current);
   const currentIndex = idx !== -1 ? idx : levels.indexOf('high');
