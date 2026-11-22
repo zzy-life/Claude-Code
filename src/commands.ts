@@ -5,7 +5,6 @@ import feedback from './commands/feedback/index.js'
 import clear from './commands/clear/index.js'
 import color from './commands/color/index.js'
 import copy from './commands/copy/index.js'
-import desktop from './commands/desktop/index.js'
 import compact from './commands/compact/index.js'
 import config from './commands/config/index.js'
 import { context, contextNonInteractive } from './commands/context/index.js'
@@ -96,8 +95,6 @@ const forkCmd = feature('FORK_SUBAGENT')
     ).default
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
-import thinkback from './commands/thinkback/index.js'
-import thinkbackPlay from './commands/thinkback-play/index.js'
 import permissions from './commands/permissions/index.js'
 import plan from './commands/plan/index.js'
 import fast from './commands/fast/index.js'
@@ -139,7 +136,6 @@ import exportCommand from './commands/export/index.js'
 import model from './commands/model/index.js'
 import tag from './commands/tag/index.js'
 import outputStyle from './commands/output-style/index.js'
-import remoteEnv from './commands/remote-env/index.js'
 import upgrade from './commands/upgrade/index.js'
 import {
   extraUsage,
@@ -205,7 +201,6 @@ const COMMANDS = memoize((): Command[] => [
   compact,
   config,
   copy,
-  desktop,
   context,
   contextNonInteractive,
   diff,
@@ -226,7 +221,6 @@ const COMMANDS = memoize((): Command[] => [
   mobile,
   model,
   outputStyle,
-  remoteEnv,
   plugin,
   pr_comments,
   releaseNotes,
@@ -261,8 +255,6 @@ const COMMANDS = memoize((): Command[] => [
   ...(bridge ? [bridge] : []),
   ...(remoteControlServerCommand ? [remoteControlServerCommand] : []),
   ...(voiceCommand ? [voiceCommand] : []),
-  thinkback,
-  thinkbackPlay,
   permissions,
   plan,
   privacySettings,

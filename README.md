@@ -170,15 +170,12 @@ ccli proxy config set <代理地址> <你的密钥>
 | `/files` | 列出本次会话已加入上下文、可供模型参考的文件；仅内部构建可用。 |
 | `/remote-control`、`/rc` | 原用于网页端或移动端连接本地终端；当前授权 gate 固定为 `false`，入口不可启用，不能通过旧覆盖变量放行。 |
 | `/session`、`/remote` | 生成远程会话链接和二维码，用其他设备继续或查看当前会话；仅远程会话模式可用。 |
-| `/desktop`、`/app` | 把当前会话转交到 Claude Desktop 应用继续处理；仅部分平台和订阅账户可用。 |
 | `/chrome` | 连接、设置或管理 Claude in Chrome 浏览器扩展（Beta）；需满足登录和会话条件。 |
 | `/extra-usage` | 在套餐额度耗尽后，设置是否允许按额外用量继续使用；仅符合资格的账户可用。 |
 | `/privacy-settings` | 查看或修改数据使用、隐私相关偏好；仅消费者订阅账户可用。 |
-| `/remote-env` | 为可传送到远程端的会话选择默认运行环境，例如远程开发环境。 |
 | `/sandbox` | 启用或关闭命令执行沙箱，以限制工具可访问的系统资源。 |
 | `/passes` | 向他人赠送或分享限时免费使用资格；仅活动符合条件的账户可见。 |
 | `/ultrareview` | 将当前分支交给 Web 端进行更深入、耗时更长的缺陷审查；实验性功能。 |
-| `/think-back`、`/thinkback-play` | 查看或播放 Claude Code 的年度使用回顾；仅在活动开启期间可用。 |
 | `/fork` | 将当前任务分叉为独立的子 Agent 会话，用于并行处理；未启用该功能时它只是 `/branch` 的别名。 |
 | `/proactive` | 让助手在空闲期间自主检查待办、继续合适的工作；需启用持久助手/主动模式实验。 |
 | `/brief` | 切换为更精简的回答风格；需启用 KAIROS 助手实验且账户具备资格。 |
@@ -198,6 +195,7 @@ ccli proxy config set <代理地址> <你的密钥>
 
 | 已移除内容 | 保留能力／替代方式 |
 |---|---|
+| `/desktop`、`/app` 会话转交及 Desktop 启动推广弹窗，`/remote-env` 环境选择界面，`/think-back`、`/thinkback-play` 内置年度回顾安装与播放 | 普通 Desktop 介绍 tip、远程环境配置读取与会话传送、通用插件系统保留；不卸载用户已安装插件。`/remote-control`、`/rc` 及远程控制链路未移除。 |
 | 内置 Computer Use、专属授权界面及三个依赖空壳 | 通用 MCP 和 Chrome 接入代码保留；不代表原生空壳实现已恢复可用。 |
 | Undercover 模式、自动提交／PR 署名注入及 `attribution`、`includeCoAuthoredBy` 设置 | 普通 Git 工作流提示和 `includeGitInstructions` 保留；旧署名键不再控制行为，不自动改写用户配置。 |
 | 内置 `/commit`、`/commit-push-pr`、`/verify`、`/stuck` | 用户自定义同名命令／技能仍可使用，普通 `/review` 和 `/debug` 保留。 |
