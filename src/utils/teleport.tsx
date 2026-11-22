@@ -17,7 +17,6 @@ import { getSessionLogsViaOAuth, getTeleportEvents } from '../services/api/sessi
 import { getOrganizationUUID } from '../services/oauth/client.js';
 import { AppStateProvider } from '../state/AppState.js';
 import type { Message, SystemMessage } from '../types/message.js';
-import type { PermissionMode } from '../types/permissions.js';
 import { checkAndRefreshOAuthTokenIfNeeded, getClaudeAIOAuthTokens } from './auth.js';
 import { checkGithubAppInstalled } from './background/remote/preconditions.js';
 import { deserializeMessages, type TeleportRemoteResponse } from './conversationRecovery.js';
@@ -736,10 +735,7 @@ export async function teleportToRemote(options: {
    * session branch name (unless they are explicitly provided).
    */
   description?: string;
-  model?: string;
-  permissionMode?: PermissionMode;
   signal: AbortSignal;
-  useDefaultEnvironment?: boolean;
   /**
    * Explicit environment_id (e.g. the code_review synthetic env). Bypasses
    * fetchEnvironments; the usual repo-detection → git source still runs so
@@ -1051,7 +1047,7 @@ export async function teleportToRemote(options: {
     }
 
     // Fetch available environments
-    let environments = await fetchEnvironments();
+    const environments = await fetchEnvironments();
     if (!environments || environments.length === 0) {
       logError(new Error('No environments available for session creation'));
       return null;
@@ -1063,22 +1059,8 @@ export async function teleportToRemote(options: {
     // are the standard compute environments with full repo access, whereas byoc environments
     // (e.g. "monorepo") are user-owned compute that may not support the current repository.
     const settings = getSettings_DEPRECATED();
-    const defaultEnvironmentId = options.useDefaultEnvironment ? undefined : settings?.remote?.defaultEnvironmentId;
-    let cloudEnv = environments.find(env => env.kind === 'anthropic_cloud');
-    // When the caller opts out of their configured default, do not fall
-    // through to a BYOC env that may not support the current repo or the
-    // requested permission mode. Retry once for eventual consistency,
-    // then fail loudly.
-    if (options.useDefaultEnvironment && !cloudEnv) {
-      logForDebugging(`No anthropic_cloud in env list (${environments.length} envs); retrying fetchEnvironments`);
-      const retried = await fetchEnvironments();
-      cloudEnv = retried?.find(env => env.kind === 'anthropic_cloud');
-      if (!cloudEnv) {
-        logError(new Error(`No anthropic_cloud environment available after retry (got: ${(retried ?? environments).map(e => `${e.name} (${e.kind})`).join(', ')}). Silent byoc fallthrough would launch into a dead env — fail fast instead.`));
-        return null;
-      }
-      if (retried) environments = retried;
-    }
+    const defaultEnvironmentId = settings?.remote?.defaultEnvironmentId;
+    const cloudEnv = environments.find(env => env.kind === 'anthropic_cloud');
     const selectedEnvironment = defaultEnvironmentId && environments.find(env => env.environment_id === defaultEnvironmentId) || cloudEnv || environments.find(env => env.kind !== 'bridge') || environments[0];
     if (!selectedEnvironment) {
       logError(new Error('No environments available for session creation'));
@@ -1104,7 +1086,7 @@ export async function teleportToRemote(options: {
         seed_bundle_file_id: seedBundleFileId
       }),
       outcomes: gitOutcome ? [gitOutcome] : [],
-      model: options.model ?? getMainLoopModel(),
+      model: getMainLoopModel(),
       ...(options.reuseOutcomeBranch && {
         reuse_outcome_branches: true
       }),
@@ -1113,28 +1095,10 @@ export async function teleportToRemote(options: {
       })
     };
 
-    // CreateCCRSessionPayload has no permission_mode field — a top-level
-    // body entry is silently dropped by the proto parser server-side.
-    // Instead prepend a set_permission_mode control_request event. Initial
-    // events are written to threadstore before the container connects, so
-    // the CLI applies the mode before the first user turn — no readiness race.
     const events: Array<{
       type: 'event';
       data: Record<string, unknown>;
     }> = [];
-    if (options.permissionMode) {
-      events.push({
-        type: 'event',
-        data: {
-          type: 'control_request',
-          request_id: `set-mode-${randomUUID()}`,
-          request: {
-            subtype: 'set_permission_mode',
-            mode: options.permissionMode
-          }
-        }
-      });
-    }
     if (initialMessage) {
       events.push({
         type: 'event',

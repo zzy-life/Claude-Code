@@ -8,7 +8,6 @@ import {
 import { getModelStrings } from './modelStrings.js'
 import {
   COST_TIER_3_15,
-  COST_HAIKU_35,
   COST_HAIKU_45,
   formatModelPricing,
 } from '../modelCost.js'
@@ -202,25 +201,6 @@ export function getMaxHaiku45_1MOption(): ModelOption {
   }
 }
 
-function getHaiku35Option(): ModelOption {
-  const is3P = getAPIProvider() !== 'firstParty'
-  return {
-    value: 'haiku',
-    label: 'Haiku',
-    description: `Haiku 3.5 for simple tasks${is3P ? '' : ` · ${formatModelPricing(COST_HAIKU_35)}`}`,
-    descriptionForModel:
-      'Haiku 3.5 - faster and lower cost, but less capable than Sonnet. Use for simple tasks.',
-  }
-}
-
-function getHaikuOption(): ModelOption {
-  // Return correct Haiku option based on provider
-  const haikuModel = getDefaultHaikuModel()
-  return haikuModel === getModelStrings().haiku45
-    ? getHaiku45Option()
-    : getHaiku35Option()
-}
-
 function getMaxOpusOption(fastMode = false): ModelOption {
   return {
     value: 'opus',
@@ -371,7 +351,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
   const customHaiku = getCustomHaikuOption()
   payg3pOptions.push(
     customHaiku ??
-      (checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaikuOption()),
+      (checkHaiku1mAccess() ? getHaiku45_1MOption() : getHaiku45Option()),
   )
   return payg3pOptions
 }
