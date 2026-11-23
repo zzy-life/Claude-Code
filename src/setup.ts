@@ -27,8 +27,7 @@ import { prefetchApiKeyFromApiKeyHelperIfSafe } from './utils/auth.js'
 import { clearMemoryFileCaches } from './utils/claudemd.js'
 import { getCurrentProjectConfig, getGlobalConfig } from './utils/config.js'
 import { logForDiagnosticsNoPII } from './utils/diagLogs.js'
-import { env } from './utils/env.js'
-import { envDynamic } from './utils/envDynamic.js'
+import { getBypassPermissionsEnvironmentError } from './utils/permissions/bypassPermissionsEnvironment.js'
 import { isBareMode, isEnvTruthy } from './utils/envUtils.js'
 import { errorMessage } from './utils/errors.js'
 import { findCanonicalGitRoot, findGitRoot, getIsGit } from './utils/git.js'
@@ -390,47 +389,11 @@ export async function setup(
     permissionMode === 'bypassPermissions' ||
     allowDangerouslySkipPermissions
   ) {
-    // Check if running as root/sudo on Unix-like systems
-    // Allow root if in a sandbox (e.g., TPU devspaces that require root)
-    if (
-      process.platform !== 'win32' &&
-      typeof process.getuid === 'function' &&
-      process.getuid() === 0 &&
-      process.env.IS_SANDBOX !== '1' &&
-      !isEnvTruthy(process.env.CLAUDE_CODE_BUBBLEWRAP)
-    ) {
+    const environmentError = await getBypassPermissionsEnvironmentError()
+    if (environmentError) {
       // biome-ignore lint/suspicious/noConsole:: intentional console output
-      console.error(
-        `--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons`,
-      )
+      console.error(environmentError)
       process.exit(1)
-    }
-
-    if (
-      process.env.USER_TYPE === 'ant' &&
-      // Skip for Desktop's local agent mode — same trust model as CCR/BYOC
-      // (trusted Anthropic-managed launcher intentionally pre-approving everything).
-      // Precedent: permissionSetup.ts:861, applySettingsChange.ts:55 (PR #19116)
-      process.env.CLAUDE_CODE_ENTRYPOINT !== 'local-agent' &&
-      // Same for CCD (Claude Code in Desktop) — apps#29127 passes the flag
-      // unconditionally to unlock mid-session bypass switching
-      process.env.CLAUDE_CODE_ENTRYPOINT !== 'claude-desktop'
-    ) {
-      // Only await if permission mode is set to bypass
-      const [isDocker, hasInternet] = await Promise.all([
-        envDynamic.getIsDocker(),
-        env.hasInternetAccess(),
-      ])
-      const isBubblewrap = envDynamic.getIsBubblewrapSandbox()
-      const isSandbox = process.env.IS_SANDBOX === '1'
-      const isSandboxed = isDocker || isBubblewrap || isSandbox
-      if (!isSandboxed || hasInternet) {
-        // biome-ignore lint/suspicious/noConsole:: intentional console output
-        console.error(
-          `--dangerously-skip-permissions can only be used in Docker/sandbox containers with no internet access but got Docker: ${isDocker}, Bubblewrap: ${isBubblewrap}, IS_SANDBOX: ${isSandbox}, hasInternet: ${hasInternet}`,
-        )
-        process.exit(1)
-      }
     }
   }
 

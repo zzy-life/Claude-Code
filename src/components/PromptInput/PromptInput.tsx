@@ -69,12 +69,13 @@ import { isMacosOptionChar, MACOS_OPTION_SPECIAL_CHARS } from '../../utils/keybo
 import { logError } from '../../utils/log.js';
 import { isOpus1mMergeEnabled, modelDisplayString } from '../../utils/model/model.js';
 import { getIsRemoteMode } from '../../bootstrap/state.js';
-import { getNextPermissionMode } from '../../utils/permissions/getNextPermissionMode.js';
-import { transitionPermissionMode } from '../../utils/permissions/permissionSetup.js';
+import { canOfferLocalBypassPermissions, getNextPermissionMode } from '../../utils/permissions/getNextPermissionMode.js';
+import { getBypassPermissionsEnvironmentError } from '../../utils/permissions/bypassPermissionsEnvironment.js';
+import { isBypassPermissionsModeDisabled, transitionPermissionMode } from '../../utils/permissions/permissionSetup.js';
 import { getPlatform } from '../../utils/platform.js';
 import type { ProcessUserInputContext } from '../../utils/processUserInput/processUserInput.js';
 import { editPromptInEditor } from '../../utils/promptEditor.js';
-import { hasLocalAutoApprovalConsent } from '../../utils/settings/settings.js';
+import { hasLocalAutoApprovalConsent, hasSkipDangerousModePermissionPrompt } from '../../utils/settings/settings.js';
 import { findBtwTriggerPositions } from '../../utils/sideQuestion.js';
 import { findSlashCommandPositions } from '../../utils/suggestions/commandSuggestions.js';
 import { findSlackChannelPositions, getKnownChannelsVersion, hasSlackMcpServer, subscribeKnownChannels } from '../../utils/suggestions/slackChannelSuggestions.js';
@@ -89,6 +90,7 @@ import type { Theme } from '../../utils/theme.js';
 import { findThinkingTriggerPositions, getRainbowColor, isUltrathinkEnabled } from '../../utils/thinking.js';
 import { findTokenBudgetPositions } from '../../utils/tokenBudget.js';
 import { AutoModeOptInDialog } from '../AutoModeOptInDialog.js';
+import { BypassPermissionsModeDialog } from '../BypassPermissionsModeDialog.js';
 import { BridgeDialog } from '../BridgeDialog.js';
 import { ConfigurableShortcutHint } from '../ConfigurableShortcutHint.js';
 import { getVisibleAgentTasks, useCoordinatorTaskCount } from '../CoordinatorAgentStatus.js';
@@ -392,9 +394,15 @@ function PromptInput({
   const autoModeConsentSequence = useRef(0);
   const pendingAutoModeConsent = useRef<{ id: number; mode: PermissionMode } | null>(null);
 
-  // Clear synchronously on cycling; callbacks from an older dialog cannot activate auto.
+  const [showBypassModeOptIn, setShowBypassModeOptIn] = useState(false);
+  const [bypassModeConsentId, setBypassModeConsentId] = useState(0);
+  const bypassModeConsentSequence = useRef(0);
+  const pendingBypassModeConsent = useRef<{ id: number; mode: PermissionMode } | null>(null);
+
+  // Clear synchronously on cycling/unmount so stale dialogs cannot grant access.
   useEffect(() => () => {
     pendingAutoModeConsent.current = null;
+    pendingBypassModeConsent.current = null;
   }, []);
   useEffect(() => store.subscribe(() => {
     const pending = pendingAutoModeConsent.current;
@@ -402,6 +410,11 @@ function PromptInput({
     if (pending && (state.toolPermissionContext.mode !== pending.mode || state.viewingAgentTaskId)) {
       pendingAutoModeConsent.current = null;
       setShowAutoModeOptIn(false);
+    }
+    const bypassPending = pendingBypassModeConsent.current;
+    if (bypassPending && (state.toolPermissionContext.mode !== bypassPending.mode || state.viewingAgentTaskId || isBypassPermissionsModeDisabled())) {
+      pendingBypassModeConsent.current = null;
+      setShowBypassModeOptIn(false);
     }
   }), [store]);
 
@@ -1310,8 +1323,55 @@ function PromptInput({
     }
   }, [helpOpen]);
 
+  const isBypassConsentCurrent = useCallback((id: number) => {
+    const pending = pendingBypassModeConsent.current;
+    const state = store.getState();
+    return pending?.id === id && state.toolPermissionContext.mode === pending.mode &&
+      !state.viewingAgentTaskId && canOfferLocalBypassPermissions();
+  }, [store]);
+
+  const activateLocalBypass = useCallback(async (id: number) => {
+    try {
+      const environmentError = await getBypassPermissionsEnvironmentError();
+      // Environment checks may await I/O; a newer keypress or policy change wins.
+      if (!isBypassConsentCurrent(id)) {
+        return;
+      }
+      if (environmentError) {
+        pendingBypassModeConsent.current = null;
+        setShowBypassModeOptIn(false);
+        addNotification({ key: 'bypass-environment', text: environmentError, priority: 'immediate' });
+        return;
+      }
+      if (!hasSkipDangerousModePermissionPrompt()) {
+        setShowBypassModeOptIn(true);
+        return;
+      }
+      const currentContext = store.getState().toolPermissionContext;
+      pendingBypassModeConsent.current = null;
+      setShowBypassModeOptIn(false);
+      // Keep startup availability unchanged: remote/teammate entry points and
+      // plan-mode permissions must not inherit this local UI consent.
+      const preparedContext = transitionPermissionMode(currentContext.mode, 'bypassPermissions', currentContext);
+      setAppState(prev => ({ ...prev, toolPermissionContext: { ...preparedContext, mode: 'bypassPermissions' } }));
+      setToolPermissionContext({ ...preparedContext, mode: 'bypassPermissions' });
+      logEvent('tengu_mode_cycle', { to: 'bypassPermissions' });
+    } catch (error) {
+      if (pendingBypassModeConsent.current?.id !== id) {
+        return;
+      }
+      pendingBypassModeConsent.current = null;
+      setShowBypassModeOptIn(false);
+      logError(error);
+      addNotification({ key: 'bypass-environment', text: 'Could not verify bypass permissions availability. Mode unchanged.', priority: 'immediate' });
+    }
+  }, [store, isBypassConsentCurrent, setAppState, setToolPermissionContext, addNotification]);
+
   // Handler for chat:cycleMode - cycle through permission modes
   const handleCycleMode = useCallback(() => {
+    const bypassPending = pendingBypassModeConsent.current;
+    pendingBypassModeConsent.current = null;
+    setShowBypassModeOptIn(false);
     // When viewing a teammate, cycle their mode instead of the leader's
     if (isAgentSwarmsEnabled() && viewedTeammate && viewingAgentTaskId) {
       pendingAutoModeConsent.current = null;
@@ -1357,17 +1417,29 @@ function PromptInput({
     const pending = pendingAutoModeConsent.current;
     pendingAutoModeConsent.current = null;
     setShowAutoModeOptIn(false);
-    let nextMode = getNextPermissionMode(currentContext, teamContext);
-    if (pending) {
+    let nextMode = getNextPermissionMode(currentContext, teamContext, true);
+    if (bypassPending) {
+      nextMode = 'default';
+    } else if (pending) {
       // The pending auto slot was never activated. Advance past it without
       // transitioning through auto or changing the original permission context.
-      nextMode = getNextPermissionMode({ ...currentContext, mode: 'auto' }, teamContext);
+      nextMode = getNextPermissionMode({ ...currentContext, mode: 'auto' }, teamContext, true);
     }
     if (nextMode === 'auto' && !hasLocalAutoApprovalConsent()) {
       const id = ++autoModeConsentSequence.current;
       pendingAutoModeConsent.current = { id, mode: currentContext.mode };
       setAutoModeConsentId(id);
       setShowAutoModeOptIn(true);
+      if (helpOpen) {
+        setHelpOpen(false);
+      }
+      return;
+    }
+    if (nextMode === 'bypassPermissions' && canOfferLocalBypassPermissions()) {
+      const id = ++bypassModeConsentSequence.current;
+      pendingBypassModeConsent.current = { id, mode: currentContext.mode };
+      setBypassModeConsentId(id);
+      void activateLocalBypass(id);
       if (helpOpen) {
         setHelpOpen(false);
       }
@@ -1409,7 +1481,7 @@ function PromptInput({
     if (helpOpen) {
       setHelpOpen(false);
     }
-  }, [toolPermissionContext, teamContext, viewingAgentTaskId, viewedTeammate, setAppState, setToolPermissionContext, helpOpen, store]);
+  }, [toolPermissionContext, teamContext, viewingAgentTaskId, viewedTeammate, setAppState, setToolPermissionContext, helpOpen, store, activateLocalBypass]);
 
   const handleAutoModeOptInAccept = useCallback(() => {
     const pending = pendingAutoModeConsent.current;
@@ -1433,6 +1505,20 @@ function PromptInput({
       setHelpOpen(false);
     }
   }, [autoModeConsentId, store, viewingAgentTaskId, teamContext, helpOpen, setHelpOpen, setAppState, setToolPermissionContext]);
+
+  const handleBypassModeOptInAccept = useCallback(() => {
+    if (isBypassConsentCurrent(bypassModeConsentId)) {
+      void activateLocalBypass(bypassModeConsentId);
+    }
+  }, [bypassModeConsentId, isBypassConsentCurrent, activateLocalBypass]);
+
+  const handleBypassModeOptInDecline = useCallback(() => {
+    if (pendingBypassModeConsent.current?.id !== bypassModeConsentId) {
+      return;
+    }
+    pendingBypassModeConsent.current = null;
+    setShowBypassModeOptIn(false);
+  }, [bypassModeConsentId]);
 
   const handleAutoModeOptInDecline = useCallback(() => {
     if (pendingAutoModeConsent.current?.id !== autoModeConsentId) {
@@ -1917,7 +2003,10 @@ function PromptInput({
       !store.getState().viewingAgentTaskId && !isInProcessTeammate() && !getIsRemoteMode() &&
       getNextPermissionMode(currentContext, teamContext) === 'auto';
   }} /> : null, [showAutoModeOptIn, autoModeConsentId, store, viewingAgentTaskId, teamContext, handleAutoModeOptInAccept, handleAutoModeOptInDecline]);
-  useSetPromptOverlayDialog(isFullscreenEnvEnabled() ? autoModeOptInDialog : null);
+  const bypassModeOptInDialog = useMemo(() => showBypassModeOptIn ? <BypassPermissionsModeDialog key={bypassModeConsentId} onAccept={handleBypassModeOptInAccept} onDecline={handleBypassModeOptInDecline} isConsentCurrent={() => isBypassConsentCurrent(bypassModeConsentId)} /> : null,
+    [showBypassModeOptIn, bypassModeConsentId, handleBypassModeOptInAccept, handleBypassModeOptInDecline, isBypassConsentCurrent]);
+  const permissionModeOptInDialog = autoModeOptInDialog ?? bypassModeOptInDialog;
+  useSetPromptOverlayDialog(isFullscreenEnvEnabled() ? permissionModeOptInDialog : null);
   if (showBashesDialog) {
     return <BackgroundTasksDialog onDone={() => setShowBashesDialog(false)} toolUseContext={getToolUseContext(messages, [], new AbortController(), mainLoopModel)} initialDetailTaskId={typeof showBashesDialog === 'string' ? showBashesDialog : undefined} />;
   }
@@ -2069,7 +2158,7 @@ function PromptInput({
           </Box>
         </Box>}
       <PromptInputFooter apiKeyStatus={apiKeyStatus} debug={debug} exitMessage={exitMessage} vimMode={isVimModeEnabled() ? vimMode : undefined} mode={mode} autoUpdaterResult={autoUpdaterResult} isAutoUpdating={isAutoUpdating} verbose={verbose} onAutoUpdaterResult={onAutoUpdaterResult} onChangeIsUpdating={setIsAutoUpdating} suggestions={suggestions} selectedSuggestion={selectedSuggestion} maxColumnWidth={maxColumnWidth} toolPermissionContext={effectiveToolPermissionContext} helpOpen={helpOpen} suppressHint={input.length > 0} isLoading={isLoading} tasksSelected={tasksSelected} teamsSelected={teamsSelected} bridgeSelected={bridgeSelected} teammateFooterIndex={teammateFooterIndex} ideSelection={ideSelection} mcpClients={mcpClients} isPasting={isPasting} isInputWrapped={isInputWrapped} messages={messages} isSearching={isSearchingHistory} historyQuery={historyQuery} setHistoryQuery={setHistoryQuery} historyFailedMatch={historyFailedMatch} onOpenTasksDialog={isFullscreenEnvEnabled() ? handleOpenTasksDialog : undefined} />
-      {isFullscreenEnvEnabled() ? null : autoModeOptInDialog}
+      {isFullscreenEnvEnabled() ? null : permissionModeOptInDialog}
       {isFullscreenEnvEnabled() ?
     // position=absolute takes zero layout height so the spinner
     // doesn't shift when a notification appears/disappears. Yoga
@@ -2087,7 +2176,7 @@ function PromptInput({
     // bottom row. Keeping Notifications mounted prevents AutoUpdater's
     // initial-check effect from re-firing on every slash-completion
     // toggle (PR#22413).
-    <Box position="absolute" marginTop={briefOwnsGap ? -2 : -1} height={suggestions.length === 0 && !showAutoModeOptIn ? 1 : 0} width="100%" paddingLeft={2} paddingRight={1} flexDirection="column" justifyContent="flex-end" overflow="hidden">
+    <Box position="absolute" marginTop={briefOwnsGap ? -2 : -1} height={suggestions.length === 0 && !showAutoModeOptIn && !showBypassModeOptIn ? 1 : 0} width="100%" paddingLeft={2} paddingRight={1} flexDirection="column" justifyContent="flex-end" overflow="hidden">
           <Notifications apiKeyStatus={apiKeyStatus} autoUpdaterResult={autoUpdaterResult} debug={debug} isAutoUpdating={isAutoUpdating} verbose={verbose} messages={messages} onAutoUpdaterResult={onAutoUpdaterResult} onChangeIsUpdating={setIsAutoUpdating} ideSelection={ideSelection} mcpClients={mcpClients} isInputWrapped={isInputWrapped} />
         </Box> : null}
     </Box>;

@@ -47,10 +47,13 @@ mock.module('./src/utils/settings/settings.js', () => ({
 }))
 mock.module('./src/utils/permissions/permissionSetup.js', () => ({
   isAutoModeGateEnabled: () => localGate,
+  isBypassPermissionsModeDisabled: () => false,
   getAutoModeUnavailableReason: () => 'fixture gate disabled',
   transitionPermissionMode: () => { throw new Error('本夹具不模拟模式激活') },
 }))
+mock.module('./src/utils/teammate.js', () => ({ isTeammate: () => false }))
 mock.module('./src/utils/teammateContext.js', () => ({ isInProcessTeammate: () => false }))
+mock.module('./src/utils/permissions/bypassPermissionsEnvironment.js', () => ({ isBypassPermissionsBlockedByRoot: () => false }))
 mock.module('./src/utils/cwd.js', () => ({ getCwd: () => 'fixture-workspace' }))
 mock.module('./src/utils/debug.js', () => ({ logForDebugging: () => {} }))
 mock.module('./src/utils/messages.js', () => ({ createSystemMessage: (message: string) => ({ type: 'system', message }) }))

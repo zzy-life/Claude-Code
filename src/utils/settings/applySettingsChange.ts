@@ -59,7 +59,7 @@ export function applySettingsChange(
     }
 
     if (
-      newContext.isBypassPermissionsModeAvailable &&
+      (newContext.isBypassPermissionsModeAvailable || newContext.mode === 'bypassPermissions') &&
       isBypassPermissionsModeDisabled()
     ) {
       newContext = createDisabledBypassPermissionsContext(newContext)

@@ -61,7 +61,7 @@ export function AppStateProvider(t0) {
       const {
         toolPermissionContext
       } = store.getState();
-      if (toolPermissionContext.isBypassPermissionsModeAvailable && isBypassPermissionsModeDisabled()) {
+      if ((toolPermissionContext.isBypassPermissionsModeAvailable || toolPermissionContext.mode === 'bypassPermissions') && isBypassPermissionsModeDisabled()) {
         logForDebugging("Disabling bypass permissions mode on mount (remote settings loaded before mount)");
         store.setState(_temp);
       }

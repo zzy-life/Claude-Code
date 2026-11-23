@@ -1,4 +1,7 @@
-import { getIsRemoteMode } from '../../bootstrap/state.js'
+import { getIsNonInteractiveSession, getIsRemoteMode } from '../../bootstrap/state.js'
+import { isEnvTruthy } from '../envUtils.js'
+import { isTeammate } from '../teammate.js'
+import { isBypassPermissionsBlockedByRoot } from './bypassPermissionsEnvironment.js'
 import { isInProcessTeammate } from '../teammateContext.js'
 import type { ToolPermissionContext } from '../../Tool.js'
 import { logForDebugging } from '../debug.js'
@@ -6,6 +9,7 @@ import type { PermissionMode } from './PermissionMode.js'
 import {
   getAutoModeUnavailableReason,
   isAutoModeGateEnabled,
+  isBypassPermissionsModeDisabled,
   transitionPermissionMode,
 } from './permissionSetup.js'
 
@@ -25,13 +29,25 @@ function canCycleToAuto(ctx: ToolPermissionContext): boolean {
   return can
 }
 
+// Only the local leader's input may offer an unopened bypass slot. Merely
+// selecting the slot does not grant access; PromptInput verifies consent first.
+export function canOfferLocalBypassPermissions(): boolean {
+  return !getIsNonInteractiveSession() && !getIsRemoteMode() &&
+    !isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) && !isTeammate() &&
+    !isBypassPermissionsBlockedByRoot() && !isBypassPermissionsModeDisabled()
+}
+
 /**
  * Determines the next permission mode when cycling through modes with Shift+Tab.
  */
 export function getNextPermissionMode(
   toolPermissionContext: ToolPermissionContext,
   _teamContext?: { leadAgentId: string },
+  offerLocalBypass = false,
 ): PermissionMode {
+  const bypassAvailable = !isBypassPermissionsModeDisabled() &&
+    (toolPermissionContext.isBypassPermissionsModeAvailable ||
+      (offerLocalBypass && canOfferLocalBypassPermissions()))
   switch (toolPermissionContext.mode) {
     case 'default':
       return 'plan'
@@ -43,13 +59,13 @@ export function getNextPermissionMode(
       if (canCycleToAuto(toolPermissionContext)) {
         return 'auto'
       }
-      if (toolPermissionContext.isBypassPermissionsModeAvailable) {
+      if (bypassAvailable) {
         return 'bypassPermissions'
       }
       return 'default'
 
     case 'auto':
-      if (toolPermissionContext.isBypassPermissionsModeAvailable) {
+      if (bypassAvailable) {
         return 'bypassPermissions'
       }
       return 'default'
