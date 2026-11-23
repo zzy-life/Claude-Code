@@ -227,6 +227,7 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `/output-style` | 已弃用；请改用 `/config` 调整输出样式。 |
 | `/statusline` | 配置状态栏显示。 |
 | `/terminal-setup` | 执行终端设置/安装引导。 |
+| `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用；快照可能包含敏感信息，分享前需谨慎检查。 |
 
 #### 三、受限、实验或内部命令
 
@@ -244,7 +245,6 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `/voice` | 用语音输入与 Claude 交互；需语音实验、订阅资格和服务端开关均已启用。 |
 | `/peers` | 管理本地 Claude 进程之间的消息收件箱和协作通信；仅实验构建可用。 |
 | `/workflows` | 管理可复用的工作流脚本：把一组预定义步骤保存为命令，以便重复执行开发流程；仅启用工作流实验时可用。 |
-| `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
 
 ---
 
