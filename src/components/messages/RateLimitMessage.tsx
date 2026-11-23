@@ -1,141 +1,19 @@
-import { c as _c } from "react/compiler-runtime";
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { Box, Text } from 'src/ink.js';
-import { useClaudeAiLimits } from 'src/services/claudeAiLimitsHook.js';
-import { getRateLimitTier, getSubscriptionType, isClaudeAISubscriber } from 'src/utils/auth.js';
+import { getRateLimitTier, isClaudeAISubscriber } from 'src/utils/auth.js';
 import { MessageResponse } from '../MessageResponse.js';
-type UpsellParams = {
-  shouldShowUpsell: boolean;
-  isMax20x: boolean;
-  shouldAutoOpenRateLimitOptionsMenu: boolean;
-  isTeamOrEnterprise: boolean;
-};
-export function getUpsellMessage({
-  shouldShowUpsell,
-  isMax20x,
-  shouldAutoOpenRateLimitOptionsMenu,
-  isTeamOrEnterprise
-}: UpsellParams): string | null {
-  if (!shouldShowUpsell) return null;
-  if (isMax20x) {
-    return '/login to switch to an API usage-billed account.';
-  }
-  if (shouldAutoOpenRateLimitOptionsMenu) {
-    return 'Opening your options\u2026';
-  }
-  if (isTeamOrEnterprise) {
-    return null;
-  }
-  return '/upgrade to increase your usage limit.';
-}
+
 type RateLimitMessageProps = {
   text: string;
-  onOpenRateLimitOptions?: () => void;
 };
-export function RateLimitMessage(t0) {
-  const $ = _c(16);
-  const {
-    text,
-    onOpenRateLimitOptions
-  } = t0;
-  let t1;
-  if ($[0] === Symbol.for("react.memo_cache_sentinel")) {
-    t1 = getSubscriptionType();
-    $[0] = t1;
-  } else {
-    t1 = $[0];
-  }
-  const subscriptionType = t1;
-  let t2;
-  if ($[1] === Symbol.for("react.memo_cache_sentinel")) {
-    t2 = getRateLimitTier();
-    $[1] = t2;
-  } else {
-    t2 = $[1];
-  }
-  const rateLimitTier = t2;
-  const isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";
-  const isMax20x = rateLimitTier === "default_claude_max_20x";
-  let t3;
-  if ($[2] === Symbol.for("react.memo_cache_sentinel")) {
-    t3 = isClaudeAISubscriber();
-    $[2] = t3;
-  } else {
-    t3 = $[2];
-  }
-  const shouldShowUpsell = t3;
-  const canSeeRateLimitOptionsUpsell = shouldShowUpsell && !isMax20x;
-  const [hasOpenedInteractiveMenu, setHasOpenedInteractiveMenu] = useState(false);
-  const claudeAiLimits = useClaudeAiLimits();
-  const isCurrentlyRateLimited = claudeAiLimits.status === "rejected" && claudeAiLimits.resetsAt !== undefined && !claudeAiLimits.isUsingOverage;
-  const shouldAutoOpenRateLimitOptionsMenu = canSeeRateLimitOptionsUpsell && !hasOpenedInteractiveMenu && isCurrentlyRateLimited && onOpenRateLimitOptions;
-  let t4;
-  let t5;
-  if ($[3] !== onOpenRateLimitOptions || $[4] !== shouldAutoOpenRateLimitOptionsMenu) {
-    t4 = () => {
-      if (shouldAutoOpenRateLimitOptionsMenu) {
-        setHasOpenedInteractiveMenu(true);
-        onOpenRateLimitOptions();
-      }
-    };
-    t5 = [shouldAutoOpenRateLimitOptionsMenu, onOpenRateLimitOptions];
-    $[3] = onOpenRateLimitOptions;
-    $[4] = shouldAutoOpenRateLimitOptionsMenu;
-    $[5] = t4;
-    $[6] = t5;
-  } else {
-    t4 = $[5];
-    t5 = $[6];
-  }
-  useEffect(t4, t5);
-  let t6;
-  bb0: {
-    let t7;
-    if ($[7] !== shouldAutoOpenRateLimitOptionsMenu) {
-      t7 = getUpsellMessage({
-        shouldShowUpsell,
-        isMax20x,
-        shouldAutoOpenRateLimitOptionsMenu: !!shouldAutoOpenRateLimitOptionsMenu,
-        isTeamOrEnterprise
-      });
-      $[7] = shouldAutoOpenRateLimitOptionsMenu;
-      $[8] = t7;
-    } else {
-      t7 = $[8];
-    }
-    const message = t7;
-    if (!message) {
-      t6 = null;
-      break bb0;
-    }
-    let t8;
-    if ($[9] !== message) {
-      t8 = <Text dimColor={true}>{message}</Text>;
-      $[9] = message;
-      $[10] = t8;
-    } else {
-      t8 = $[10];
-    }
-    t6 = t8;
-  }
-  const upsell = t6;
-  let t7;
-  if ($[11] !== text) {
-    t7 = <Text color="error">{text}</Text>;
-    $[11] = text;
-    $[12] = t7;
-  } else {
-    t7 = $[12];
-  }
-  const t8 = hasOpenedInteractiveMenu ? null : upsell;
-  let t9;
-  if ($[13] !== t7 || $[14] !== t8) {
-    t9 = <MessageResponse><Box flexDirection="column">{t7}{t8}</Box></MessageResponse>;
-    $[13] = t7;
-    $[14] = t8;
-    $[15] = t9;
-  } else {
-    t9 = $[15];
-  }
-  return t9;
+
+export function RateLimitMessage({ text }: RateLimitMessageProps) {
+  const showLoginHint = isClaudeAISubscriber() && getRateLimitTier() === 'default_claude_max_20x';
+
+  return <MessageResponse>
+    <Box flexDirection="column">
+      <Text color="error">{text}</Text>
+      {showLoginHint && <Text dimColor>/login to switch to an API usage-billed account.</Text>}
+    </Box>
+  </MessageResponse>;
 }

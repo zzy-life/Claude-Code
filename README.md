@@ -200,7 +200,7 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 
 | 命令（含别名） | 用途 |
 |---|---|
-| `/add-dir <path>` | 将目录添加到工作区。 |
+| `/add-dir <path>` | 将目录添加到工作区，方便跨项目处理。 |
 | `/agents` | 管理 Agent 配置。 |
 | `/mcp` | 管理 MCP 服务器。 |
 | `/plugin`、`/plugins`、`/marketplace` | 管理插件与插件市场。 |
@@ -224,8 +224,6 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `/install-github-app` | 为仓库配置 Claude GitHub Actions。 |
 | `/install-slack-app` | 安装 Claude Slack App。 |
 | `/login`、`/logout` | 登录或登出 Anthropic 账户。 |
-| `/usage` | 显示 Claude.ai 套餐用量限制；仅 Claude.ai OAuth 订阅者可见。通过自定义 `ANTHROPIC_BASE_URL` 的代理、Bedrock、Vertex、Foundry 或普通 API Key 使用时，该命令会被隐藏；支持用量查询的代理仍可在输入框 footer 显示额度提示。 |
-| `/upgrade` | 升级至 Max；受账户资格限制。 |
 | `/output-style` | 已弃用；请改用 `/config` 调整输出样式。 |
 | `/statusline` | 配置状态栏显示。 |
 | `/terminal-setup` | 执行终端设置/安装引导。 |
@@ -256,8 +254,9 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 
 | 已移除内容 | 保留能力／替代方式 |
 |---|---|
+| `/usage`、`/upgrade`、`/rate-limit-options` 内置命令及限流升级菜单 | 设置中的 Usage 页、代理额度 footer 和限流状态／重置时间提示保留；不再自动弹出套餐升级菜单。 |
 | `/advisor`、`--advisor`、顾问模型设置与实验启用、服务端顾问工具注入及专属计费/展示 | 普通模型、工具调用和会话成本统计保留；旧会话不删除，仅在发送 API 前过滤不再支持的 Advisor block，避免恢复后请求被拒绝，不恢复顾问能力。 |
-| `/extra-usage` 交互/非交互操作、限流菜单中的额外用量操作及管理员额度申请 | `/usage` 的真实用量与余额展示、赠送额度资格读取、Fast Mode/1M 权限及实际计费判断保留；额度设置由账户用量设置管理，`/rate-limit-options` 保留升级与等待重置选项。 |
+| `/extra-usage` 交互/非交互操作、限流菜单中的额外用量操作及管理员额度申请 | 设置中 Usage 页的真实用量与余额展示、赠送额度资格读取、Fast Mode/1M 权限及实际计费判断保留；额度设置由账户用量设置管理；限流菜单已移除，限流与重置时间提示保留。 |
 | `/ultrareview` 远程审查、专属配额/付费确认、关键词高亮与审查轮询 | 本地 `/review` 提示词、通用远程任务创建/恢复/轮询/进度与 Remote Control 保留；不提供旧审查记录的专属恢复与展示兼容，不迁移或清理用户历史文件。 |
 | `/passes` 赠送资格、邀请奖励展示及后台资格预取，`/privacy-settings` 主动隐私设置界面 | 启动时的隐私/条款告知、接受选择、print 模式检查与登录/登出缓存处理保留；真实额度与额外用量功能不受本阶段影响。 |
 | `/desktop`、`/app` 会话转交及 Desktop 启动推广弹窗，`/remote-env` 环境选择界面，`/think-back`、`/thinkback-play` 内置年度回顾安装与播放 | 普通 Desktop 介绍 tip、远程环境配置读取与会话传送、通用插件系统保留；不卸载用户已安装插件。`/remote-control`、`/rc` 及远程控制链路未移除。 |

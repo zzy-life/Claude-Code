@@ -225,17 +225,14 @@ function getEarlyWarningText(limits: ClaudeAILimits): string | null {
     ? formatResetTime(limits.resetsAt, true)
     : undefined
 
-  // Get upsell command based on subscription type and limit type
-  const upsell = getWarningUpsellText(limits.rateLimitType)
-
   if (used && resetTime) {
     const base = `You've used ${used}% of your ${limitName} · resets ${resetTime}`
-    return upsell ? `${base} · ${upsell}` : base
+    return base
   }
 
   if (used) {
     const base = `You've used ${used}% of your ${limitName}`
-    return upsell ? `${base} · ${upsell}` : base
+    return base
   }
 
   if (limits.rateLimitType === 'overage') {
@@ -245,33 +242,11 @@ function getEarlyWarningText(limits: ClaudeAILimits): string | null {
 
   if (resetTime) {
     const base = `Approaching ${limitName} · resets ${resetTime}`
-    return upsell ? `${base} · ${upsell}` : base
+    return base
   }
 
   const base = `Approaching ${limitName}`
-  return upsell ? `${base} · ${upsell}` : base
-}
-
-/**
- * Get the upsell command text for warning messages based on subscription and limit type.
- * Returns null if no upsell should be shown.
- * Only used for warnings because actual rate limit hits will see an interactive menu of options.
- */
-function getWarningUpsellText(
-  rateLimitType: ClaudeAILimits['rateLimitType'],
-): string | null {
-  const subscriptionType = getSubscriptionType()
-
-  // 5-hour session limit warning
-  if (rateLimitType === 'five_hour') {
-    // Pro/Max users: prompt to upgrade
-    if (subscriptionType === 'pro' || subscriptionType === 'max') {
-      return '/upgrade to keep using Claude Code'
-    }
-  }
-
-  // Weekly limit warnings don't show upsell per spec
-  return null
+  return base
 }
 
 /**

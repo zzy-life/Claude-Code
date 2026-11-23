@@ -23,7 +23,6 @@ type Props = {
   shouldShowDot: boolean;
   verbose: boolean;
   width?: number | string;
-  onOpenRateLimitOptions?: () => void;
 };
 function InvalidApiKeyMessage() {
   const $ = _c(2);
@@ -50,8 +49,7 @@ export function AssistantTextMessage(t0) {
     param: t1,
     addMargin,
     shouldShowDot,
-    verbose,
-    onOpenRateLimitOptions
+    verbose
   } = t0;
   const {
     text
@@ -62,9 +60,8 @@ export function AssistantTextMessage(t0) {
   }
   if (isRateLimitErrorMessage(text)) {
     let t2;
-    if ($[0] !== onOpenRateLimitOptions || $[1] !== text) {
-      t2 = <RateLimitMessage text={text} onOpenRateLimitOptions={onOpenRateLimitOptions} />;
-      $[0] = onOpenRateLimitOptions;
+    if ($[1] !== text) {
+      t2 = <RateLimitMessage text={text} />;
       $[1] = text;
       $[2] = t2;
     } else {

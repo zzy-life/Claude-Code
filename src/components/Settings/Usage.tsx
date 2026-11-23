@@ -246,7 +246,7 @@ export function Usage(): React.ReactNode {
   return <Box flexDirection="column" gap={1} width="100%">
       {limits.some(({
       limit
-    }) => limit) || <Text dimColor>/usage is only available for subscription plans.</Text>}
+    }) => limit) || <Text dimColor>Plan usage limits are only available for subscription plans.</Text>}
 
       {limits.map(({
       title,

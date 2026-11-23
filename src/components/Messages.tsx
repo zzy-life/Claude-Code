@@ -221,7 +221,6 @@ type Props = {
   streamingToolUses: StreamingToolUse[];
   showAllInTranscript?: boolean;
   agentDefinitions?: AgentDefinitionsResult;
-  onOpenRateLimitOptions?: () => void;
   /** Hide the logo/header - used for subagent zoom view */
   hideLogo?: boolean;
   isLoading: boolean;
@@ -351,7 +350,6 @@ const MessagesImpl = ({
   streamingToolUses,
   showAllInTranscript = false,
   agentDefinitions,
-  onOpenRateLimitOptions,
   hideLogo = false,
   isLoading,
   hidePastThinking = false,
@@ -616,7 +614,7 @@ const MessagesImpl = ({
     // streaming instead of waiting for the block to finalize.
     const hasContentAfter = msg_8.type === 'collapsed_read_search' && (!!streamingText || hasContentAfterIndex(renderableMessages, index, tools, streamingToolUseIDs));
     const k_0 = messageKey(msg_8);
-    const row = <MessageRow key={k_0} message={msg_8} isUserContinuation={isUserContinuation} hasContentAfter={hasContentAfter} tools={tools} commands={commands} verbose={verbose || isItemExpanded(msg_8) || cursor?.expanded === true && index === selectedIdx} inProgressToolUseIDs={inProgressToolUseIDs} streamingToolUseIDs={streamingToolUseIDs} screen={screen} canAnimate={canAnimate} onOpenRateLimitOptions={onOpenRateLimitOptions} lastThinkingBlockId={lastThinkingBlockId} latestBashOutputUUID={latestBashOutputUUID} columns={columns} isLoading={isLoading} lookups={lookups_0} />;
+    const row = <MessageRow key={k_0} message={msg_8} isUserContinuation={isUserContinuation} hasContentAfter={hasContentAfter} tools={tools} commands={commands} verbose={verbose || isItemExpanded(msg_8) || cursor?.expanded === true && index === selectedIdx} inProgressToolUseIDs={inProgressToolUseIDs} streamingToolUseIDs={streamingToolUseIDs} screen={screen} canAnimate={canAnimate} lastThinkingBlockId={lastThinkingBlockId} latestBashOutputUUID={latestBashOutputUUID} columns={columns} isLoading={isLoading} lookups={lookups_0} />;
 
     // Per-row Provider — only 2 rows re-render on selection change.
     // Wrapped BEFORE divider branch so both return paths get it.
@@ -723,9 +721,8 @@ function expandKey(msg: RenderableMessage): string {
 
 // Custom comparator to prevent unnecessary re-renders during streaming.
 // Default React.memo does shallow comparison which fails when:
-// 1. onOpenRateLimitOptions callback is recreated (doesn't affect render output)
-// 2. streamingToolUses array is recreated on every delta, but only contentBlock matters for rendering
-// 3. streamingThinking changes on every delta - we DO want to re-render for this
+// 1. streamingToolUses array is recreated on every delta, but only contentBlock matters for rendering
+// 2. streamingThinking changes on every delta - we DO want to re-render for this
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
   for (const item of a) {
@@ -736,7 +733,7 @@ function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 export const Messages = React.memo(MessagesImpl, (prev, next) => {
   const keys = Object.keys(prev) as (keyof typeof prev)[];
   for (const key of keys) {
-    if (key === 'onOpenRateLimitOptions' || key === 'scrollRef' || key === 'trackStickyPrompt' || key === 'setCursor' || key === 'cursorNavRef' || key === 'jumpRef' || key === 'onSearchMatchesChange' || key === 'scanElement' || key === 'setPositions') continue;
+    if (key === 'scrollRef' || key === 'trackStickyPrompt' || key === 'setCursor' || key === 'cursorNavRef' || key === 'jumpRef' || key === 'onSearchMatchesChange' || key === 'scanElement' || key === 'setPositions') continue;
     if (prev[key] !== next[key]) {
       if (key === 'streamingToolUses') {
         const p = prev.streamingToolUses;

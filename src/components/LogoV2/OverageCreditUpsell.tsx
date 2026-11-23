@@ -18,7 +18,7 @@ const MAX_IMPRESSIONS = 3;
  * so they don't see an upsell they can't act on.
  *
  * isEligibleForOverageCreditGrant — just the backend eligibility. Use for
- *   persistent reference surfaces (/usage) where the info should show
+ *   persistent reference surfaces (Usage settings) where the info should show
  *   whenever eligible, no impression cap.
  * shouldShowOverageCreditUpsell — adds the 3-impression cap. Use for promotional surfaces
  *   (welcome feed, tips).
@@ -65,7 +65,7 @@ export function incrementOverageCreditUpsellSeenCount(): void {
   });
 }
 
-// Copy from "OC & Bulk Overages copy" doc (#6 — CLI /usage)
+// Copy from "OC & Bulk Overages copy" doc (#6 — CLI Usage settings)
 function getUsageText(amount: string): string {
   return `${amount} in extra usage for third-party apps · check account usage settings`;
 }
