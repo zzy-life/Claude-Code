@@ -182,6 +182,7 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `/diff` | 查看未提交改动及本轮差异。 |
 | `/copy` | 复制最近一条消息内容。 |
 | `/rename` | 重命名当前会话。 |
+| `/tag <tag-name>` | 为当前会话添加或替换标签；重复输入相同标签可确认移除，标签可在 `/resume` 中显示和搜索。 |
 | `/resume`、`/continue` | 恢复之前的会话。 |
 | `/rewind`、`/checkpoint` | 将代码和/或对话回退到先前状态。 |
 | `/branch` | 从当前节点创建会话分支；未启用 `FORK_SUBAGENT` 时，`/fork` 是其别名。 |

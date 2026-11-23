@@ -40,7 +40,7 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 
 `/commit`、`/commit-push-pr`、`/cost`、`/version`、`/bridge-kick` 及内置 `/verify`、`/stuck` 也已移除；用户自定义同名技能不受影响。共享 Git、成本统计和远程会话实现不因命令删除而整体移除。
 
-`/force-snip`、`/subscribe-pr` 还分别受 `HISTORY_SNIP`、`KAIROS_GITHUB_WEBHOOKS` 等开关约束；即使进入内部构建也未必可用。`/tag` 属于常规注册表中的受限命令，不属于 `INTERNAL_ONLY_COMMANDS`。`/files` 已移除，文件上下文跟踪与缓存逻辑保留。
+`/force-snip`、`/subscribe-pr` 还分别受 `HISTORY_SNIP`、`KAIROS_GITHUB_WEBHOOKS` 等开关约束；即使进入内部构建也未必可用。`/tag` 属于常规注册表，现已向普通用户开放，不再受 `USER_TYPE` 限制。`/files` 已移除，文件上下文跟踪与缓存逻辑保留。
 
 ---
 
