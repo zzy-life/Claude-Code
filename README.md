@@ -246,7 +246,6 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `/voice` | 用语音输入与 Claude 交互；需语音实验、订阅资格和服务端开关均已启用。 |
 | `/peers` | 管理本地 Claude 进程之间的消息收件箱和协作通信；仅实验构建可用。 |
 | `/workflows` | 管理可复用的工作流脚本：把一组预定义步骤保存为命令，以便重复执行开发流程；仅启用工作流实验时可用。 |
-| `/torch` | Anthropic 内部代号功能；源码未提供面向外部用户的稳定用途说明，默认不可用。 |
 | `/heapdump` | 将当前 JavaScript 内存快照写入桌面目录，供排查内存泄漏或异常内存占用，不用于日常开发。 |
 
 ---
@@ -532,7 +531,6 @@ vendor/                 # 原生绑定源码
 | `DAEMON` | 守护进程模式 |
 | `UDS_INBOX` | Unix Socket 收件箱 |
 | `WORKFLOW_SCRIPTS` | 工作流脚本 |
-| `TORCH` | Torch 功能 |
 | `MONITOR_TOOL` | 监控工具 |
 | `HISTORY_SNIP` | 历史截断 |
 | `ANTI_DISTILLATION_CC` | 反蒸馏保护 |

@@ -48,7 +48,6 @@
 |------|------|
 | `UDS_INBOX` | Unix Domain Socket 收件箱 |
 | `WORKFLOW_SCRIPTS` | 工作流脚本 |
-| `TORCH` | Torch 功能 |
 | `MONITOR_TOOL` | 监控工具 |
 | `HISTORY_SNIP` | 历史截断 |
 | `BG_SESSIONS` | 后台会话管理 |

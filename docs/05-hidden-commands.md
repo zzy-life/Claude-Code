@@ -21,7 +21,6 @@ Claude Code 中有大量未公开的斜杠命令、CLI 参数和环境变量。
 | `/fork` | `FORK_SUBAGENT` | 创建独立的子 Agent 分叉会话；未启用时 `/fork` 是 `/branch` 的别名。 |
 | `/peers` | `UDS_INBOX` | 本地 Claude 进程之间的收件箱与协作通信。 |
 | `/workflows` | `WORKFLOW_SCRIPTS` | 将预定义的多步骤开发流程保存、管理并重复执行。 |
-| `/torch` | `TORCH` | 内部代号功能；源码未提供面向外部的稳定用途。 |
 | `/force-snip` | `HISTORY_SNIP` | 强制截断历史；即使开关启用，仍仅限内部构建。 |
 
 ---
