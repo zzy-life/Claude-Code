@@ -3128,6 +3128,12 @@ function getPlanModeInstructions(attachment: {
   return getPlanModeV2Instructions(attachment)
 }
 
+const PLAN_IMPLEMENTATION_PHASES = `### Implementation Phases for Large Tasks
+- For large implementation tasks (such as cross-module changes, multiple deliverables, or work with substantial dependencies), the plan file MUST contain numbered implementation phases. These are the phases of implementation, not the planning workflow itself.
+- For each phase, include its goal, a concrete task checklist, affected file paths, prerequisites, deliverables, and acceptance criteria. Keep these concise and avoid repeating details already listed in the plan.
+- Give each phase a clear scope and a verifiable outcome so the user can request execution of only a specific phase, subject to its prerequisites. Do not imply that approving the plan requires executing every phase at once.
+- Keep small, focused changes simple; do not force them into multiple phases. Respect the plan's existing brevity and length constraints.`
+
 // --
 // Plan file structure experiment arms.
 // Each arm returns the full Phase 4 section so the surrounding template
@@ -3263,6 +3269,8 @@ Goal: Review the plan(s) from Phase 2 and ensure alignment with the user's inten
 
 ${getPlanPhase4Section()}
 
+${PLAN_IMPLEMENTATION_PHASES}
+
 ### Phase 5: Call ${ExitPlanModeV2Tool.name}
 At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ${ExitPlanModeV2Tool.name} to indicate to the user that you are done planning.
 This is critical - your turn should only end with either using the ${ASK_USER_QUESTION_TOOL_NAME} tool OR calling ${ExitPlanModeV2Tool.name}. Do not stop unless it's for these 2 reasons
@@ -3344,6 +3352,8 @@ Your plan file should be divided into clear sections using markdown headers, bas
 - Include the paths of critical files to be modified
 - Reference existing functions and utilities you found that should be reused, with their file paths
 - Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)
+
+${PLAN_IMPLEMENTATION_PHASES}
 
 ### When to Converge
 
