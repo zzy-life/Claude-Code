@@ -3865,7 +3865,17 @@ async function run(): Promise<CommanderCommand> {
 
   const proxy = program.command('proxy').description('Configure the Anthropic API proxy').configureHelp(createSortedHelpConfig());
   const proxyConfig = proxy.command('config').description('Manage API proxy configuration').configureHelp(createSortedHelpConfig());
-  proxyConfig.command('set').description('Configure API proxy and credentials').argument('<proxy-url>', 'Base URL for the API proxy').argument('<api-key>', 'API key for the proxy').action((proxyUrl: string, apiKey: string) => {
+  proxyConfig.command('set')
+    .description('Configure API proxy, credentials, and optional model names')
+    .argument('<proxy-url>', 'Base URL for the API proxy')
+    .argument('<api-key>', 'API key for the proxy')
+    .argument('[opus-model]', 'Default Opus model name')
+    .argument('[sonnet-model]', 'Default Sonnet model name')
+    .argument('[haiku-model]', 'Default Haiku model name')
+    .option('--opus-model <name>', 'Default Opus model name (overrides positional argument)')
+    .option('--sonnet-model <name>', 'Default Sonnet model name (overrides positional argument)')
+    .option('--haiku-model <name>', 'Default Haiku model name (overrides positional argument)')
+    .action((proxyUrl: string, apiKey: string, opusModel: string | undefined, sonnetModel: string | undefined, haikuModel: string | undefined, options: { opusModel?: string; sonnetModel?: string; haikuModel?: string }) => {
     if (!proxyUrl.trim()) {
       process.stderr.write('Proxy URL must not be empty.\n');
       process.exitCode = 1;
@@ -3895,9 +3905,9 @@ async function run(): Promise<CommanderCommand> {
         ANTHROPIC_AUTH_TOKEN: apiKey,
         ANTHROPIC_API_KEY: apiKey,
         CLAUDE_CODE_AUTO_COMPACT_WINDOW: '258000',
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: undefined,
-        ANTHROPIC_DEFAULT_OPUS_MODEL: undefined,
-        ANTHROPIC_DEFAULT_SONNET_MODEL: undefined,
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: options.haikuModel ?? haikuModel,
+        ANTHROPIC_DEFAULT_OPUS_MODEL: options.opusModel ?? opusModel,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: options.sonnetModel ?? sonnetModel,
         ANTHROPIC_MODEL: undefined
       }
     });

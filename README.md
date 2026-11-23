@@ -48,9 +48,18 @@ $env:ANTHROPIC_API_KEY = "你的 Client API Key"
 
 ```powershell
 ccli proxy config set <代理地址> <你的密钥>
+
+# 可选：按 Opus、Sonnet、Haiku 的顺序指定代理模型名
+ccli proxy config set <代理地址> <你的密钥> <Opus模型名> <Sonnet模型名> <Haiku模型名>
+
+# 只指定 Sonnet，避免位置参数错位
+ccli proxy config set <代理地址> <你的密钥> --sonnet-model <Sonnet模型名>
+
+# 也可以全部使用具名选项，顺序不限
+ccli proxy config set <代理地址> <你的密钥> --opus-model <Opus模型名> --sonnet-model <Sonnet模型名> --haiku-model <Haiku模型名>
 ```
 
-该命令会将指定的 HTTP 或 HTTPS 代理地址写入 `ANTHROPIC_BASE_URL`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。它会保留 `~/.claude/settings.json` 中的其他配置，清除可能覆盖代理模型设置的 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 及 `ANTHROPIC_MODEL`。配置完成后重启 Claude Code 生效。
+该命令会将指定的 HTTP 或 HTTPS 代理地址写入 `ANTHROPIC_BASE_URL`，并同时设置 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY` 和 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=258000`。三个可选位置参数依次写入 `ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL`、`ANTHROPIC_DEFAULT_HAIKU_MODEL`，也可以通过 `--opus-model`、`--sonnet-model`、`--haiku-model` 单独指定；同一模型同时传入两种形式时，以具名选项为准。未通过任一形式指定的模型会清除对应旧配置，因此原两参数用法仍会清除这三个模型配置。注意：直接在密钥后只写一个模型名时，该值始终属于 Opus，不会按名称自动识别档位。命令始终清除可能覆盖模型选择的 `ANTHROPIC_MODEL`，保留 `~/.claude/settings.json` 中的其他配置。配置完成后重启 Claude Code 生效。
 
 每轮对话结束后，额度右侧还会显示当前会话的上下文占用和可用窗口，例如 `ctx 123k/160k`；分母复用自动压缩的有效窗口计算，会应用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 并扣除摘要预留 token。未配置上述环境变量、代理不支持用量查询或请求失败时，CLI 不显示额度提示，不影响正常对话。
 
