@@ -233,7 +233,6 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 
 | 命令 | 用途与限制 |
 |---|---|
-| `/files` | 列出本次会话已加入上下文、可供模型参考的文件；仅内部构建可用。 |
 | `/remote-control`、`/rc` | 原用于网页端或移动端连接本地终端；当前授权 gate 固定为 `false`，入口不可启用，不能通过旧覆盖变量放行。 |
 | `/session`、`/remote` | 生成远程会话链接和二维码，用其他设备继续或查看当前会话；仅远程会话模式可用。 |
 | `/chrome` | 连接、设置或管理 Claude in Chrome 浏览器扩展（Beta）；需满足登录和会话条件。 |

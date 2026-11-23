@@ -98,7 +98,6 @@ import permissions from './commands/permissions/index.js'
 import plan from './commands/plan/index.js'
 import fast from './commands/fast/index.js'
 import hooks from './commands/hooks/index.js'
-import files from './commands/files/index.js'
 import branch from './commands/branch/index.js'
 import agents from './commands/agents/index.js'
 import plugin from './commands/plugin/index.js'
@@ -199,7 +198,6 @@ const COMMANDS = memoize((): Command[] => [
   effort,
   exit,
   fast,
-  files,
   heapDump,
   help,
   ide,
@@ -565,7 +563,6 @@ export const BRIDGE_SAFE_COMMANDS: Set<Command> = new Set(
     compact, // Shrink context — useful mid-session from a phone
     clear, // Wipe transcript
     releaseNotes, // Show changelog
-    files, // List tracked files
   ].filter((c): c is Command => c !== null),
 )
 
