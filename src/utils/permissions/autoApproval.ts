@@ -1,6 +1,5 @@
 import type { Tool, ToolUseContext } from '../../Tool.js'
 import type { AssistantMessage } from '../../types/message.js'
-import { z } from 'zod/v4'
 import { getCwd } from '../cwd.js'
 import { AbortError, errorMessage } from '../errors.js'
 import { createSystemMessage } from '../messages.js'
@@ -8,8 +7,13 @@ import { sideQuery, type SideQueryOptions } from '../sideQuery.js'
 import { modelSupportsStructuredOutputs } from '../betas.js'
 import { hasLocalAutoApprovalConsent } from '../settings/settings.js'
 import { isAutoModeGateEnabled } from './permissionSetup.js'
-import { buildAutoApprovalEvidence } from './autoApprovalContext.js'
-import { AUTO_APPROVAL_OUTPUT_SCHEMA, AUTO_APPROVAL_SYSTEM_PROMPT } from './autoApprovalPrompt.js'
+import { buildAutoApprovalEvidence, getAutoApprovalInputBudget } from './autoApprovalContext.js'
+import { getContextWindowForModel } from '../context.js'
+import { getModelCapability } from '../model/modelCapabilities.js'
+import { getModelBetas } from '../betas.js'
+import { roughTokenCountEstimation } from '../../services/tokenEstimation.js'
+import { logForDebugging } from '../debug.js'
+import { AUTO_APPROVAL_OUTPUT_SCHEMA, AUTO_APPROVAL_SYSTEM_PROMPT, autoApprovalResultSchema } from './autoApprovalPrompt.js'
 import { resolveAutoApprovalModel, recordAutoApprovalUsage } from './autoApprovalModel.js'
 import type {
   AutoApprovalResult,
@@ -54,14 +58,10 @@ export function requiresHumanApproval(
   return false
 }
 
+export { autoApprovalResultSchema } from './autoApprovalPrompt.js'
+
 export const AUTO_APPROVAL_TIMEOUT_MS = 60_000
 export const AUTO_APPROVAL_MAX_OUTPUT_TOKENS = 512
-
-export const autoApprovalResultSchema = z.discriminatedUnion('decision', [
-  z.object({ decision: z.literal('allow') }).strict(),
-  z.object({ decision: z.literal('deny'), reason: z.string().trim().min(1) }).strict(),
-  z.object({ decision: z.literal('needs_user'), reason: z.string().trim().min(1) }).strict(),
-])
 
 /** New implementation stays dormant until the new local consent is accepted. */
 export function usesLocalAutoApproval(context: ToolUseContext): boolean {
@@ -72,8 +72,10 @@ export function usesLocalAutoApproval(context: ToolUseContext): boolean {
 }
 
 function manualDecision(result: PermissionAskDecision, reason: string): PermissionAskDecision {
+  logForDebugging('[autoApproval] outcome=needs_user; see the permission UI for the reason')
   return {
     ...result,
+    decisionReason: { type: 'other', reason: `User approval required: ${reason}` },
     message: `User approval required: ${reason}`,
     pendingClassifierCheck: undefined,
     autoApprovalNeedsUser: true,
@@ -124,7 +126,14 @@ export async function reviewToolWithAutoApproval(args: {
     if (!deps.supportsStructuredOutputs(model)) {
       return manualDecision(result, 'The approval model does not support the required structured output')
     }
-    const evidence = buildAutoApprovalEvidence({
+    const started = Date.now()
+    const capability = getModelCapability(model)
+    const inputBudget = getAutoApprovalInputBudget(
+      getContextWindowForModel(model, getModelBetas(model)), capability?.max_input_tokens,
+    )
+    logForDebugging(`[autoApproval] start model=${model} stream=false inputBudget=${inputBudget} windowSource=${capability?.max_input_tokens ? 'catalog' : 'inferred_capped'}`)
+    const buildEvidence = (budget: number) => buildAutoApprovalEvidence({
+      inputBudget: budget,
       rootMessages: scope.rootMessages,
       agentMessages: context.messages,
       constraints: scope.constraints,
@@ -141,6 +150,8 @@ export async function reviewToolWithAutoApproval(args: {
       verifiedAnswers: scope.verifiedAnswers,
       taskAnswers: scope.taskAnswers,
     })
+    // The final request callback accounts for attribution and schema overhead.
+    const evidence = buildEvidence(inputBudget)
     if ('reason' in evidence) return manualDecision(result, evidence.reason)
     const controller = new AbortController()
     const cancel = () => controller.abort()
@@ -156,7 +167,32 @@ export async function reviewToolWithAutoApproval(args: {
         output_format: { type: 'json_schema', schema: AUTO_APPROVAL_OUTPUT_SCHEMA },
         max_tokens: AUTO_APPROVAL_MAX_OUTPUT_TOKENS,
         signal: controller.signal, skipSystemPromptPrefix: true,
+        prepareRequest: request => {
+          // Inspect the exact request that sideQuery will send, including attribution.
+          const fixedRequest = { ...request, messages: [{ role: 'user', content: '' }] }
+          const fixedTokens = roughTokenCountEstimation(JSON.stringify(fixedRequest))
+          const selected = buildEvidence(Math.max(0, inputBudget - fixedTokens))
+          if ('reason' in selected) throw new Error(selected.reason)
+          request.messages = [{ role: 'user', content: selected.content }]
+          let estimatedTokens = roughTokenCountEstimation(JSON.stringify(request))
+          if (estimatedTokens > inputBudget) {
+            // JSON escaping can cost more than the raw evidence estimate. One bounded
+            // rebuild removes optional history; required evidence is never shortened.
+            const reduced = buildEvidence(Math.max(0, selected.estimatedTokens - (estimatedTokens - inputBudget) - 256))
+            if ('reason' in reduced) throw new Error(reduced.reason)
+            request.messages = [{ role: 'user', content: reduced.content }]
+            estimatedTokens = roughTokenCountEstimation(JSON.stringify(request))
+          }
+          if (estimatedTokens > inputBudget) throw new Error('The complete approval request exceeds the model input budget')
+          logForDebugging(`[autoApproval] request inputTokens=${estimatedTokens} inputBudget=${inputBudget} omittedEntries=${selected.omittedEntries}`)
+        },
+        validateRequest: request => {
+          if (roughTokenCountEstimation(JSON.stringify(request)) > inputBudget) {
+            throw new Error('The final attributed approval request exceeds the model input budget')
+          }
+        },
       }).then(response => {
+        logForDebugging(`[autoApproval] response durationMs=${Date.now() - started} stopReason=${response.stop_reason}`)
         // A transport that ignores abort can still return billable usage later.
         deps.recordUsage(response, model)
         return response

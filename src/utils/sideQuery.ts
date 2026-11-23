@@ -45,6 +45,9 @@ export type SideQueryOptions = {
   tool_choice?: ToolChoice
   /** Optional JSON output format for structured responses */
   output_format?: BetaJSONOutputFormat
+  /** Inspect or reduce evidence in the final request before any API call. */
+  prepareRequest?: (request: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming) => void
+  validateRequest?: (request: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming) => void
   /** Max tokens (default: 1024) */
   max_tokens?: number
   /** Max retries (default: 2) */
@@ -178,24 +181,29 @@ export async function sideQuery(opts: SideQueryOptions): Promise<BetaMessage> {
 
   const normalizedModel = normalizeModelStringForAPI(model)
   const start = Date.now()
+  const request: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
+    stream: false,
+    model: normalizedModel,
+    max_tokens,
+    system: systemBlocks,
+    messages,
+    ...(tools && { tools }),
+    ...(tool_choice && { tool_choice }),
+    ...(output_format && { output_config: { format: output_format } }),
+    ...(temperature !== undefined && { temperature }),
+    ...(stop_sequences && { stop_sequences }),
+    ...(thinkingConfig && { thinking: thinkingConfig }),
+    ...(betas.length > 0 && { betas }),
+    metadata: getAPIMetadata(),
+  }
+  opts.prepareRequest?.(request)
+  if (opts.prepareRequest && attributionHeader) {
+    const finalFingerprint = computeFingerprint(extractFirstUserMessageText(request.messages), MACRO.VERSION)
+    systemBlocks[0] = { type: 'text', text: getAttributionHeader(finalFingerprint) }
+  }
+  opts.validateRequest?.(request)
   // biome-ignore lint/plugin: this IS the wrapper that handles OAuth attribution
-  const response = await client.beta.messages.create(
-    {
-      model: normalizedModel,
-      max_tokens,
-      system: systemBlocks,
-      messages,
-      ...(tools && { tools }),
-      ...(tool_choice && { tool_choice }),
-      ...(output_format && { output_config: { format: output_format } }),
-      ...(temperature !== undefined && { temperature }),
-      ...(stop_sequences && { stop_sequences }),
-      ...(thinkingConfig && { thinking: thinkingConfig }),
-      ...(betas.length > 0 && { betas }),
-      metadata: getAPIMetadata(),
-    },
-    { signal },
-  )
+  const response = await client.beta.messages.create(request, { signal })
 
   const requestId =
     (response as { _request_id?: string | null })._request_id ?? undefined
