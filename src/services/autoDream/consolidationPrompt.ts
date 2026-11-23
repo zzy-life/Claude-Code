@@ -49,6 +49,9 @@ Focus on:
 - Merging new signal into existing topic files rather than creating near-duplicates
 - Converting relative dates ("yesterday", "last week") to absolute dates so they remain interpretable after time passes
 - Deleting contradicted facts — if today's investigation disproves an old memory, fix it at the source
+- Applying the same save-eligibility checks to existing memories as to new ones: remove task-specific repair decisions, temporary status, and one-off approvals presented as standing rules
+- Keeping durable project motivations and external constraints only when supported by user evidence and not recoverable from code or project documentation
+- Never replacing removed task details with an inferred general preference the user did not express; a single correction or successful outcome is not a lasting instruction
 
 ## Phase 4 — Prune and index
 
