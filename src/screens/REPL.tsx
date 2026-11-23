@@ -2489,7 +2489,15 @@ export function REPL({
       setMessages(oldMessages => oldMessages.filter(m => m !== tombstonedMessage));
       void removeTranscriptMessage(tombstonedMessage.uuid);
     }, setStreamingThinking, onStreamingText);
-  }, [setMessages, setResponseLength, setStreamMode, setStreamingToolUses, setStreamingThinking, onStreamingText]);
+    // Final usage is written back before message_stop; non-streaming responses
+    // carry stop_reason directly. Reuse the existing count without waiting
+    // for the entire tool loop to finish.
+    if (event.type === 'stream_event' && event.event.type === 'message_stop') {
+      refreshContextWindowUsage();
+    } else if (event.type === 'assistant' && event.message.stop_reason != null) {
+      refreshContextWindowUsage();
+    }
+  }, [setMessages, setResponseLength, setStreamMode, setStreamingToolUses, setStreamingThinking, onStreamingText, refreshContextWindowUsage]);
   const onQueryImpl = useCallback(async (messagesIncludingNewMessages: MessageType[], newMessages: MessageType[], abortController: AbortController, shouldQuery: boolean, additionalAllowedTools: string[], mainLoopModelParam: string, effort?: EffortValue) => {
     // Prepare IDE integration for new prompt. Read mcpClients fresh from
     // store — useManageMCPConnections may have populated it since the
