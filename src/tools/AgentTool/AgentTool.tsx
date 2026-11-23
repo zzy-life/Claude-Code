@@ -688,7 +688,6 @@ export const AgentTool = buildTool({
       const asyncAgentId = earlyAgentId;
       const agentBackgroundTask = registerAsyncAgent({
         agentId: asyncAgentId,
-        approvalTurnScope: toolUseContext.approvalTurnScope,
         description,
         prompt,
         selectedAgent,
@@ -820,7 +819,6 @@ export const AgentTool = buildTool({
         if (!isBackgroundTasksDisabled) {
           const registration = registerAgentForeground({
             agentId: syncAgentId,
-            approvalTurnScope: toolUseContext.approvalTurnScope,
             description,
             prompt,
             selectedAgent,

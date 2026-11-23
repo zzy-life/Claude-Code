@@ -146,12 +146,6 @@ function createPermissionContext(
       return updates.some(update => supportsPersistence(update.destination))
     },
     resolveIfAborted(resolve: (decision: PermissionDecision) => void) {
-      if (toolUseContext.approvalTurnScope?.stop) {
-        resolve(this.buildDeny(`Turn blocked and stopped: ${toolUseContext.approvalTurnScope.stop.reason}`, {
-          type: 'other', reason: 'auto_approval_hard_deny',
-        }))
-        return true
-      }
       if (!toolUseContext.abortController.signal.aborted) return false
       this.logCancelled()
       resolve(this.cancelAndAbort(undefined, true))
@@ -316,7 +310,7 @@ function createPermissionContext(
         : false
       const trimmedFeedback = feedback?.trim()
       const approvalScope = toolUseContext.approvalTurnScope
-      if (trimmedFeedback && approvalScope) {
+      if (trimmedFeedback && approvalScope && !tool.requiresUserInteraction?.()) {
         approvalScope.verifiedAnswers.push({
           toolUseID, toolName: tool.name,
           question: { input, updatedInput },

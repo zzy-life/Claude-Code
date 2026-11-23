@@ -45,8 +45,7 @@ export type PermissionBehavior = 'allow' | 'deny' | 'ask'
 // An approval never rewrites tool input or grants permissions to future calls.
 export type AutoApprovalResult =
   | { decision: 'allow' }
-  | { decision: 'retryable_deny'; reason: string; saferAlternative?: string }
-  | { decision: 'hard_deny'; reason: string }
+  | { decision: 'deny'; reason: string }
   | { decision: 'needs_user'; reason: string }
 
 // ============================================================================

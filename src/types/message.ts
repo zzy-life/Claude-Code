@@ -23,6 +23,8 @@ export type AttachmentMessage = MessageBase & {
 
 export type UserMessage = MessageBase & {
   type: 'user'
+  /** Host-only: an AI permission denial must not trigger Bash sibling cancellation. */
+  autoApprovalDenied?: boolean
   message: {
     content: string | Array<{ type: string; text?: string; [key: string]: unknown }>
     [key: string]: unknown

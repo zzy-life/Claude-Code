@@ -2585,10 +2585,9 @@ export function REPL({
       return;
     }
     const toolUseContext = getToolUseContext(messagesIncludingNewMessages, newMessages, abortController, mainLoopModelParam);
-    const approvalScope = new ApprovalTurnScope(stop => {
-      setMessages(prev => [...prev, createSystemMessage(`Turn blocked and stopped: ${stop.reason} (toolUseID: ${stop.toolUseID})`, 'warning')]);
-    });
+    const approvalScope = new ApprovalTurnScope();
     toolUseContext.approvalTurnScope = approvalScope;
+    toolUseContext.autoApprovalDenials = [];
     toolUseContext.requestLocalApproval = canUseTool;
     approvalScope.rootMessages = messagesIncludingNewMessages;
     approvalScope.updatePermissions(store.getState().toolPermissionContext);

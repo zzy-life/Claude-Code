@@ -33,6 +33,7 @@ import {
   extractTextContent,
   getLastAssistantMessage,
 } from './messages.js'
+import { enqueuePendingNotification } from './messageQueueManager.js'
 import { createDenialTrackingState } from './permissions/denialTracking.js'
 import { parseToolListFromCLI } from './permissions/permissionSetup.js'
 import { recordSidechainTranscript } from './sessionStorage.js'
@@ -399,8 +400,17 @@ export function createSubagentContext(
         ? cloneContentReplacementState(parentContext.contentReplacementState)
         : undefined),
 
-    // Ordinary descendants retain the root turn even with an independent controller.
+    // Share authorization evidence, not denial history or a cancellation domain.
     approvalTurnScope: parentContext.approvalTurnScope,
+    autoApprovalDenials: [],
+    reportAutoApprovalDenial: denial => {
+      enqueuePendingNotification({
+        value: `Subagent action denied by the permission reviewer (not user authorization): ${JSON.stringify(denial)}. The subagent is still running; any revised action requires normal permission checks.`,
+        mode: 'task-notification',
+        priority: 'next',
+        agentId: parentContext.agentId,
+      })
+    },
     requestLocalApproval: parentContext.requestLocalApproval,
     appendSystemMessage: parentContext.appendSystemMessage,
     // AbortController

@@ -55,13 +55,11 @@ export function requiresHumanApproval(
 }
 
 export const AUTO_APPROVAL_TIMEOUT_MS = 60_000
-export const AUTO_APPROVAL_MAX_DENIALS = 3
 export const AUTO_APPROVAL_MAX_OUTPUT_TOKENS = 512
 
 export const autoApprovalResultSchema = z.discriminatedUnion('decision', [
   z.object({ decision: z.literal('allow') }).strict(),
-  z.object({ decision: z.literal('retryable_deny'), reason: z.string().trim().min(1), saferAlternative: z.string().trim().min(1).optional() }).strict(),
-  z.object({ decision: z.literal('hard_deny'), reason: z.string().trim().min(1) }).strict(),
+  z.object({ decision: z.literal('deny'), reason: z.string().trim().min(1) }).strict(),
   z.object({ decision: z.literal('needs_user'), reason: z.string().trim().min(1) }).strict(),
 ])
 
@@ -107,7 +105,6 @@ export async function reviewToolWithAutoApproval(args: {
     supportsStructuredOutputs: modelSupportsStructuredOutputs,
     recordUsage: recordAutoApprovalUsage, isActive: usesLocalAutoApproval,
   }
-  scope.throwIfStopped()
   const inputJSON = JSON.stringify(input)
   const revision = scope.permissionRevision
   const key = `${revision}:${tool.name}:${inputJSON}`
@@ -121,9 +118,6 @@ export async function reviewToolWithAutoApproval(args: {
     if (!deps.isActive(context)) return manualDecision(result, 'The current mode no longer allows AI approval')
     if (requiresHumanApproval(result, !!tool.requiresUserInteraction?.(), false)) {
       return manualDecision(result, result.message)
-    }
-    if (scope.consecutiveDenials >= AUTO_APPROVAL_MAX_DENIALS) {
-      return manualDecision(result, 'Three consecutive actions were denied; the user must decide how to proceed')
     }
     const model = deps.resolveModel(scope.rootModel)
     if (!model) return manualDecision(result, 'Cannot select an approval model because the root session model family could not be determined')
@@ -143,12 +137,12 @@ export async function reviewToolWithAutoApproval(args: {
         additionalWorkingDirectories: [...context.getAppState().toolPermissionContext.additionalWorkingDirectories],
         notice: 'Existing deny/explicit ask/mandatory safety checks cannot be overridden; no system-level sandbox is promised.',
       },
-      previousDenials: scope.previousDenials,
+      previousDenials: context.autoApprovalDenials ?? [],
       verifiedAnswers: scope.verifiedAnswers,
+      taskAnswers: scope.taskAnswers,
     })
     if ('reason' in evidence) return manualDecision(result, evidence.reason)
     const controller = new AbortController()
-    const unregisterScope = scope.registerController(controller)
     const cancel = () => controller.abort()
     context.abortController.signal.addEventListener('abort', cancel, { once: true })
     const unregisterInvalidation = scope.onInvalidated(cancel)
@@ -191,44 +185,35 @@ export async function reviewToolWithAutoApproval(args: {
       }
       approval = autoApprovalResultSchema.parse(JSON.parse(response.content[0].text))
     } catch (error) {
-      scope.throwIfStopped()
       if (context.abortController.signal.aborted) throw new AbortError()
       return manualDecision(result, controller.signal.aborted
         ? 'Approval timed out or permissions changed; the action was not executed'
         : `The approval service is unavailable: ${errorMessage(error)}`)
     } finally {
       clearTimeout(timer)
-      unregisterScope()
       unregisterInvalidation()
       context.abortController.signal.removeEventListener('abort', cancel)
       // Abandon every late result before opening the manual queue.
       controller.abort()
     }
-    scope.throwIfStopped()
     if (context.abortController.signal.aborted) throw new AbortError()
     if (scope.permissionRevision !== revision || !deps.isActive(context) || JSON.stringify(input) !== inputJSON) {
       return manualDecision(result, 'The input or permissions changed during approval; the previous result is no longer valid')
     }
-    if (approval.decision === 'hard_deny') {
-      scope.stopTurn({ decision: 'hard_deny', toolUseID, reason: approval.reason })
-      return { behavior: 'deny', message: `Turn blocked and stopped: ${approval.reason}`, decisionReason: { type: 'other', reason: 'auto_approval_hard_deny' } }
-    }
     if (approval.decision === 'needs_user') return manualDecision(result, approval.reason)
-    if (approval.decision === 'retryable_deny') {
-      scope.consecutiveDenials++
-      scope.previousDenials.push({ toolName: tool.name, reason: approval.reason })
-      if (scope.consecutiveDenials >= AUTO_APPROVAL_MAX_DENIALS) return manualDecision(result, approval.reason)
-      let message = `This action was denied. Try a safer alternative: ${approval.reason}`
-      if (approval.saferAlternative) {
-        message += ` Suggested alternative: ${approval.saferAlternative}`
-      }
-      message += '\nDo not bypass this denial by switching shells, encodings, tools, or subagents. Any new action must go through permission checks again.'
+    if (approval.decision === 'deny') {
+      context.autoApprovalDenials ??= []
+      context.autoApprovalDenials.push({ toolName: tool.name, reason: approval.reason })
+      const message = `This action was denied: ${approval.reason}`
       context.appendSystemMessage?.(createSystemMessage(message, 'warning'))
-      return { behavior: 'deny', message, decisionReason: { type: 'other', reason: 'auto_approval_retryable_deny' } }
+      // The caller receives the tool error; the direct parent receives a separate notification.
+      if (context.agentId) {
+        context.reportAutoApprovalDenial?.({ agentId: context.agentId, toolUseID, toolName: tool.name, reason: approval.reason })
+      }
+      return { behavior: 'deny', message, decisionReason: { type: 'other', reason: 'auto_approval_deny' } }
     }
     // Re-run pure permission checks only, never side-effectful hooks.
     const fresh = await args.recheck()
-    scope.throwIfStopped()
     if (context.abortController.signal.aborted) throw new AbortError()
     if (fresh.behavior === 'deny') return fresh
     if (scope.permissionRevision !== revision || !deps.isActive(context) || JSON.stringify(input) !== inputJSON ||
@@ -236,7 +221,6 @@ export async function reviewToolWithAutoApproval(args: {
       (fresh.updatedInput && JSON.stringify(fresh.updatedInput) !== inputJSON)) {
       return manualDecision(result, 'Permissions or arguments changed before execution; approval is required again')
     }
-    scope.consecutiveDenials = 0
     return {
       behavior: 'allow', updatedInput: JSON.parse(inputJSON),
       decisionReason: { type: 'mode', mode: 'auto' },

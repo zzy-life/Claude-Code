@@ -6,7 +6,7 @@ import { logError } from '../utils/log.js';
 import { Select } from './CustomSelect/index.js';
 import { Dialog } from './design-system/Dialog.js';
 
-export const AUTO_MODE_DESCRIPTION = 'Auto mode uses a separate model to review tool permission requests, which incurs additional model charges. The review can make mistakes and allow harmful actions or reject safe ones. Some actions still require manual approval. A hard deny stops the entire current turn instead of letting Claude retry another approach. Auto mode is not a sandbox and does not isolate commands, files, or network access. Only enable it in an environment where you accept these risks. Shift+Tab to change mode.';
+export const AUTO_MODE_DESCRIPTION = 'Auto mode uses a separate model to review tool permission requests, which incurs additional model charges. The review can make mistakes and allow harmful actions or reject safe ones. Some actions still require manual approval. A denial blocks only the requested action and returns its reason; agents and already running commands continue. Subagent denials are reported to their parent. Human-only approval uses the tool-permission dialog, not ordinary text or question answers. Auto mode is not a sandbox and does not isolate commands, files, or network access. Only enable it in an environment where you accept these risks. Shift+Tab to change mode.';
 
 type Props = {
   onAccept(): void;

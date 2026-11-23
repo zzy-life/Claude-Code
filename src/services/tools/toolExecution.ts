@@ -458,7 +458,6 @@ export async function* runToolUse(
 
   const toolInput = toolUse.input as { [key: string]: string }
   try {
-    toolUseContext.approvalTurnScope?.throwIfStopped()
     if (toolUseContext.abortController.signal.aborted) {
       logEvent('tengu_tool_use_cancelled', {
         toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -1108,13 +1107,19 @@ async function checkPermissionsAndCallTool(
       }
     }
 
+    const denialMessage = createUserMessage({
+      content: messageContent,
+      imagePasteIds: rejectImageIds,
+      toolUseResult: `Error: ${errorMessage}`,
+      sourceToolAssistantUUID: assistantMessage.uuid,
+    })
     resultingMessages.push({
-      message: createUserMessage({
-        content: messageContent,
-        imagePasteIds: rejectImageIds,
-        toolUseResult: `Error: ${errorMessage}`,
-        sourceToolAssistantUUID: assistantMessage.uuid,
-      }),
+      message: {
+        ...denialMessage,
+        // A reviewed rejection is not a failed Bash process: do not cancel sibling tools.
+        autoApprovalDenied: permissionDecision.decisionReason?.type === 'other' &&
+          permissionDecision.decisionReason.reason === 'auto_approval_deny',
+      },
     })
 
     // Run PermissionDenied hooks for auto mode classifier denials.
@@ -1233,7 +1238,10 @@ async function checkPermissionsAndCallTool(
   // the backfill-expanded value, restore the model's original so the tool
   // result string embeds the path the model emitted — keeps transcript/VCR
   // hashes stable. Other hook modifications flow through unchanged.
-  if (
+  if (permissionDecision.autoApprovalReceipt) {
+    // AI approved the normalized input. Never restore a display-only path after approval.
+    callInput = processedInput
+  } else if (
     backfilledClone &&
     processedInput !== callInput &&
     typeof processedInput === 'object' &&
@@ -1252,7 +1260,6 @@ async function checkPermissionsAndCallTool(
   }
   try {
     // Approval/hook waits may have outlived the turn; never dispatch a late allow.
-    toolUseContext.approvalTurnScope?.throwIfStopped()
     if (toolUseContext.abortController.signal.aborted) {
       throw new AbortError()
     }

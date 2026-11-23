@@ -1,12 +1,24 @@
-// 一键契约测试：真实审批服务/停止域/模型选择 + 内存依赖夹具。
+// 一键契约测试：真实审批服务/证据与权限 revision/模型选择 + 内存依赖夹具。
 // 不调用真实 API、不执行工具动作、不读写真实用户设置；不等同于终端端到端测试。
+// 运行：bun run ./test-auto-approval.ts。本轮仅编写，未执行；PASS 只会在实际运行后输出。
 const TEST_TIMEOUT_MS = 5
 const OVERSIZED_ACTION_LENGTH = 200_000
 const TEST_MODEL_IDS = { opus: 'fixture-opus', sonnet: 'fixture-sonnet', haiku: 'fixture-haiku' }
 const TEST_USAGE = { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 20, cache_creation_input_tokens: 5 }
 const TEST_COST_USD = 0.01
 const TEST_API_ERROR = 'Injected approval service failure'
-const STOP_REASON = '测试：操作超出授权范围'
+const DENIAL_REASON = 'The action is outside the authorized scope'
+const TEST_AGENT_ID = 'fixture-child-a'
+const HISTORY_MEDIA_MARKER = 'FIXTURE_PRIVATE_MEDIA_PAYLOAD_'
+const HISTORY_MEDIA_PAYLOAD = HISTORY_MEDIA_MARKER + 'a'.repeat(OVERSIZED_ACTION_LENGTH)
+const TEST_MEDIA_TYPES = ['image', 'document'] as const
+const TEST_ACTION_COUNT = 4
+const TASK_ANSWER = {
+  toolUseID: 'task-scope-question', toolName: 'AskUserQuestion',
+  question: { questions: [{ question: '继续检查还是发布？', options: [{ label: '检查' }, { label: '发布' }] }] },
+  answer: { answers: { '继续检查还是发布？': '仅检查临时目录，不要发布或上传' } },
+}
+const CONCURRENT_REVIEW_COUNT = 2
 const TOOL_USE_ID = 'approval-test-tool'
 const TEST_ROOT_MODEL = 'test-root-model'
 const TEST_REVIEW_MODEL = 'test-review-model'
@@ -69,7 +81,7 @@ mock.module('./src/utils/model/modelStrings.js', () => ({ getModelStrings: () =>
 mock.module('./src/cost-tracker.js', () => ({ addToTotalSessionCost: (cost: number) => { sessionCost += cost; sessionUsageCalls++ } }))
 mock.module('./src/utils/modelCost.js', () => ({ calculateUSDCost: () => TEST_COST_USD }))
 
-const { ApprovalTurnScope, ApprovalTurnStoppedError } = await import('./src/utils/permissions/approvalTurnScope.js')
+const { ApprovalTurnScope } = await import('./src/utils/permissions/approvalTurnScope.js')
 const { buildAutoApprovalEvidence } = await import('./src/utils/permissions/autoApprovalContext.js')
 const { getNextPermissionMode } = await import('./src/utils/permissions/getNextPermissionMode.js')
 const { allowsAutomaticWorkspaceEdits, requiresHumanApproval, supportsLocalAutoApproval, reviewToolWithAutoApproval, autoApprovalResultSchema } = await import('./src/utils/permissions/autoApproval.js')
@@ -80,43 +92,27 @@ import type { Tool, ToolPermissionContext, ToolUseContext } from './src/Tool.js'
 import { EXTERNAL_PERMISSION_MODES, INTERNAL_PERMISSION_MODES, PERMISSION_MODES } from './src/types/permissions.js'
 import type { AssistantMessage } from './src/types/message.js'
 
-let notifications = 0
-const scope = new ApprovalTurnScope(() => { notifications++ })
-const otherTurn = new ApprovalTurnScope(() => {})
-const root = new AbortController()
-const background = new AbortController()
-const removed = new AbortController()
-const unregisterRoot = scope.registerController(root)
-const unregisterBackground = scope.registerController(background)
-const unregisterRemoved = scope.registerController(removed)
-unregisterRemoved()
-
-// ESC 只取消原控制器，不触发轮次硬停止，也不取消独立后台代理。
-root.abort('interrupt')
-assert.equal(scope.stop === undefined, true)
-assert.equal(background.signal.aborted, false)
-scope.stopTurn({ decision: 'hard_deny', toolUseID: TOOL_USE_ID, reason: STOP_REASON })
-assert.equal(background.signal.aborted, true)
-assert.equal(removed.signal.aborted, false)
-assert.equal(otherTurn.signal.aborted, false)
-assert.equal(scope.stop?.reason, STOP_REASON)
-assert.throws(() => scope.throwIfStopped(), ApprovalTurnStoppedError)
-scope.stopTurn({ decision: 'hard_deny', toolUseID: TOOL_USE_ID, reason: '不得覆盖第一次拒绝' })
-assert.equal(notifications, 1)
-assert.equal(scope.stop?.reason, STOP_REASON)
-const late = new AbortController()
-scope.registerController(late)()
-assert.equal(late.signal.aborted, true)
-unregisterRoot()
-unregisterBackground()
-
-// 展示/记录回调失败也不能阻止安全取消。
-const failingScope = new ApprovalTurnScope(() => { throw new Error('测试记录失败') })
-const failingController = new AbortController()
-failingScope.registerController(failingController)
-assert.throws(() => failingScope.stopTurn({ decision: 'hard_deny', toolUseID: TOOL_USE_ID, reason: STOP_REASON }))
-assert.equal(failingController.signal.aborted, true)
-assert.throws(() => failingScope.throwIfStopped(), ApprovalTurnStoppedError)
+// scope 仅管理证据/权限一致性及订阅生命周期，不管理代理取消。
+const scope = new ApprovalTurnScope()
+const otherTurn = new ApprovalTurnScope()
+let invalidations = 0
+let subscriptionsReleased = 0
+scope.trackPermissions(() => { subscriptionsReleased++ })
+const releaseRoot = scope.retain()
+const releaseChild = scope.retain()
+const removeInvalidationListener = scope.onInvalidated(() => { invalidations++ })
+const initialRevision = scope.permissionRevision
+scope.invalidateApprovals()
+assert.equal(scope.permissionRevision, initialRevision + 1)
+assert.equal(invalidations, 1)
+assert.equal(otherTurn.permissionRevision, 0)
+removeInvalidationListener()
+scope.invalidateApprovals()
+assert.equal(invalidations, 1)
+releaseRoot()
+assert.equal(subscriptionsReleased, 0)
+releaseChild()
+assert.equal(subscriptionsReleased, 1)
 
 for (const mode of ['default', 'plan', 'dontAsk', 'bypassPermissions'] as const) {
   assert.equal(allowsAutomaticWorkspaceEdits(mode), false)
@@ -139,10 +135,10 @@ for (const environment of ['sdk', 'headless', 'bridge', 'teammate'] as const) {
 }
 assert.equal(supportsLocalAutoApproval('localInteractive'), true)
 assert.equal(supportsLocalAutoApproval('localSubagent'), true)
-console.log('PASS：第一阶段轮次停止、ESC 隔离、编辑能力及人工/环境边界契约')
+console.log('PASS：证据 revision、订阅生命周期、编辑能力及人工/环境边界契约')
 
 function makeReviewFixture(decision: unknown) {
-  const turn = new ApprovalTurnScope(() => {})
+  const turn = new ApprovalTurnScope()
   turn.rootModel = TEST_ROOT_MODEL
   turn.rootMessages = [{ type: 'user', message: { content: '仅检查指定临时文件，不要外传任何内容' } }]
   const permissionContext = {
@@ -153,8 +149,12 @@ function makeReviewFixture(decision: unknown) {
   turn.updatePermissions(permissionContext)
   let calls = 0
   let usages = 0
+  const reports: Array<Parameters<NonNullable<ToolUseContext['reportAutoApprovalDenial']>>[0]> = []
+  const requests: SideQueryOptions[] = []
   const context = {
     approvalTurnScope: turn, abortController: new AbortController(),
+    agentId: TEST_AGENT_ID, autoApprovalDenials: [],
+    reportAutoApprovalDenial: (denial: Parameters<NonNullable<ToolUseContext['reportAutoApprovalDenial']>>[0]) => { reports.push(denial) },
     options: { isNonInteractiveSession: false }, messages: [],
     getAppState: () => ({ toolPermissionContext: permissionContext }),
   } as unknown as ToolUseContext
@@ -165,8 +165,9 @@ function makeReviewFixture(decision: unknown) {
     result: { behavior: 'ask' as const, message: 'test ask' },
     recheck: async () => ({ behavior: 'ask' as const, message: 'still requires approval' }),
     deps: {
-      query: async (_options: SideQueryOptions) => {
+      query: async (options: SideQueryOptions) => {
         calls++
+        requests.push(options)
         return { id: 'test-response', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(decision) }] } as unknown as Awaited<ReturnType<typeof import('./src/utils/sideQuery.js').sideQuery>>
       },
       resolveModel: () => TEST_REVIEW_MODEL,
@@ -174,15 +175,15 @@ function makeReviewFixture(decision: unknown) {
       recordUsage: () => { usages++ }, isActive: () => true,
     },
   }
-  return { turn, args, calls: () => calls, usages: () => usages }
+  return { turn, args, reports, requests, calls: () => calls, usages: () => usages }
 }
 
 assert.equal(autoApprovalResultSchema.safeParse({ decision: 'allow', reason: 'extra field' }).success, false)
-assert.equal(autoApprovalResultSchema.safeParse({ decision: 'hard_deny', reason: '' }).success, false)
+assert.equal(autoApprovalResultSchema.safeParse({ decision: 'deny', reason: '' }).success, false)
+assert.equal(autoApprovalResultSchema.safeParse({ decision: 'deny', reason: DENIAL_REASON, unexpected: true }).success, false)
 for (const decision of [
-  { decision: 'allow' }, { decision: 'retryable_deny', reason: STOP_REASON },
-  { decision: 'hard_deny', reason: STOP_REASON }, { decision: 'needs_user', reason: STOP_REASON },
-  { decision: 'invalid' },
+  { decision: 'allow' }, { decision: 'deny', reason: DENIAL_REASON },
+  { decision: 'needs_user', reason: DENIAL_REASON }, { decision: 'invalid' },
 ]) {
   const fixture = makeReviewFixture(decision)
   const [first, second] = await Promise.all([reviewToolWithAutoApproval(fixture.args), reviewToolWithAutoApproval(fixture.args)])
@@ -195,13 +196,19 @@ for (const decision of [
       assert.equal(first.autoApprovalReceipt?.inputJSON, JSON.stringify(fixture.args.input))
       assert.equal(first.autoApprovalReceipt, second.behavior === 'allow' ? second.autoApprovalReceipt : undefined)
     }
-  } else if (decision.decision === 'hard_deny') {
-    assert.equal(fixture.turn.stop?.reason, STOP_REASON)
-  } else if (decision.decision === 'retryable_deny') {
-    assert.equal(first.behavior, 'deny')
-    assert.equal(fixture.turn.stop, undefined)
+  } else if (decision.decision === 'deny') {
+    if (first.behavior !== 'deny') assert.fail('模型 deny 必须返回普通权限拒绝')
+    assert.equal(first.message.includes(DENIAL_REASON), true)
+    assert.deepEqual(fixture.reports, [{ agentId: TEST_AGENT_ID, toolUseID: TOOL_USE_ID, toolName: 'TestRead', reason: DENIAL_REASON }])
+    assert.deepEqual(fixture.args.context.autoApprovalDenials, [{ toolName: 'TestRead', reason: DENIAL_REASON }])
+    // 顺序重入也共享同一拒绝，不再次请求、记历史或通知父代理。
+    assert.equal(await reviewToolWithAutoApproval(fixture.args), first)
+    assert.equal(fixture.reports.length, 1)
+    assert.equal(fixture.calls(), 1)
+    assert.equal(fixture.args.context.autoApprovalDenials?.length, 1)
   } else {
     assert.equal(first.behavior, 'ask')
+    assert.equal(fixture.reports.length, 0)
   }
 }
 
@@ -213,12 +220,13 @@ invalidated.args.deps.query = async () => {
 }
 assert.equal((await reviewToolWithAutoApproval(invalidated.args)).behavior, 'ask')
 
-// 模拟另一个人工请求补充限制；即使传输忽略取消并返回 allow，也不得生效。
+// 模拟另一个工具权限弹窗补充限制；即使传输忽略取消并返回 allow，也不得生效。
+// 这里只注入宿主记录，不宣称直接运行了真实弹窗回调。
 const answered = makeReviewFixture({ decision: 'allow' })
 answered.args.deps.query = async () => {
   answered.turn.verifiedAnswers.push({
-    toolUseID: 'parallel-question', toolName: 'AskUserQuestion',
-    question: { text: '是否发布？' }, answer: { text: '只检查，不要发布' },
+    toolUseID: 'parallel-permission-dialog', toolName: 'TestRead',
+    question: { input: { path: 'temporary-safe-target' } }, answer: { feedback: '只检查，不要发布' },
   })
   answered.turn.invalidateApprovals()
   return { id: 'old-evidence-response', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"decision":"allow"}' }] } as unknown as Awaited<ReturnType<typeof import('./src/utils/sideQuery.js').sideQuery>>
@@ -228,6 +236,60 @@ const answeredResult = await reviewToolWithAutoApproval(answered.args)
 assert.equal(answered.turn.permissionRevision, answeredRevision + 1)
 assert.equal(answeredResult.behavior, 'ask')
 assert.equal(answeredResult.behavior === 'ask' && answeredResult.autoApprovalNeedsUser, true)
+
+// 两个独立 toolUseID 已进入 query 后，另一交互问答新增限制。
+// 注入等价的宿主写入/失效，不执行真实 interactiveHandler；传输故意忽略 abort。
+const taskAnswered = makeReviewFixture({ decision: 'allow' })
+let releaseLateResponses!: () => void
+const lateResponses = new Promise<void>(resolve => { releaseLateResponses = resolve })
+let markBothStarted!: () => void
+const bothStarted = new Promise<void>(resolve => { markBothStarted = resolve })
+let startedReviews = 0
+const reviewSignals: AbortSignal[] = []
+const pendingTaskReviews = Array.from({ length: CONCURRENT_REVIEW_COUNT }, (_, index) => reviewToolWithAutoApproval({
+  ...taskAnswered.args, toolUseID: `${TOOL_USE_ID}-task-inflight-${index}`,
+  deps: {
+    ...taskAnswered.args.deps,
+    query: async (options: SideQueryOptions) => {
+      assert.ok(options.signal)
+      reviewSignals.push(options.signal)
+      startedReviews++
+      if (startedReviews === CONCURRENT_REVIEW_COUNT) markBothStarted()
+      await lateResponses
+      return { id: `late-task-answer-${index}`, stop_reason: 'end_turn', content: [{ type: 'text', text: '{"decision":"allow"}' }] } as unknown as Awaited<ReturnType<typeof import('./src/utils/sideQuery.js').sideQuery>>
+    },
+  },
+}))
+await bothStarted
+const beforeTaskAnswerRevision = taskAnswered.turn.permissionRevision
+taskAnswered.turn.taskAnswers.push(TASK_ANSWER)
+taskAnswered.turn.invalidateApprovals()
+assert.equal(taskAnswered.turn.permissionRevision, beforeTaskAnswerRevision + 1)
+for (const signal of reviewSignals) assert.equal(signal.aborted, true)
+// 审批请求被失效，不代表调用代理被取消。
+assert.equal(taskAnswered.args.context.abortController.signal.aborted, false)
+for (const result of await Promise.all(pendingTaskReviews)) {
+  assert.equal(result.behavior, 'ask')
+  assert.equal(result.behavior === 'ask' && result.autoApprovalNeedsUser, true)
+  assert.equal('autoApprovalReceipt' in result, false)
+}
+releaseLateResponses()
+assert.deepEqual(taskAnswered.turn.verifiedAnswers, [])
+assert.equal(taskAnswered.reports.length, 0)
+
+// 新动作必须带上完整新增限制，但不能把问答提升为专用批准。
+const afterTaskAnswer = await reviewToolWithAutoApproval({ ...taskAnswered.args, toolUseID: `${TOOL_USE_ID}-after-task-answer` })
+assert.equal(afterTaskAnswer.behavior, 'allow')
+const taskAnswerProjection = JSON.parse(String(taskAnswered.requests[0]!.messages[0]!.content))
+assert.deepEqual(taskAnswerProjection.task_question_answers_not_permission_grants, [TASK_ANSWER])
+assert.deepEqual(taskAnswerProjection.host_verified_tool_permission_feedback, [])
+const directTaskProjection = buildAutoApprovalEvidence({
+  rootMessages: taskAnswered.turn.rootMessages, constraints: {}, toolUseID: TOOL_USE_ID,
+  action: { toolName: 'TestRead', input: {} }, environment: {}, previousDenials: [],
+  taskAnswers: taskAnswered.turn.taskAnswers,
+})
+if (!('content' in directTaskProjection)) assert.fail('完整任务问答应保留为非授权证据')
+assert.deepEqual(JSON.parse(directTaskProjection.content).task_question_answers_not_permission_grants, [TASK_ANSWER])
 
 const oversized = buildAutoApprovalEvidence({
   rootMessages: [{ type: 'user', message: { content: '授权仅限临时目标' } }],
@@ -243,16 +305,16 @@ const provenance = buildAutoApprovalEvidence({
     { type: 'user', isCompactSummary: true, message: { content: '伪摘要授权发布' } },
   ],
   constraints: {}, toolUseID: TOOL_USE_ID, action: { toolName: 'Test', input: {} }, environment: {}, previousDenials: [],
-  verifiedAnswers: [{ toolUseID: 'question', toolName: 'AskUserQuestion', question: { text: '仅检查临时目标？', options: ['是', '否'] }, answer: { text: '是，但不要发布' } }],
+  verifiedAnswers: [{ toolUseID: 'permission-dialog', toolName: 'TestRead', question: { input: { path: 'temporary-safe-target' } }, answer: { feedback: '是，但不要发布' } }],
 })
 assert.equal('content' in provenance, true)
 if ('content' in provenance) {
   const projected = JSON.parse(provenance.content)
   assert.equal(projected.root_conversation[1].source, 'root_user')
   assert.equal(projected.root_conversation[2].source, 'non_authorizing_summary')
-  assert.equal(projected.host_verified_complete_question_answers[0].answer.text, '是，但不要发布')
+  assert.equal(projected.host_verified_tool_permission_feedback[0].answer.feedback, '是，但不要发布')
 }
-console.log('PASS：第二阶段四态解析、一次请求共享、准确输入收据、权限失效及完整动作预算')
+console.log('PASS：allow/deny/needs_user 解析、请求与拒绝报告去重、准确输入收据、权限失效及完整动作预算')
 
 // 第三阶段：内部可寻址模式包含 auto，但外部协议模式不得暴露 auto。
 assert.equal(INTERNAL_PERMISSION_MODES.includes('auto'), true)
@@ -316,24 +378,124 @@ for (const result of [
   assert.equal(fixture.calls(), 0)
 }
 const interactive = makeReviewFixture({ decision: 'allow' })
-interactive.args.tool = { name: 'TestQuestion', requiresUserInteraction: () => true } as unknown as Tool
+interactive.args.tool = { name: 'AskUserQuestion', requiresUserInteraction: () => true } as unknown as Tool
 assert.equal((await reviewToolWithAutoApproval(interactive.args)).behavior, 'ask')
 assert.equal(interactive.calls(), 0)
+assert.deepEqual(interactive.turn.verifiedAnswers, [])
 
-// 拒绝累计属于同一 scope；第三次转人工，后续动作不再请求模型。
-const denials = makeReviewFixture({ decision: 'retryable_deny', reason: STOP_REASON })
-for (let index = 0; index < 4; index++) {
-  const result = await reviewToolWithAutoApproval({ ...denials.args, toolUseID: `${TOOL_USE_ID}-denial-${index}` })
-  assert.equal(result.behavior, index < 2 ? 'deny' : 'ask')
-  assert.equal(denials.turn.stop, undefined)
+// 已有 Question 调用/回答仍只是工具证据，普通文字不生成专用工具批准记录。
+// 这里验证上下文投影，不模拟真实 AskUserQuestion 执行或授权回调。
+const questionEvidence = buildAutoApprovalEvidence({
+  rootMessages: [
+    { type: 'user', message: { content: '完成检查，发布前必须单独确认' } },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'ordinary-question', name: 'AskUserQuestion', input: { questions: ['是否继续检查？'] } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'ordinary-question', content: '继续' }] } },
+  ] as unknown as Message[],
+  constraints: {}, toolUseID: TOOL_USE_ID, action: { toolName: 'TestRead', input: {} },
+  environment: {}, previousDenials: [],
+})
+if (!('content' in questionEvidence)) assert.fail('普通问答历史应能作为工具证据投影')
+const projectedQuestion = JSON.parse(questionEvidence.content)
+assert.deepEqual(projectedQuestion.host_verified_tool_permission_feedback, [])
+assert.equal(projectedQuestion.root_conversation[2].source, 'tool_evidence_not_user_authorization')
+
+// 拒绝仅影响当前动作；父/调用子代理/兄弟及后台 Shell 控制器均保持存活。
+// 这些是内存控制器及服务并发，不是运行真实 Agent、Shell 或 StreamingToolExecutor。
+const deniedChild = makeReviewFixture({ decision: 'deny', reason: DENIAL_REASON })
+const parentController = new AbortController()
+const siblingController = new AbortController()
+const backgroundShellController = new AbortController()
+const childController = deniedChild.args.context.abortController
+// 沿用普通父取消的传播方向；审批拒绝不应触发这条链。
+parentController.signal.addEventListener('abort', () => {
+  childController.abort()
+  siblingController.abort()
+  backgroundShellController.abort()
+}, { once: true })
+const siblingReports: typeof deniedChild.reports = []
+const siblingContext = {
+  ...deniedChild.args.context,
+  abortController: siblingController,
+  agentId: 'fixture-child-b', autoApprovalDenials: [],
+  reportAutoApprovalDenial: (denial: typeof deniedChild.reports[number]) => { siblingReports.push(denial) },
+} as ToolUseContext
+let finishSiblingReview!: () => void
+const siblingReady = new Promise<void>(resolve => { finishSiblingReview = resolve })
+const siblingPending = reviewToolWithAutoApproval({
+  ...deniedChild.args, context: siblingContext, toolUseID: `${TOOL_USE_ID}-sibling`,
+  deps: {
+    ...deniedChild.args.deps,
+    query: async () => {
+      await siblingReady
+      return { id: 'sibling-response', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"decision":"allow"}' }] } as unknown as Awaited<ReturnType<typeof import('./src/utils/sideQuery.js').sideQuery>>
+    },
+  },
+})
+const childDenial = await reviewToolWithAutoApproval(deniedChild.args)
+if (childDenial.behavior !== 'deny') assert.fail('拒绝必须正常返回，而不是抛出任务中止异常')
+assert.equal(childDenial.message.includes(DENIAL_REASON), true)
+for (const controller of [parentController, childController, siblingController, backgroundShellController]) {
+  assert.equal(controller.signal.aborted, false)
 }
-assert.equal(denials.calls(), 3)
-const safer = makeReviewFixture({ decision: 'allow' })
-safer.turn.consecutiveDenials = 2
-await reviewToolWithAutoApproval(safer.args)
-assert.equal(safer.turn.consecutiveDenials, 0)
-await reviewToolWithAutoApproval({ ...safer.args, toolUseID: `${TOOL_USE_ID}-new-action` })
-assert.equal(safer.calls(), 2)
+assert.equal(deniedChild.reports.length, 1)
+assert.equal(siblingReports.length, 0)
+assert.deepEqual(siblingContext.autoApprovalDenials, [])
+finishSiblingReview()
+assert.equal((await siblingPending).behavior, 'allow')
+
+// 同一子代理提交不同输入/新 toolUseID，第四个动作仍独立请求，不因历史拒绝转人工。
+for (let index = 1; index < TEST_ACTION_COUNT; index++) {
+  const result = await reviewToolWithAutoApproval({
+    ...deniedChild.args,
+    toolUseID: `${TOOL_USE_ID}-revised-${index}`,
+    input: { path: `revised-target-${index}` },
+  })
+  assert.equal(result.behavior, 'deny')
+  assert.equal(childController.signal.aborted, false)
+}
+assert.equal(deniedChild.calls(), TEST_ACTION_COUNT)
+assert.equal(deniedChild.reports.length, TEST_ACTION_COUNT)
+assert.equal(deniedChild.args.context.autoApprovalDenials?.length, TEST_ACTION_COUNT)
+assert.deepEqual(siblingContext.autoApprovalDenials, [])
+const revisedEvidence = JSON.parse(String(deniedChild.requests[1]!.messages[0]!.content))
+assert.deepEqual(revisedEvidence.previous_denials, [{ toolName: 'TestRead', reason: DENIAL_REASON }])
+
+// 父代理自身的新动作也重新审批；历史不是全轮锁定，也不授权未来动作。
+const parentContext = {
+  ...deniedChild.args.context,
+  agentId: undefined, abortController: parentController, autoApprovalDenials: [],
+} as ToolUseContext
+await reviewToolWithAutoApproval({ ...deniedChild.args, context: parentContext, toolUseID: `${TOOL_USE_ID}-parent`, input: { path: 'parent-target' } })
+assert.equal(deniedChild.calls(), TEST_ACTION_COUNT + 1)
+assert.equal(deniedChild.reports.length, TEST_ACTION_COUNT)
+assert.deepEqual(parentContext.autoApprovalDenials, [{ toolName: 'TestRead', reason: DENIAL_REASON }])
+
+// 旧 toolUseID 改参不能偷用原决定；必须创建新动作。
+assert.equal((await reviewToolWithAutoApproval({ ...deniedChild.args, input: { path: 'changed-with-old-id' } })).behavior, 'ask')
+assert.equal(deniedChild.calls(), TEST_ACTION_COUNT + 1)
+const explicitAskAfterDenial = await reviewToolWithAutoApproval({
+  ...deniedChild.args, toolUseID: `${TOOL_USE_ID}-explicit-ask`,
+  result: { behavior: 'ask', message: 'Must ask the user', decisionReason: {
+    type: 'rule', rule: { source: 'userSettings', ruleBehavior: 'ask', ruleValue: { toolName: 'TestRead' } },
+  } },
+})
+assert.equal(explicitAskAfterDenial.behavior, 'ask')
+assert.equal(deniedChild.calls(), TEST_ACTION_COUNT + 1)
+
+// 嵌套来源只送当前 context 的直接父回调，不复用其他代理的回调。
+// 此处验证服务回调选择与去重，不验证真实通知队列路由。
+const nestedReports: typeof deniedChild.reports = []
+const nestedContext = {
+  ...deniedChild.args.context,
+  agentId: 'fixture-grandchild', abortController: new AbortController(), autoApprovalDenials: [],
+  reportAutoApprovalDenial: (denial: typeof deniedChild.reports[number]) => { nestedReports.push(denial) },
+} as ToolUseContext
+const nestedArgs = { ...deniedChild.args, context: nestedContext, toolUseID: `${TOOL_USE_ID}-nested`, input: { path: 'nested-target' } }
+await Promise.all([reviewToolWithAutoApproval(nestedArgs), reviewToolWithAutoApproval(nestedArgs)])
+assert.deepEqual(nestedReports, [{ agentId: 'fixture-grandchild', toolUseID: nestedArgs.toolUseID, toolName: 'TestRead', reason: DENIAL_REASON }])
+assert.equal(deniedChild.reports.length, TEST_ACTION_COUNT)
+assert.equal(siblingReports.length, 0)
+assert.equal(nestedContext.abortController.signal.aborted, false)
 
 // 传输错误、未知模型和结构化输出不可用均回人工，不升级或重抽模型。
 const unavailable = makeReviewFixture({ decision: 'allow' })
@@ -377,19 +539,79 @@ assert.equal(deadlineTriggered, true)
 assert.equal(timeoutResult.behavior === 'ask' && timeoutResult.message.includes('timed out'), true)
 assert.equal(timeoutSignal?.aborted, true)
 
-// 查询期间同步硬停止后返回 allow：共享 scope 控制器停止，结果不得放行。
-// 此用例不模拟两个独立审批并发返回，也不等于真实后台任务 UI 集成。
-const stopped = makeReviewFixture({ decision: 'allow' })
-const nested = new AbortController()
-stopped.turn.registerController(nested)
-const stoppedQuery = stopped.args.deps.query
-stopped.args.deps.query = async (options: SideQueryOptions) => {
-  stopped.turn.stopTurn({ decision: 'hard_deny', toolUseID: TOOL_USE_ID, reason: STOP_REASON })
-  return stoppedQuery(options)
+// 历史多模态递归省略；分别检查投影及实际交给 query 的最终请求，避免只测顶层块。
+for (const mediaType of TEST_MEDIA_TYPES) {
+  const media = { type: mediaType, source: { type: 'base64', media_type: mediaType === 'image' ? 'image/png' : 'application/pdf', data: HISTORY_MEDIA_PAYLOAD } }
+  const history = makeReviewFixture({ decision: 'allow' })
+  history.turn.rootMessages = [
+    { type: 'user', message: { content: [{ type: 'text', text: '只检查临时文件' }, media] } },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'media-call', name: 'TestRead', input: { nested: [media] } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'media-call', is_error: true, content: [
+      { type: 'text', text: 'before-media' }, media, { type: 'text', text: 'after-media' },
+      { type: 'tool_result', tool_use_id: 'deep-call', content: [media] },
+    ] }] } },
+  ] as unknown as Message[]
+  history.args.context.messages = [{ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'child-media-call', content: [media] }] } }] as unknown as Message[]
+  // 注入权限弹窗的宿主问答；不是 AskUserQuestion 专用批准。
+  history.turn.verifiedAnswers.push({ toolUseID: 'media-dialog', toolName: 'TestRead', question: { payload: [media] }, answer: { feedback: '只检查', nested: { media } } })
+  history.turn.taskAnswers.push({ ...TASK_ANSWER, question: { ...TASK_ANSWER.question, nested: [media] }, answer: { ...TASK_ANSWER.answer, nested: { media } } })
+  const evidence = buildAutoApprovalEvidence({
+    rootMessages: history.turn.rootMessages,
+    agentMessages: history.args.context.messages,
+    constraints: { text: '不要发布' }, verifiedAnswers: history.turn.verifiedAnswers,
+    taskAnswers: history.turn.taskAnswers,
+    toolUseID: TOOL_USE_ID, action: { toolName: 'TestRead', input: history.args.input },
+    environment: {}, previousDenials: [],
+  })
+  if (!('content' in evidence)) assert.fail('大图片历史应先省略再计算预算，不应因 base64 转人工')
+  assert.equal(evidence.content.includes(HISTORY_MEDIA_MARKER), false)
+  const projected = JSON.parse(evidence.content)
+  const resultBlock = projected.root_conversation[2].content[0]
+  assert.equal(resultBlock.call_id, 'media-call')
+  assert.equal(resultBlock.matched_call, true)
+  assert.equal(resultBlock.is_error, true)
+  assert.equal(resultBlock.content[0].text, 'before-media')
+  assert.equal(resultBlock.content[1].type, 'omitted_non_text_evidence')
+  assert.equal(resultBlock.content[2].text, 'after-media')
+  assert.equal(resultBlock.content[3].tool_use_id, 'deep-call')
+  assert.equal(resultBlock.content[3].content[0].type, 'omitted_non_text_evidence')
+  assert.equal((await reviewToolWithAutoApproval(history.args)).behavior, 'allow')
+  assert.equal(history.calls(), 1)
+  const finalRequest = JSON.stringify(history.requests[0])
+  assert.equal(finalRequest.includes(HISTORY_MEDIA_MARKER), false)
+  assert.equal(finalRequest.includes('omitted_non_text_evidence'), true)
+  // 省略仅发生在审批证据副本，不能破坏原对话与宿主记录。
+  assert.equal(JSON.stringify(history.turn.rootMessages).includes(HISTORY_MEDIA_MARKER), true)
+  assert.equal(JSON.stringify(history.turn.verifiedAnswers).includes(HISTORY_MEDIA_MARKER), true)
+  assert.equal(JSON.stringify(history.turn.taskAnswers).includes(HISTORY_MEDIA_MARKER), true)
+
+  // 当前动作使用预算内的小载荷，避免把“超预算回人工”误当成媒体检测通过。
+  const actionMedia = { ...media, source: { ...media.source, data: HISTORY_MEDIA_MARKER } }
+  // 当前完整动作包含结构化媒体（任意深度）时直接回人工，绝不发送裁剪后的动作。
+  for (const input of [{ payload: actionMedia }, { nested: [{ payload: [actionMedia] }] }]) {
+    const action = makeReviewFixture({ decision: 'allow' })
+    const snapshot = JSON.stringify(input)
+    const direct = buildAutoApprovalEvidence({
+      rootMessages: action.turn.rootMessages, constraints: {}, toolUseID: TOOL_USE_ID,
+      action: { toolName: 'TestRead', input }, environment: {}, previousDenials: [],
+    })
+    if (!('reason' in direct)) assert.fail('当前动作含媒体必须直接回人工')
+    assert.match(direct.reason, /image|document/i)
+    const result = await reviewToolWithAutoApproval({ ...action.args, input })
+    assert.equal(result.behavior, 'ask')
+    assert.equal(result.behavior === 'ask' && result.autoApprovalNeedsUser, true)
+    assert.equal(action.calls(), 0)
+    assert.equal(action.reports.length, 0)
+    assert.equal(JSON.stringify(input), snapshot)
+  }
 }
-await assert.rejects(reviewToolWithAutoApproval(stopped.args), ApprovalTurnStoppedError)
-assert.equal(nested.signal.aborted, true)
-assert.equal(otherTurn.signal.aborted, false)
+
+// 普通路径/URL/文字描述并非多模态载荷，不应凭扩展名猜测或联网取图。
+const mediaMention = makeReviewFixture({ decision: 'allow' })
+assert.equal((await reviewToolWithAutoApproval({
+  ...mediaMention.args, input: { path: 'temporary/photo.png', text: 'document: https://example.invalid/file.pdf' },
+})).behavior, 'allow')
+assert.equal(mediaMention.calls(), 1)
 
 // 直接测生产家族解析；家族默认值是夹具，不受机器上代理配置影响。
 assert.equal(resolveAutoApprovalModel(TEST_MODEL_IDS.opus), TEST_MODEL_IDS.sonnet)
@@ -446,5 +668,6 @@ if ('content' in pairedEvidence) {
   assert.equal(pairedEvidence.content.split('unique-pending-action').length - 1, 1)
 }
 assert.equal('reason' in buildAutoApprovalEvidence({ rootMessages: [], constraints: {}, toolUseID: TOOL_USE_ID, action: { toolName: 'TestRead', input: {} }, environment: {}, previousDenials: [] }), true)
-console.log('PASS：第四阶段服务复查、拒绝上限、超时/异常/取消、模型映射、usage 去重、证据配对及可用模式循环')
-console.log('未覆盖（需源码审查/集成验收）：真实工具执行与收据消费、人工队列竞争、首次确认/快速切换、plan 恢复、可信设置来源、子代理 task UI、真实模型质量/金额及主上下文展示')
+console.log('PASS：服务复查、deny 不取消与新动作重审、完整任务问答非授权投影及并发在途失效、普通问答来源、历史递归媒体省略/动作媒体回人工、超时/异常/取消、模型映射、usage 去重及模式循环')
+// 不导入重型 forkedAgent/执行器链；previousDenials 是证据构建参数，不是已删除的 scope 字段。
+console.log('未覆盖（需源码审查/集成验收）：REPL/fork 独立拒绝数组初始化、priority next 父通知队列、host-only autoApprovalDenied 生成与 Streaming Bash 兄弟取消分支、真实执行器路径还原与收据消费/二次消费、普通工具错误到 query 的续轮、真实子代理通知队列路由/嵌套/resume/后台 UI、弹窗唯一授权写入及人工队列竞争、首次确认/快速切换、plan 恢复、可信设置来源、真实模型质量/金额及主上下文展示')

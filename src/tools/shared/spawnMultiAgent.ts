@@ -919,7 +919,11 @@ async function handleSpawnInProcess(
       // (it builds its own history via allMessages in inProcessRunner).
       // Passing the parent's full conversation here would pin it for the
       // teammate's lifetime, surviving /clear and auto-compact.
-      toolUseContext: { ...context, messages: [] },
+      toolUseContext: {
+        ...context, messages: [], approvalTurnScope: undefined,
+        requestLocalApproval: undefined, reportAutoApprovalDenial: undefined,
+        autoApprovalDenials: undefined,
+      },
       abortController: result.abortController,
       invokingRequestId: input.invokingRequestId,
     })

@@ -152,24 +152,9 @@ export class StreamingToolExecutor {
 
   private createSyntheticErrorMessage(
     toolUseId: string,
-    reason: 'sibling_error' | 'user_interrupted' | 'streaming_fallback' | 'approval_stopped',
+    reason: 'sibling_error' | 'user_interrupted' | 'streaming_fallback',
     assistantMessage: AssistantMessage,
   ): Message {
-    if (reason === 'approval_stopped') {
-      const message = `Turn blocked and stopped: ${this.toolUseContext.approvalTurnScope?.stop?.reason}`
-      return createUserMessage({
-        content: [
-          {
-            type: 'tool_result',
-            content: message,
-            is_error: true,
-            tool_use_id: toolUseId,
-          },
-        ],
-        toolUseResult: message,
-        sourceToolAssistantUUID: assistantMessage.uuid,
-      })
-    }
     // For user interruptions (ESC to reject), use REJECT_MESSAGE so the UI shows
     // "User rejected edit" instead of "Error editing file"
     if (reason === 'user_interrupted') {
@@ -224,10 +209,7 @@ export class StreamingToolExecutor {
    */
   private getAbortReason(
     tool: TrackedTool,
-  ): 'sibling_error' | 'user_interrupted' | 'streaming_fallback' | 'approval_stopped' | null {
-    if (this.toolUseContext.approvalTurnScope?.stop) {
-      return 'approval_stopped'
-    }
+  ): 'sibling_error' | 'user_interrupted' | 'streaming_fallback' | null {
     if (this.discarded) {
       return 'streaming_fallback'
     }
@@ -374,7 +356,10 @@ export class StreamingToolExecutor {
           // Only Bash errors cancel siblings. Bash commands often have implicit
           // dependency chains (e.g. mkdir fails → subsequent commands pointless).
           // Read/WebFetch/etc are independent — one failure shouldn't nuke the rest.
-          if (tool.block.name === BASH_TOOL_NAME) {
+          if (
+            tool.block.name === BASH_TOOL_NAME &&
+            !(update.message.type === 'user' && update.message.autoApprovalDenied)
+          ) {
             this.hasErrored = true
             this.erroredToolDescription = this.getToolDescription(tool)
             this.siblingAbortController.abort('sibling_error')

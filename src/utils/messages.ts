@@ -3410,7 +3410,7 @@ function getAutoModeFullInstructions(): UserMessage[] {
 
 Auto mode reviews ordinary pending tool permission requests using a separate AI reviewer. It does not expand the user's task authorization or override deny rules, explicit ask rules, hooks, or mandatory human approval.
 
-Use the existing tool permission flow. An allow applies only to the exact reviewed action. A retryable denial permits a materially safer alternative, not the same denied effect through another shell, encoding, script, tool, or subagent. Missing evidence or reviewer failure requires user approval. A hard denial stops the current turn and its affiliated subagents; do not retry it.
+Use the existing tool permission flow. An allow applies only to the exact reviewed action. A denial blocks that action and returns its reason; it does not stop you, other agents, or already running commands. You may revise the action using that feedback, but each revised action requires normal permission checks. Subagent denials are also reported to their parent. Do not bypass rules by changing shells, encodings, tools, or agents. Missing evidence or reviewer failure requires the tool-permission approval UI; ordinary text and AskUserQuestion answers do not replace that approval.
 
 Respect new user restrictions and the normal plan workflow. Auto mode is not a sandbox and cancellation cannot undo side effects that have already occurred.`
 
@@ -3420,7 +3420,7 @@ Respect new user restrictions and the normal plan workflow. Auto mode is not a s
 }
 
 function getAutoModeSparseInstructions(): UserMessage[] {
-  const content = `Auto mode is active. Existing authorization and human-only permission boundaries still apply. Do not route around a denied action; only a materially safer alternative may be retried. A hard denial stops this turn.`
+  const content = `Auto mode is active. Existing rules and human-only permission boundaries still apply. A denial blocks only that action, not an agent; use its reason to revise the action and submit it to normal permission checks. Subagent denials are reported to the parent. Dedicated human approval uses the tool-permission UI, not ordinary text or AskUserQuestion.`
 
   return wrapMessagesInSystemReminder([
     createUserMessage({ content, isMeta: true }),

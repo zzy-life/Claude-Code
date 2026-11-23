@@ -467,7 +467,6 @@ export const hasPermissionsToUseTool: CanUseToolFn = async (
         scope.hookDecisions.set(toolUseID, hooks)
       }
       const hookDecision = await hooks
-      scope.throwIfStopped()
       if (context.abortController.signal.aborted) throw new AbortError()
       if (hookDecision) return hookDecision
       if (!usesLocalAutoApproval(context)) {
@@ -648,7 +647,6 @@ export async function hasPermissionsToUseToolInner(
   input: { [key: string]: unknown },
   context: ToolUseContext,
 ): Promise<PermissionDecision> {
-  context.approvalTurnScope?.throwIfStopped()
   if (context.abortController.signal.aborted) {
     throw new AbortError()
   }

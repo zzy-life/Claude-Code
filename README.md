@@ -77,11 +77,11 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `bypassPermissions` | 保留原完全访问模式及危险模式确认，跳过常规审批；不使用 AI 审批，也不代表无条件执行。 |
 | `dontAsk` | 已有授权照常生效，需要询问但未获授权的动作直接拒绝；不使用 AI。 |
 
-权限规则里的 **allow** 是允许匹配动作，**deny** 是禁止匹配动作，显式 **ask** 是“这类动作必须问我”。AI 不能推翻 deny；实际触发的显式 ask、hook 强制询问、交互工具和不可代批的安全检查仍走人工。已有 hooks 的授权能力保留。普通规则 deny 只拒绝此次调用，不等于下面的 AI 硬停止。
+权限规则里的 **allow** 是允许匹配动作，**deny** 是禁止匹配动作，显式 **ask** 是“这类动作必须问我”。AI 不能推翻 deny；实际触发的显式 ask、hook 强制询问、交互工具和不可代批的安全检查仍走人工。已有 hooks 的授权能力保留。审批模型只判断当前动作，不决定任何代理是否结束任务。
 
-首次切入 auto 会说明费用、误判及停止边界，确认成功后才激活。会话内切换的确认选择取消时留在原模式；启动时请求默认 auto、但尚未完成确认时，选择取消会退出程序。旧 `skipAutoPermissionPrompt` 不替代新版确认。确认仅保存到用户设置，不自动修改项目设置；普通 Shift+Tab 切换不保存为默认模式，但确认框选择 `Yes, and make it my default mode` 会同时保存用户级默认 auto。之后 Shift+Tab 仅退出当前模式；取消后续启动的默认 auto 需通过 `/config` 或用户级配置修改默认模式。
+首次切入 auto 会说明费用、误判及权限边界，确认成功后才激活。会话内切换的确认选择取消时留在原模式；启动时请求默认 auto、但尚未完成确认时，选择取消会退出程序。旧 `skipAutoPermissionPrompt` 不替代新版确认。确认仅保存到用户设置，不自动修改项目设置；普通 Shift+Tab 切换不保存为默认模式，但确认框选择 `Yes, and make it my default mode` 会同时保存用户级默认 auto。之后 Shift+Tab 仅退出当前模式；取消后续启动的默认 auto 需通过 `/config` 或用户级配置修改默认模式。
 
-需要默认开启时，可在 `/config` 中显式选择并保存，或将以下内容合并到用户级 `~/.claude/settings.json`（Windows 通常是 `%USERPROFILE%\.claude\settings.json`），不要覆盖其他设置：
+当前建议默认保持 `default`，需要时手动切入 auto；新旧版本共用设置时尤其如此。新版仍支持用户自行配置默认 auto：确需默认开启时，可在 `/config` 中显式选择并保存，或将以下内容合并到用户级 `~/.claude/settings.json`（Windows 通常是 `%USERPROFILE%\.claude\settings.json`），不要覆盖其他设置：
 
 ```json
 {
@@ -93,22 +93,28 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 
 默认 auto 和新版确认只信任用户级/受管理设置；项目设置、仓库内 local 设置不能静默启用或代替确认。管理员禁用策略仍然有效。不要手工复制确认字段来跳过说明。
 
+**旧版本兼容提醒**：上述配置仅适用于支持本地 auto 的版本。如果终端报告 `permissions.defaultMode` 不支持 `auto`，说明当前运行版本的设置 schema 不支持它；不要继续向全局设置写入该值。旧版错误界面的 Continue 会跳过整个设置文件，并非仅忽略此字段。此修正不新增旧版配置兼容，也不自动修改全局配置。
+
 **审批结果**：
 
 - 允许：仅批准此次完整原样动作，正常执行，无批准理由、额外标记或通知，也不保存未来 allow 规则。
-- 可换方案的拒绝：不执行此次动作，显示 `This action was denied. Try a safer alternative: …`；主模型可提出实质更安全的新方案，新动作重新检查。连续第三次拒绝转人工，避免反复改写绕过。
-- 硬拒绝：显示 `Turn blocked and stopped: …`，程序停止本轮主代理及所属普通本地子代理，包括其后台后代；不停止其他轮的任务。新用户输入开始新轮，不自动重试被拒动作。
+- 拒绝：不执行此次动作，显示 `This action was denied: …`，调用代理通过普通工具错误收到原因并继续运行。子代理的拒绝另以带来源的非用户授权通知回传直接父代理；父代理在正常可处理边界接收，不强制打断工具。父代理、兄弟代理及后台命令不会因这次拒绝被取消。
+- 调用代理或父代理可以调整任务并提交新动作，新动作仍重新走权限检查与必要审批；没有累计三次拒绝后锁定的规则。换工具、shell、编码或子代理不构成授权，也不能推翻禁止规则或显式 ask。
 - 缺少授权/证据、未知模型、结构化输出不支持、接口错误或 60 秒审批超时：不自动执行，显示 `User approval required: …` 并转原人工队列。用户取消按原中止语义处理。
 
 **模型与费用**：以根会话实际主模型为基准降一级：Opus → Sonnet，Sonnet / Haiku → Haiku；普通子代理也用根会话基准，不按自己的模型再次降级。复用默认家族模型、供应商映射和 `modelOverrides`，不另设审核型号；映射未知/冲突或目标不可用时转人工，不自动升级到更贵模型。自定义代理的家族名称不保证实际价格更低。
 
-每次审批是独立、无工具能力的模型请求，经现有鉴权/API 路径发送固定策略、可验证根用户任务及限制、完整人工问答、相关主/子代理文本历史与工具调用/结果、当前环境/权限规则、前次拒绝及完整待审参数。工具输出、仓库材料和代理自述不作为用户授权；不额外读取密钥、全仓库、图片或完整主系统提示词。每次发送自足证据，不依赖缓存记住上次请求。当前实现输入估算预算为 **12,000 tokens**（含策略/schema 和封装预留），输出上限 **512 tokens**；不截断动作，完整证据超预算则转人工，尚未实现复杂相关历史裁剪。估算不是实际计费量。
+每次审批是独立、无工具能力的模型请求，经现有鉴权/API 路径发送固定策略、根用户任务及限制、宿主记录的工具权限弹窗反馈、相关主/子代理文本历史与工具调用/结果、当前环境/权限规则、调用代理自己的拒绝历史及完整待审参数。普通任务文字只表达任务意图和约束；交互问答完整保留为任务限制，新回答会使在途审批及旧收据失效，但不授予工具权限。AskUserQuestion 问答、工具输出、仓库材料和代理自述都不构成专用工具权限批准；**专用授权只来自现有工具权限弹窗/审批通道**，不新增问答授权工具，既有 hooks 规则不变。
+
+历史、嵌套工具结果及宿主权限反馈中的结构化 `image` / `document` 会递归替换为证据缺失标记，不发送 base64 或文档载荷；当前待审动作本身包含这些结构化块则直接转人工，不请求模型，也不裁剪动作以换取批准。普通文件路径和图片 URL 的文本提及仍是文字，不联网取图。不额外读取密钥、全仓库或完整主系统提示词。每次发送自足证据，不依赖缓存记住上次请求。当前实现输入估算预算为 **12,000 tokens**（含策略/schema 和封装预留），输出上限 **512 tokens**；完整动作及必要证据超预算则转人工，尚未实现复杂相关历史裁剪。估算不是实际计费量。
 
 审批产生额外模型请求和费用；真实 usage 按现有模型价格统计计入会话总消耗/预算，另列 AI approval 子集（`included` 表示已包含，不是再加一次），不计为主模型当前上下文占用。迟到或格式错误的响应也可能已经产生费用；最终以供应商/代理账单为准，目前没有真实质量、token 或金额实测结论。
 
 **适用范围和限制**：首版仅本地交互会话及其普通同步/后台/嵌套子代理；不向 SDK、print/headless、bridge/远端或独立团队队友提供 AI 审批。这些环境忽略默认 auto，显式请求则报错；本地 Remote Control 与 auto 互斥。退出 plan 恢复 auto 时仍检查当前策略和新版确认。
 
-**这不是系统级沙箱，也不是“每个危险动作都审查”**：acceptEdits 已允许的部分 Bash 文件操作（可能包括删除）不会再次送 AI；现有规则和安全边界继续生效。硬停止尽力取消已启动动作，不能回滚文件修改/网络副作用，也不能保证第三方 MCP 服务支持远端取消。AI 可能误判，重要操作仍应保留显式 ask。
+**这不是系统级沙箱，也不是“每个危险动作都审查”**：acceptEdits 已允许的部分 Bash 文件操作（可能包括删除）不会再次送 AI；现有规则和安全边界继续生效。审批拒绝不取消已执行的 Shell，不回滚文件修改或网络副作用；用户 ESC、普通取消和代理正常退出的清理仍按原流程。AI 可能误判，重要操作仍应保留显式 ask。
+
+本次不修本地命令输出的来源/展示现状，也不修退出 plan 后自动恢复 bypass 的问题，需手动重新进入完全访问。动态目录指令（`nested_memory`）按访问目标路径，从原 cwd 到目标目录加载 AGENTS/CLAUDE/.claude 指令与路径条件 rules，并匹配用户/管理条件规则；当前审批器仍跳过这些附件，本次只解释、不修遗漏，不与 `additionalWorkingDirectories` 混同。ant 环境限制保持现状。
 
 ### VS Code 终端标题与会话名称
 
@@ -254,7 +260,7 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | 云端深度规划 ultraplan、旧云端启动消息专用排版、buddy 电子宠物、Overflow／Tungsten 内部测试工具 | 普通计划模式、本地命令输出、远程任务及 Bash 的 tmux 隔离机制保留。 |
 | DevBar／员工 API 性能面板、限流模拟和内部自动 issue 链路 | 真实 429 重试、总耗时与成本、慢操作日志以及 `/feedback`、`/bug` 保留。 |
 | 会话／记忆／压缩／技能改进问卷及 `feedbackSurveyRate` 设置 | 普通技能与 Hook 执行保留；不再后台生成技能改进问卷。 |
-| 旧 auto 远程实验资格、二态转录审批、旧批准通知及 plan 内隐式分类器启用 | `auto` 模式保留，改由本地 `autoApproval` 四态审批实现；旧 opt-in/critique 入口不再提供。共享 Bash 分类、PermissionRequest hooks、原 deny/ask 及 bypassPermissions 链路保留，不是恢复远程实验系统。 |
+| 旧 auto 远程实验资格、二态转录审批、旧批准通知及 plan 内隐式分类器启用 | `auto` 模式保留，改由本地 `autoApproval` 的 allow / deny 与 needs_user 人工出口实现；旧 opt-in/critique 入口不再提供。AI 专属全轮停止、级联取消、拒绝分档与累计拒绝上限已被当前规范取代；共享 Bash 分类、PermissionRequest hooks、原 deny/ask、普通取消及 bypassPermissions 链路保留，不是恢复远程实验系统。 |
 | 官方统计上传、远程 GrowthBook 求值、Gates 标签页、本地特性覆盖和设置同步 | 用户显式配置的 OTEL、本地错误日志、显式启动 profiling、托管设置及正常设置监听保留。功能查询固定采用调用方默认值。 |
 
 `CLAUDE_INTERNAL_FC_OVERRIDES`、`growthBookOverrides` 和 `CLAUDE_CODE_GB_BASE_URL` 已不生效。默认值为 `false` 的会话记忆／后台提取门控也不会因设置内部用户身份而自动启用；普通记忆文件和正常压缩不等于后台自动提取器。贡献追踪仍有历史缺失模块，不保证端到端文件贡献采集可用。
@@ -297,17 +303,19 @@ bun run version   # 验证版本
 bun run ./test-auto-approval.ts
 ```
 
-测试常量集中在文件顶部；不修改真实用户设置、不执行 shell/文件工具、不发网络请求。断言失败或模块加载失败时进程应非零退出；只有运行完成才可据实际 `PASS` 输出判断。**第四阶段交付时未运行此测试、构建或类型检查，不能把测试代码存在当成验证通过。**
+测试常量集中在文件顶部；不修改真实用户设置、不执行 shell/文件工具、不发网络请求。断言失败或模块加载失败时进程应非零退出；只有运行完成才可据实际 `PASS` 输出判断。**历史第四阶段及本次修正均未运行此测试、构建或类型检查，不能把测试代码存在当成验证通过。**
 
-测试直接加载审批服务、轮次停止域、上下文投影、模式循环、家族解析和 usage 去重；隔离模型默认值、设置/gate、token 估算、费用写入、API/UI 依赖。覆盖四态、请求共享、精确输入收据生成、输入/权限失效、最终规则复查、三次拒绝上限、超时/异常/取消、模型家族/供应商表/override 冲突、call/result 配对、来源边界、完整动作预算及独立轮次隔离。费用断言使用合成 usage 和固定金额，不验证实际价格；模式循环使用内存 gate，不验证首次确认 UI。
+测试直接加载审批服务、证据/权限 revision scope、上下文投影、模式循环、家族解析和 usage 去重；隔离模型默认值、设置/gate、token 估算、费用写入、API/UI 依赖。已编写断言覆盖 allow / deny / needs_user、同 toolUseID 请求/拒绝报告去重、deny 不取消父/调用子代理/兄弟/后台内存控制器、兄弟并发审批可继续、新动作重新审批与拒绝历史隔离、精确输入收据生成、输入/权限失效、最终规则复查、历史/宿主反馈嵌套媒体不泄漏到最终请求、动作含媒体不调用模型而回人工、普通问答来源、完整任务问答非授权投影与两个独立在途审批同步失效、新动作带上新增任务限制、超时/异常/取消、模型映射与 usage 去重。费用断言使用合成 usage 和固定金额，不验证实际价格；模式循环使用内存 gate，不验证首次确认 UI。
 
 **源码边界**：
 
-- `src/utils/permissions/autoApproval.ts`：普通待授权请求的独立 `sideQuery`；准确输入快照、权限 revision 和 toolUseID 绑定，allow 收据由 `src/services/tools/toolExecution.ts` 在真实 `tool.call` 前核验并一次消费。不把审批模型结论或 usage 注入主模型上下文，不执行审批模型生成的参数改写。
-- `autoApprovalPrompt.ts` / `autoApprovalContext.ts`：固定策略与动态来源证据隔离；完整动作仅在末尾发送，历史待审调用用引用替代。缺根授权或完整证据超预算回人工；固定估算尚非实测。
-- `approvalTurnScope.ts`：每个根轮次独立停止域，普通子代理继承；hard_deny 同步锁定再取消所属控制器。`LocalAgentTask` 按归属更新后台任务状态，不使用 killAll；普通 ESC 不等于安全硬停止。
+- `src/utils/permissions/autoApproval.ts`：普通待授权请求的独立 `sideQuery`；准确输入快照、权限 revision 和 toolUseID 绑定。deny 返回普通权限错误，新请求实际得到 deny 时才调用 `context.reportAutoApprovalDenial({agentId, toolUseID, toolName, reason})`；复用 Promise 不重复报告。拒绝历史在调用代理自己的 `ToolUseContext.autoApprovalDenials`，REPL 与 fork 分别初始化独立 `[]`，不再使用 scope.previousDenials，不共享累计计数，不 abort 代理控制器。
+- `src/services/tools/toolExecution.ts`：AI 收据绑定规范化的最终完整输入；存在 AI 收据时 `callInput = processedInput`，跳过为 transcript 展示而做的原始路径回填。toolUseID、revision、auto 模式、完整输入严格比较及单次消费保留，不能用模糊路径等价替代。非 AI 路径行为保留，AI 结果可能展示规范化路径。**现有独立测试只检查收据生成，未直接运行该执行器，也未证明 Windows/相对路径/~ 能到达 tool.call 或二次消费被拒。**
+- `autoApprovalPrompt.ts` / `autoApprovalContext.ts`：模型只判准确动作，不决定代理生命周期。固定策略与动态证据隔离；历史/宿主弹窗反馈递归省略 image/document，动作包含这些块直接回人工。交互工具完整问答保存到 `scope.taskAnswers` 并使在途审批/旧收据失效，经 `task_question_answers_not_permission_grants` 传递，只能新增任务限制、不能授予工具权限。`scope.verifiedAnswers` / `host_verified_tool_permission_feedback` 仅表示宿主工具权限弹窗反馈；PermissionContext 的允许反馈排除 requiresUserInteraction，避免任务问答被重复记为专用批准。缺根任务证据或完整证据超预算回人工；固定估算尚非实测。
+- `approvalTurnScope.ts`：普通后代共享根模型/证据、权限 revision、请求/hook 去重、收据失效及 retain/release 生命周期；不是停止域，不注册或取消代理控制器。子代理拒绝通过既有 task-notification 队列以 `priority: 'next'` 路由直接父代理，通知不是用户授权；父代理在正常边界接收，普通最终结果/完成通知保留。独立团队队友不扩展支持。
 - `interactiveHandler.ts` / `PermissionContext.ts`：人工兜底复用根会话队列和一次完成竞争保护；进入人工后不再启动其他自动批准者。`autoApprovalModel.ts` 按 response.id 去重，将审批 usage 归入现有会话消耗及审批子集，不重复计费。
-- 设置来源过滤、首次确认、快速切换、plan 恢复、远端拒绝和子代理真实执行仍涉及宿主集成。独立测试**不覆盖**真实执行器消费收据、人工回调竞争、React 快捷键竞态、后台任务 UI、真实 API schema 接受情况、模型判断质量及主上下文/账单展示；这些仅作源码核对或另行集成验收，不伪称一键测试已全部覆盖。
+- `toolExecution.ts` 为 AI 拒绝的工具结果设置宿主专用 `autoApprovalDenied` 标记；`StreamingToolExecutor` 据此避免将 Bash 审批拒绝当作进程执行失败触发 `sibling_error` 取消。它不是模型输出字段，不改变普通 Bash 失败的兄弟取消语义。
+- 独立测试不导入重型 forkedAgent/执行器集成链，**不覆盖** REPL/fork 的真实数组初始化、父通知 `priority: 'next'` 队列投递、host-only 标记生成与 Streaming Bash 分支、真实执行器收据消费与路径规范化、流式工具错误/query 续轮、父通知队列路由/嵌套/resume/后台任务 UI、Question/权限弹窗真实授权写入、人工回调竞争、可信配置加载、React 快捷键竞态、plan 恢复、远端启动、真实 API schema 接受情况、模型质量及主上下文/账单展示；这些需源码复核或另行集成验收，不能把 fixture 的 allow 或内存回调当成端到端证明。
 
 **用户可操作验收（使用临时工作目录与无害目标）**：
 
@@ -315,7 +323,7 @@ bun run ./test-auto-approval.ts
 2. 做普通临时文件编辑，再请求一个范围明确、原本需授权的无害动作。若 AI 允许，只出现普通执行结果，无额外批准理由/通知；模型选择 needs_user 时应出现人工框，不强求某个真实模型必须允许。
 3. 用 `/permissions` 为一个无害命令添加显式 ask，观察仍由人工确认；结束后从同一入口移除测试规则。离开 auto 后不再触发 AI 审批。
 4. 在 auto 中进入 plan，再经原计划确认恢复；观察恢复模式和实际行为一致，计划批准本身不交 AI。不要为复现首次确认手动删除真实用户设置。
-5. 运行独立测试查看明确通过/失败输出。拒绝、硬停止及故障兜底使用注入测试，不以真实恶意动作、凭据外传或破坏操作验收。
+5. 运行独立测试查看明确通过/失败输出。拒绝原因回传、代理继续及故障兜底使用注入测试，不以真实恶意动作、凭据外传或破坏操作验收。
 
 后台子代理真实队列、SDK/远端和费用账单可按环境另行集成验证，不是普通用户必须搭建的验收条件。状态机通过不代表 AI 零误判。当前无新增 HTTP API，无 curl 对接；更完整的阶段覆盖与未验证项见根目录 `precious-crafting-pony.md`。
 

@@ -119,7 +119,11 @@ export class InProcessBackend implements TeammateExecutor {
         // Strip messages: the teammate never reads toolUseContext.messages
         // (runAgent overrides it via createSubagentContext). Passing the
         // parent's conversation would pin it for the teammate's lifetime.
-        toolUseContext: { ...this.context, messages: [] },
+        toolUseContext: {
+          ...this.context, messages: [], approvalTurnScope: undefined,
+          requestLocalApproval: undefined, reportAutoApprovalDenial: undefined,
+          autoApprovalDenials: undefined,
+        },
         abortController: result.abortController,
         model: config.model,
         systemPrompt: config.systemPrompt,

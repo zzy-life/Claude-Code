@@ -139,13 +139,6 @@ function handleInteractivePermission(
     },
     onAbort() {
       if (!claim()) return
-      if (ctx.toolUseContext.approvalTurnScope?.stop) {
-        ctx.removeFromQueue()
-        resolveOnce(ctx.buildDeny(`Turn blocked and stopped: ${ctx.toolUseContext.approvalTurnScope.stop.reason}`, {
-          type: 'other', reason: 'auto_approval_hard_deny',
-        }))
-        return
-      }
       if (bridgeCallbacks && bridgeRequestId) {
         bridgeCallbacks.sendResponse(bridgeRequestId, {
           behavior: 'deny',
@@ -171,11 +164,12 @@ function handleInteractivePermission(
       if (ctx.resolveIfAborted(resolveOnce)) return
       const approvalScope = ctx.toolUseContext.approvalTurnScope
       if (ctx.tool.requiresUserInteraction?.() && approvalScope) {
-        approvalScope.verifiedAnswers.push({
+        // Question answers may restrict the task, but never grant tool permissions.
+        approvalScope.taskAnswers.push({
           toolUseID: ctx.toolUseID, toolName: ctx.tool.name,
-          question: JSON.parse(JSON.stringify(displayInput)), answer: JSON.parse(JSON.stringify(updatedInput)),
+          question: JSON.parse(JSON.stringify(displayInput)),
+          answer: JSON.parse(JSON.stringify(updatedInput)),
         })
-        // 新问答可能收紧授权，不能让其他审批继续采用旧证据。
         approvalScope.invalidateApprovals()
       }
 

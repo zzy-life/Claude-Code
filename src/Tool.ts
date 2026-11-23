@@ -179,8 +179,11 @@ export type ToolUseContext = {
     refreshTools?: () => Tools
   }
   abortController: AbortController
-  /** Root-turn safety stop, shared with ordinary local descendants, not teammates. */
+  /** Root evidence and permission revisions; approval denial never stops an agent. */
   approvalTurnScope?: ApprovalTurnScope
+  /** Denial history belongs only to the calling agent, never its siblings. */
+  autoApprovalDenials?: Array<{ toolName: string; reason: string }>
+  reportAutoApprovalDenial?: (denial: { agentId: string; toolUseID: string; toolName: string; reason: string }) => void
   /** Local root queue, shared only with ordinary descendants. */
   requestLocalApproval?: CanUseToolFn
   readFileState: FileStateCache
