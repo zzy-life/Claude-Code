@@ -12,6 +12,7 @@ coverage/
 *.tmp
 *.swp
 *.swo
+*.tgz
 
 .claude/
 .idea/
