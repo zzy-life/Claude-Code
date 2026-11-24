@@ -563,6 +563,7 @@ export type Attachment =
       type: 'plan_mode'
       reminderType: 'full' | 'sparse'
       isSubAgent?: boolean
+      planningAgentTypes?: string[]
       planFilePath: string
       planExists: boolean
     }
@@ -1223,6 +1224,10 @@ async function getPlanModeAttachments(
     type: 'plan_mode',
     reminderType,
     isSubAgent: isReadOnlySubAgent,
+    planningAgentTypes:
+      reminderType === 'full' && !isReadOnlySubAgent
+        ? getAvailableAgents(toolUseContext)?.map(agent => agent.agentType)
+        : undefined,
     planFilePath,
     planExists: existingPlan !== null,
   })
@@ -1460,30 +1465,12 @@ export function getDeferredToolsDeltaAttachment(
   return [{ type: 'deferred_tools_delta', ...delta }]
 }
 
-/**
- * Diff the current filtered agent pool against what's already been announced
- * in this conversation (reconstructed from prior agent_listing_delta
- * attachments). Returns [] if nothing changed or the gate is off.
- *
- * The agent list was embedded in AgentTool's description, causing ~10.2% of
- * fleet cache_creation: MCP async connect, /reload-plugins, or
- * permission-mode change → description changes → full tool-schema cache bust.
- * Moving the list here keeps the tool description static.
- *
- * Exported for compact.ts — re-announces the full set after compaction eats
- * prior deltas.
- */
-export function getAgentListingDeltaAttachment(
-  toolUseContext: ToolUseContext,
-  messages: Message[] | undefined,
-): Attachment[] {
-  if (!shouldInjectAgentListInMessages()) return []
-
-  // Skip if AgentTool isn't in the pool — the listing would be unactionable.
+// Use the same actionable agent pool for listings and planning instructions.
+export function getAvailableAgents(toolUseContext: ToolUseContext) {
   if (
     !toolUseContext.options.tools.some(t => toolMatchesName(t, AGENT_TOOL_NAME))
   ) {
-    return []
+    return undefined
   }
 
   const { activeAgents, allowedAgentTypes } =
@@ -1505,6 +1492,22 @@ export function getAgentListingDeltaAttachment(
   if (allowedAgentTypes) {
     filtered = filtered.filter(a => allowedAgentTypes.includes(a.agentType))
   }
+
+  return filtered
+}
+
+/**
+ * Diff the current filtered agent pool against what's already been announced
+ * in the transcript. Exported for compaction, which removes the prior deltas.
+ */
+export function getAgentListingDeltaAttachment(
+  toolUseContext: ToolUseContext,
+  messages: Message[] | undefined,
+): Attachment[] {
+  if (!shouldInjectAgentListInMessages()) return []
+
+  const filtered = getAvailableAgents(toolUseContext)
+  if (!filtered) return []
 
   // Reconstruct announced set from prior deltas in the transcript.
   const announced = new Set<string>()

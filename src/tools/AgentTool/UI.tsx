@@ -726,7 +726,8 @@ export function renderGroupedAgentToolUse(toolUses: Array<{
     };
   });
   const anyUnresolved = toolUses.some(t => !t.isResolved);
-  const anyError = toolUses.some(t => t.isError);
+  const failedCount = toolUses.filter(t => t.isError).length;
+  const anyError = failedCount > 0;
   const allComplete = !anyUnresolved;
 
   // Check if all agents are the same type
@@ -734,23 +735,26 @@ export function renderGroupedAgentToolUse(toolUses: Array<{
   const commonType = allSameType && agentStats[0]?.agentType !== 'Agent' ? agentStats[0]?.agentType : null;
 
   // Check if all resolved agents are async (background)
-  const allAsync = agentStats.every(stat => stat.isAsync);
+  const allAsync = !anyError && agentStats.every(stat => stat.isAsync);
+  let summary = `Running ${toolUses.length} ${commonType ? `${commonType} agents` : 'agents'}…`;
+  if (allComplete) {
+    if (failedCount === toolUses.length) {
+      summary = `${failedCount} ${commonType ? `${commonType} calls` : 'agent calls'} failed`;
+    } else {
+      summary = `${toolUses.length} ${commonType ? `${commonType} agents` : 'agents'} finished`;
+      if (anyError) summary += ` (${failedCount} failed)`;
+    }
+  }
   return <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row">
         <ToolUseLoader shouldAnimate={shouldAnimate && anyUnresolved} isUnresolved={anyUnresolved} isError={anyError} />
         <Text>
-          {allComplete ? allAsync ? <>
+          {allComplete && allAsync ? <>
                 <Text bold>{toolUses.length}</Text> background agents launched{' '}
                 <Text dimColor>
                   <KeyboardShortcutHint shortcut="↓" action="manage" parens />
                 </Text>
-              </> : <>
-                <Text bold>{toolUses.length}</Text>{' '}
-                {commonType ? `${commonType} agents` : 'agents'} finished
-              </> : <>
-              Running <Text bold>{toolUses.length}</Text>{' '}
-              {commonType ? `${commonType} agents` : 'agents'}…
-            </>}{' '}
+              </> : summary}{' '}
         </Text>
         {!allAsync && <CtrlOToExpand />}
       </Box>

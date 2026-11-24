@@ -265,6 +265,7 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | 内置 `/commit`、`/commit-push-pr`、`/verify`、`/stuck` | 用户自定义同名命令／技能仍可使用，普通 `/review` 和 `/debug` 保留。 |
 | `/cost`、`/version`、`/bridge-kick`、`/web-setup`、内部 lorem-ipsum 入口及已禁用的内部桩命令 | 会话成本统计、退出摘要、Bridge 底层实现和共享远程会话代码保留；Bridge 入口的可用性仍受固定默认值限制，桩命令清单见隐藏命令文档。 |
 | 云端深度规划 ultraplan、旧云端启动消息专用排版、buddy 电子宠物、Overflow／Tungsten 内部测试工具 | 普通计划模式、本地命令输出、远程任务及 Bash 的 tmux 隔离机制保留。 |
+| 内置 `Plan` 子代理及其专用开关 | `/plan` 和方案审批流程保留。`Explore` 默认注册，仍受会话权限限制；主会话负责设计方案，`Explore` 不可用时由主会话直接调查。 |
 | DevBar／员工 API 性能面板、限流模拟和内部自动 issue 链路 | 真实 429 重试、总耗时与成本、慢操作日志以及 `/feedback`、`/bug` 保留。 |
 | 会话／记忆／压缩／技能改进问卷及 `feedbackSurveyRate` 设置 | 普通技能与 Hook 执行保留；不再后台生成技能改进问卷。 |
 | 旧 auto 远程实验资格、二态转录审批、旧批准通知及 plan 内隐式分类器启用 | `auto` 模式保留，改由本地 `autoApproval` 的 allow / deny 与 needs_user 人工出口实现；旧 opt-in/critique 入口不再提供。AI 专属全轮停止、级联取消、拒绝分档与累计拒绝上限已被当前规范取代；共享 Bash 分类、PermissionRequest hooks、原 deny/ask、普通取消及 bypassPermissions 链路保留，不是恢复远程实验系统。 |

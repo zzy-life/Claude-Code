@@ -35,6 +35,7 @@ import {
   createAttachmentMessage,
   generateFileAttachment,
   getAgentListingDeltaAttachment,
+  getAvailableAgents,
   getDeferredToolsDeltaAttachment,
   getMcpInstructionsDeltaAttachment,
 } from '../../utils/attachments.js'
@@ -1554,6 +1555,9 @@ export async function createPlanModeAttachmentIfNeeded(
     type: 'plan_mode',
     reminderType: 'full',
     isSubAgent: !!context.agentId,
+    planningAgentTypes: context.agentId
+      ? undefined
+      : getAvailableAgents(context)?.map(agent => agent.agentType),
     planFilePath,
     planExists,
   })
