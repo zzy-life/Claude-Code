@@ -13,7 +13,7 @@ import { getModelCapability } from '../model/modelCapabilities.js'
 import { getModelBetas } from '../betas.js'
 import { roughTokenCountEstimation } from '../../services/tokenEstimation.js'
 import { logForDebugging } from '../debug.js'
-import { AUTO_APPROVAL_OUTPUT_SCHEMA, AUTO_APPROVAL_SYSTEM_PROMPT, autoApprovalResultSchema } from './autoApprovalPrompt.js'
+import { AUTO_APPROVAL_OUTPUT_SCHEMA, AUTO_APPROVAL_SYSTEM_PROMPT, autoApprovalResultSchema, getAutoApprovalDecisionText } from './autoApprovalPrompt.js'
 import { resolveAutoApprovalModel, recordAutoApprovalUsage } from './autoApprovalModel.js'
 import type {
   AutoApprovalResult,
@@ -192,7 +192,8 @@ export async function reviewToolWithAutoApproval(args: {
           }
         },
       }).then(response => {
-        logForDebugging(`[autoApproval] response durationMs=${Date.now() - started} stopReason=${response.stop_reason}`)
+        const blockTypes = response.content.map(block => block.type)
+        logForDebugging(`[autoApproval] response durationMs=${Date.now() - started} stopReason=${response.stop_reason} blockTypes=${JSON.stringify(blockTypes)}`)
         // A transport that ignores abort can still return billable usage later.
         deps.recordUsage(response, model)
         return response
@@ -216,10 +217,11 @@ export async function reviewToolWithAutoApproval(args: {
       if (response.stop_reason !== 'end_turn') {
         return manualDecision(result, `The approval response did not complete (${response.stop_reason})`)
       }
-      if (response.content.length !== 1 || response.content[0]?.type !== 'text') {
+      const decisionText = getAutoApprovalDecisionText(response.content)
+      if (decisionText === undefined) {
         return manualDecision(result, 'The approval service returned unexpected response blocks')
       }
-      approval = autoApprovalResultSchema.parse(JSON.parse(response.content[0].text))
+      approval = autoApprovalResultSchema.parse(JSON.parse(decisionText))
     } catch (error) {
       if (context.abortController.signal.aborted) throw new AbortError()
       return manualDecision(result, controller.signal.aborted

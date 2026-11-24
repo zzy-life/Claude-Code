@@ -1,4 +1,16 @@
+import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages.js'
 import { z } from 'zod/v4'
+
+export function getAutoApprovalDecisionText(content: BetaMessage['content']): string | undefined {
+  const decision = content.at(-1)
+  if (decision?.type !== 'text') return undefined
+
+  // Thinking is metadata, not part of the decision. Reject every other leading block.
+  for (const block of content.slice(0, -1)) {
+    if (block.type !== 'thinking' && block.type !== 'redacted_thinking') return undefined
+  }
+  return decision.text
+}
 
 export const autoApprovalResultSchema = z.discriminatedUnion('decision', [
   z.object({ decision: z.literal('allow'), reason: z.literal('') }).strict(),
