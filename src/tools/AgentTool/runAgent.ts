@@ -382,7 +382,7 @@ export async function* runAgent({
     override?.systemContext ?? getSystemContext(),
   ])
 
-  // Read-only agents (Explore, Plan) don't act on commit/PR/lint rules from
+  // Read-only agents like Explore don't act on commit/PR/lint rules from
   // CLAUDE.md — the main agent has full context and interprets their output.
   // Dropping claudeMd here saves ~5-15 Gtok/week across 34M+ Explore spawns.
   // Explicit override.userContext from callers is preserved untouched.
@@ -397,17 +397,12 @@ export async function* runAgent({
     ? userContextNoClaudeMd
     : baseUserContext
 
-  // Explore/Plan are read-only search agents — the parent-session-start
-  // gitStatus (up to 40KB, explicitly labeled stale) is dead weight. If they
-  // need git info they run `git status` themselves and get fresh data.
-  // Saves ~1-3 Gtok/week fleet-wide.
+  // Explore can run `git status` itself rather than receive the stale snapshot
+  // from the start of the parent session.
   const { gitStatus: _omittedGitStatus, ...systemContextNoGit } =
     baseSystemContext
   const resolvedSystemContext =
-    agentDefinition.agentType === 'Explore' ||
-    agentDefinition.agentType === 'Plan'
-      ? systemContextNoGit
-      : baseSystemContext
+    agentDefinition.agentType === 'Explore' ? systemContextNoGit : baseSystemContext
 
   // Override permission mode if agent defines one
   // However, don't override if parent is in bypassPermissions or acceptEdits mode - those should always take precedence

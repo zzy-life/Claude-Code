@@ -8,5 +8,4 @@ export const VERIFICATION_AGENT_TYPE = 'verification'
 // trailer for these to save tokens (~135 chars × 34M Explore runs/week).
 export const ONE_SHOT_BUILTIN_AGENT_TYPES: ReadonlySet<string> = new Set([
   'Explore',
-  'Plan',
 ])

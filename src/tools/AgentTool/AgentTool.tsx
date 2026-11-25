@@ -1317,7 +1317,7 @@ The agent is now running and will receive instructions via mailbox.`
         type: 'text' as const,
         text: '(Subagent completed but returned no output.)'
       }];
-      // One-shot built-ins (Explore, Plan) are never continued via SendMessage
+      // One-shot built-ins like Explore are never continued via SendMessage
       // — the agentId hint and <usage> block are dead weight (~135 chars ×
       // 34M Explore runs/week ≈ 1-2 Gtok/week). Telemetry doesn't parse this
       // block (it uses logEvent in finalizeAgentTool), so dropping is safe.
