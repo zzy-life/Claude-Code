@@ -668,8 +668,8 @@ const MessagesImpl = ({
     return lowered;
   }, [tools, lookups_0]);
   return <>
-      {/* Logo */}
-      {!hideLogo && !(renderRange && renderRange[0] > 0) && <LogoHeader agentDefinitions={agentDefinitions} />}
+      {/* Remount the header on conversation reset to discard frozen model/effort text. */}
+      {!hideLogo && !(renderRange && renderRange[0] > 0) && <LogoHeader key={conversationId} agentDefinitions={agentDefinitions} />}
 
       {/* Truncation indicator */}
       {hasTruncatedMessages_0 && <Divider title={`${toggleShowAllShortcut} to show ${chalk.bold(hiddenMessageCount_0)} previous messages`} width={columns} />}
