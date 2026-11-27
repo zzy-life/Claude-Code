@@ -36,7 +36,7 @@ import { buildLargeToolResultMessage, ensureToolResultsDir, generatePreview, get
 import { shouldUseSandbox } from '../BashTool/shouldUseSandbox.js';
 import { BackgroundHint } from '../BashTool/UI.js';
 import { buildImageToolResult, isImageOutput, resetCwdIfOutsideProject, resizeShellImageOutput, stdErrAppendShellResetMessage, stripEmptyLines } from '../BashTool/utils.js';
-import { trackGitOperations } from '../shared/gitOperationTracking.js';
+import { retryWorktreeCleanupAfterGitOperation, trackGitOperations } from '../shared/gitOperationTracking.js';
 import { interpretCommandResult } from './commandSemantics.js';
 import { powershellToolHasPermission } from './powershellPermissions.js';
 import { getDefaultTimeoutMs, getMaxTimeoutMs, getPrompt } from './prompt.js';
@@ -547,6 +547,12 @@ export const PowerShellTool = buildTool({
       const stdoutAccumulator = new EndTruncatingAccumulator();
       const processedStdout = (result.stdout || '').trimEnd();
       stdoutAccumulator.append(processedStdout + EOL);
+      if (isMainThread && !isPreFlightSentinel && !result.interrupted) {
+        const worktreeCleanup = await retryWorktreeCleanupAfterGitOperation(input.command, result.code);
+        if (worktreeCleanup) {
+          stdoutAccumulator.append(worktreeCleanup + EOL);
+        }
+      }
 
       // Interpret exit code using semantic rules. PS-native cmdlets (Select-String,
       // Compare-Object, Test-Path) exit 0 on no-match so they always hit the default

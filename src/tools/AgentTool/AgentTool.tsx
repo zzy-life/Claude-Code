@@ -39,7 +39,7 @@ import { isInProcessTeammate } from '../../utils/teammateContext.js';
 import { teleportToRemote } from '../../utils/teleport.js';
 import { getAssistantMessageContentLength } from '../../utils/tokens.js';
 import { createAgentId } from '../../utils/uuid.js';
-import { createAgentWorktree, removeAgentWorktree } from '../../utils/worktree.js';
+import { createAgentWorktree, finishAgentWorktree, formatAgentWorktreeResult, type AgentWorktreeInfo, type AgentWorktreeResult } from '../../utils/worktree.js';
 import { BASH_TOOL_NAME } from '../BashTool/toolName.js';
 import { BackgroundHint } from '../BashTool/UI.js';
 import { FILE_READ_TOOL_NAME } from '../FileReadTool/prompt.js';
@@ -580,14 +580,7 @@ export const AgentTool = buildTool({
     const earlyAgentId = createAgentId();
 
     // Worktree isolation is strict: creation must succeed before the agent runs.
-    let worktreeInfo: {
-      worktreePath: string;
-      worktreeBranch?: string;
-      headCommit?: string;
-      parentBranch?: string;
-      gitRoot?: string;
-      hookBased?: boolean;
-    } | null = null;
+    let worktreeInfo: AgentWorktreeInfo | null = null;
     if (effectiveIsolation === 'worktree') {
       const slug = `agent-${earlyAgentId.slice(0, 8)}`;
       worktreeInfo = await createAgentWorktree(slug);
@@ -641,48 +634,23 @@ export const AgentTool = buildTool({
     const cwdOverridePath = cwd ?? worktreeInfo?.worktreePath;
     const wrapWithCwd = <T,>(fn: () => T): T => cwdOverridePath ? runWithCwdOverride(cwdOverridePath, fn) : fn();
 
-    // Helper to clean up worktree after agent completes
-    const cleanupWorktreeIfNeeded = async (): Promise<{
-      worktreePath?: string;
-      worktreeBranch?: string;
-    }> => {
-      if (!worktreeInfo) return {};
-      const {
-        worktreePath,
-        worktreeBranch,
-        headCommit,
-        parentBranch,
-        gitRoot,
-        hookBased
-      } = worktreeInfo;
-      // Null out to make idempotent — guards against double-call if code
-      // between cleanup and end of try throws into catch
-      worktreeInfo = null;
-      if (hookBased) {
-        // Hook-based worktrees are always kept since we can't detect VCS changes
-        logForDebugging(`Hook-based agent worktree kept at: ${worktreePath}`);
-        return {
-          worktreePath
-        };
-      }
-      if (headCommit) {
-        const removed = await removeAgentWorktree(worktreePath, worktreeBranch, gitRoot, false, headCommit, parentBranch);
-        if (removed) {
-          // Clear worktreePath from metadata so resume doesn't try to use
-          // a deleted directory. Fire-and-forget to match runAgent's
-          // writeAgentMetadata handling.
-          void writeAgentMetadata(asAgentId(earlyAgentId), {
+    // Keep the result for repeated completion/error paths; retained worktrees
+    // remain queued for a safe retry after the parent integrates the changes.
+    let worktreeCleanup: Promise<AgentWorktreeResult> | undefined;
+    const cleanupWorktreeIfNeeded = (): Promise<AgentWorktreeResult> => {
+      if (worktreeCleanup) return worktreeCleanup;
+      if (!worktreeInfo) return Promise.resolve({});
+      const info = worktreeInfo;
+      worktreeCleanup = finishAgentWorktree(info).then(async result => {
+        if (result.worktreeStatus === 'cleaned') {
+          await writeAgentMetadata(asAgentId(earlyAgentId), {
             agentType: selectedAgent.agentType,
             description
-          }).catch(_err => logForDebugging(`Failed to clear worktree metadata: ${_err}`));
-          return {};
+          }).catch(error => logForDebugging(`Failed to clear worktree metadata: ${error}`));
         }
-      }
-      logForDebugging(`Agent worktree could not be proven safe to remove, keeping: ${worktreePath}`);
-      return {
-        worktreePath,
-        worktreeBranch
-      };
+        return result;
+      });
+      return worktreeCleanup;
     };
     if (shouldRunAsync) {
       const asyncAgentId = earlyAgentId;
@@ -861,10 +829,7 @@ export const AgentTool = buildTool({
         // Track if an error occurred during iteration
         let syncAgentError: Error | undefined;
         let wasAborted = false;
-        let worktreeResult: {
-          worktreePath?: string;
-          worktreeBranch?: string;
-        } = {};
+        let worktreeResult: AgentWorktreeResult = {};
         try {
           while (true) {
             const elapsed = Date.now() - agentStartTime;
@@ -1307,8 +1272,8 @@ The agent is now running and will receive instructions via mailbox.`
       };
     }
     if (data.status === 'completed') {
-      const worktreeData = data as Record<string, unknown>;
-      const worktreeInfoText = worktreeData.worktreePath ? `\nworktreePath: ${worktreeData.worktreePath}\nworktreeBranch: ${worktreeData.worktreeBranch}` : '';
+      const worktreeDetails = formatAgentWorktreeResult(data);
+      const worktreeInfoText = worktreeDetails ? `\n${worktreeDetails}` : '';
       // If the subagent completes with no content, the tool_result is just the
       // agentId/usage trailer below — a metadata-only block at the prompt tail.
       // Some models read that as "nothing to act on" and end their turn

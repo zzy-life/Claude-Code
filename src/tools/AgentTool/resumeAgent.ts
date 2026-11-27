@@ -21,12 +21,20 @@ import { getQuerySourceForAgent } from '../../utils/promptCategory.js'
 import {
   getAgentTranscript,
   readAgentMetadata,
+  writeAgentMetadata,
 } from '../../utils/sessionStorage.js'
 import { buildEffectiveSystemPrompt } from '../../utils/systemPrompt.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { getTaskOutputPath } from '../../utils/task/diskOutput.js'
 import { getParentSessionId } from '../../utils/teammate.js'
 import { reconstructForSubagentResume } from '../../utils/toolResultStorage.js'
+import {
+  finishAgentWorktree,
+  releaseAgentWorktree,
+  resumeAgentWorktree,
+  type AgentWorktreeInfo,
+  type AgentWorktreeResult,
+} from '../../utils/worktree.js'
 import { runAsyncAgentLifecycle } from './agentToolUtils.js'
 import { GENERAL_PURPOSE_AGENT } from './built-in/generalPurposeAgent.js'
 import { FORK_AGENT, isForkSubagentEnabled } from './forkSubagent.js'
@@ -77,24 +85,8 @@ export async function resumeAgentBackground({
     resumedMessages,
     transcript.contentReplacements,
   )
-  // Best-effort: if the original worktree was removed externally, fall back
-  // to parent cwd rather than crashing on chdir later.
-  const resumedWorktreePath = meta?.worktreePath
-    ? await fsp.stat(meta.worktreePath).then(
-        s => (s.isDirectory() ? meta.worktreePath : undefined),
-        () => {
-          logForDebugging(
-            `Resumed worktree ${meta.worktreePath} no longer exists; falling back to parent cwd`,
-          )
-          return undefined
-        },
-      )
-    : undefined
-  if (resumedWorktreePath) {
-    // Bump mtime so stale-worktree cleanup doesn't delete a just-resumed worktree (#22355)
-    const now = new Date()
-    await fsp.utimes(resumedWorktreePath, now, now)
-  }
+  let resumedWorktreeInfo: AgentWorktreeInfo | undefined
+  let resumedWorktreePath: string | undefined
 
   // Skip filterDeniedAgents re-gating — original spawn already passed permission checks
   let selectedAgent: AgentDefinition
@@ -163,6 +155,26 @@ export async function resumeAgentBackground({
     ? toolUseContext.options.tools
     : assembleToolPool(workerPermissionContext, appState.mcp.tools)
 
+  // Reacquire isolation only after prompt/model setup succeeds. A setup failure
+  // must not leave an inactive agent permanently marked as running.
+  if (meta?.worktreePath) {
+    try {
+      resumedWorktreeInfo = await resumeAgentWorktree(meta.worktreePath)
+      const exists = await fsp.stat(meta.worktreePath).then(entry => entry.isDirectory(), () => false)
+      if (exists) {
+        resumedWorktreePath = meta.worktreePath
+        const now = new Date()
+        await fsp.utimes(resumedWorktreePath, now, now)
+      } else {
+        await finishAgentWorktree(resumedWorktreeInfo)
+        throw new Error(`Cannot resume agent: its isolated worktree no longer exists at ${meta.worktreePath}. Start a new agent in the intended directory instead of silently switching to the parent working directory.`)
+      }
+    } catch (error) {
+      releaseAgentWorktree(meta.worktreePath)
+      throw error
+    }
+  }
+
   const runAgentParams: Parameters<typeof runAgent>[0] = {
     agentDefinition: selectedAgent,
     promptMessages: [
@@ -227,6 +239,22 @@ export async function resumeAgentBackground({
   const wrapWithCwd = <T>(fn: () => T): T =>
     resumedWorktreePath ? runWithCwdOverride(resumedWorktreePath, fn) : fn()
 
+  let worktreeCleanup: Promise<AgentWorktreeResult> | undefined
+  const getWorktreeResult = (): Promise<AgentWorktreeResult> => {
+    if (worktreeCleanup) return worktreeCleanup
+    if (!resumedWorktreeInfo) return Promise.resolve({})
+    worktreeCleanup = finishAgentWorktree(resumedWorktreeInfo).then(async result => {
+      if (result.worktreeStatus === 'cleaned') {
+        await writeAgentMetadata(asAgentId(agentId), {
+          agentType: selectedAgent.agentType,
+          description: meta?.description,
+        }).catch(error => logForDebugging(`Failed to clear resumed worktree metadata: ${error}`))
+      }
+      return result
+    })
+    return worktreeCleanup
+  }
+
   void runWithAgentContext(asyncAgentContext, () =>
     wrapWithCwd(() =>
       runAsyncAgentLifecycle({
@@ -251,8 +279,7 @@ export async function resumeAgentBackground({
           isCoordinatorMode() ||
           isForkSubagentEnabled() ||
           getSdkAgentProgressSummariesEnabled(),
-        getWorktreeResult: async () =>
-          resumedWorktreePath ? { worktreePath: resumedWorktreePath } : {},
+        getWorktreeResult,
       }),
     ),
   )

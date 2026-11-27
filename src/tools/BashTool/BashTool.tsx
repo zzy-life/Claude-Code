@@ -39,7 +39,7 @@ import { TaskOutput } from '../../utils/task/TaskOutput.js';
 import { isOutputLineTruncated } from '../../utils/terminal.js';
 import { buildLargeToolResultMessage, ensureToolResultsDir, generatePreview, getToolResultPath, PREVIEW_SIZE_BYTES } from '../../utils/toolResultStorage.js';
 import { userFacingName as fileEditUserFacingName } from '../FileEditTool/UI.js';
-import { trackGitOperations } from '../shared/gitOperationTracking.js';
+import { retryWorktreeCleanupAfterGitOperation, trackGitOperations } from '../shared/gitOperationTracking.js';
 import { bashToolHasPermission, commandHasAnyCd, matchWildcardPattern, permissionRuleExtractPrefix } from './bashPermissions.js';
 import { interpretCommandResult } from './commandSemantics.js';
 import { getDefaultTimeoutMs, getMaxTimeoutMs, getSimplePrompt } from './prompt.js';
@@ -685,6 +685,12 @@ export const BashTool = buildTool({
 
       // stderr is interleaved in stdout (merged fd) — result.stdout has both
       stdoutAccumulator.append((result.stdout || '').trimEnd() + EOL);
+      if (isMainThread && !result.backgroundTaskId && !result.interrupted) {
+        const worktreeCleanup = await retryWorktreeCleanupAfterGitOperation(input.command, result.code);
+        if (worktreeCleanup) {
+          stdoutAccumulator.append(worktreeCleanup + EOL);
+        }
+      }
 
       // Interpret the command result using semantic rules
       interpretationResult = interpretCommandResult(input.command, result.code, result.stdout || '', '');

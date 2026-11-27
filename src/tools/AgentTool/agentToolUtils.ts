@@ -49,6 +49,7 @@ import { permissionRuleValueFromString } from '../../utils/permissions/permissio
 import { emitTaskProgress as emitTaskProgressEvent } from '../../utils/task/sdkProgress.js'
 import { isInProcessTeammate } from '../../utils/teammateContext.js'
 import { getTokenCountFromUsage } from '../../utils/tokens.js'
+import type { AgentWorktreeResult } from '../../utils/worktree.js'
 import { EXIT_PLAN_MODE_V2_TOOL_NAME } from '../ExitPlanModeTool/constants.js'
 import { AGENT_TOOL_NAME } from './constants.js'
 import type { AgentDefinition } from './loadAgentsDir.js'
@@ -224,6 +225,13 @@ export const agentToolResultSchema = lazySchema(() =>
     // results verbatim without re-validation). Used to gate the sync
     // result trailer — one-shot built-ins skip the SendMessage hint.
     agentType: z.string().optional(),
+    worktreeStatus: z
+      .enum(['cleaned', 'pending_integration', 'cleanup_failed', 'retained'])
+      .optional(),
+    worktreePath: z.string().optional(),
+    worktreeBranch: z.string().optional(),
+    worktreeParentBranch: z.string().optional(),
+    worktreeReason: z.string().optional(),
     content: z.array(z.object({ type: z.literal('text'), text: z.string() })),
     totalToolUseCount: z.number(),
     totalDurationMs: z.number(),
@@ -427,10 +435,7 @@ export async function runAsyncAgentLifecycle({
   rootSetAppState: SetAppState
   agentIdForCleanup: string
   enableSummarization: boolean
-  getWorktreeResult: () => Promise<{
-    worktreePath?: string
-    worktreeBranch?: string
-  }>
+  getWorktreeResult: () => Promise<AgentWorktreeResult>
 }): Promise<void> {
   let stopSummarization: (() => void) | undefined
   const agentMessages: MessageType[] = []

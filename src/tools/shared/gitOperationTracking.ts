@@ -21,8 +21,9 @@ import {
  * `git -c commit.gpgsign=false commit` after a signing failure.
  */
 function gitCmdRe(subcmd: string, suffix = ''): RegExp {
+  const argument = `(?:"[^"]*"|'[^']*'|[^\\s"']+)`
   return new RegExp(
-    `\\bgit(?:\\s+-[cC]\\s+\\S+|\\s+--\\S+=\\S+)*\\s+${subcmd}\\b${suffix}`,
+    `\\bgit(?:\\.exe)?(?:\\s+-[cC]\\s+${argument}|\\s+--\\S+=${argument})*\\s+${subcmd}\\b${suffix}`,
   )
 }
 
@@ -31,6 +32,29 @@ const GIT_PUSH_RE = gitCmdRe('push')
 const GIT_CHERRY_PICK_RE = gitCmdRe('cherry-pick')
 const GIT_MERGE_RE = gitCmdRe('merge', '(?!-)')
 const GIT_REBASE_RE = gitCmdRe('rebase')
+
+// Command matching only schedules a retry. The worktree layer independently
+// verifies integration and ownership before removing any directory or ref.
+export async function retryWorktreeCleanupAfterGitOperation(
+  command: string,
+  exitCode: number,
+): Promise<string> {
+  const integrationCommands = [GIT_MERGE_RE, GIT_CHERRY_PICK_RE, GIT_REBASE_RE, GIT_COMMIT_RE]
+  if (exitCode !== 0 || !integrationCommands.some(re => re.test(command))) {
+    return ''
+  }
+  try {
+    const { retryPendingAgentWorktreeCleanup, formatAgentWorktreeResult } = await import('../../utils/worktree.js')
+    const results = await retryPendingAgentWorktreeCleanup()
+    if (results.length === 0) {
+      return ''
+    }
+    return `Agent worktree cleanup after Git operation:\n${results.map(formatAgentWorktreeResult).join('\n\n')}`
+  } catch (error) {
+    const { errorMessage } = await import('../../utils/errors.js')
+    return `Agent worktree cleanup could not be completed: ${errorMessage(error)}`
+  }
+}
 
 export type CommitKind = 'committed' | 'amended' | 'cherry-picked'
 export type BranchAction = 'merged' | 'rebased'

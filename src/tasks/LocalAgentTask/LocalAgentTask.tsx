@@ -15,6 +15,7 @@ import { registerCleanup } from '../../utils/cleanupRegistry.js';
 import { getToolSearchOrReadInfo } from '../../utils/collapseReadSearch.js';
 import { enqueuePendingNotification } from '../../utils/messageQueueManager.js';
 import { getAgentTranscriptPath } from '../../utils/sessionStorage.js';
+import { formatAgentWorktreeResult, type AgentWorktreeResult } from '../../utils/worktree.js';
 import { evictTaskOutput, getTaskOutputPath, initTaskOutputAsSymlink } from '../../utils/task/diskOutput.js';
 import { PANEL_GRACE_MS, registerTask, updateTaskState } from '../../utils/task/framework.js';
 import { emitTaskProgress } from '../../utils/task/sdkProgress.js';
@@ -203,7 +204,10 @@ export function enqueueAgentNotification({
   usage,
   toolUseId,
   worktreePath,
-  worktreeBranch
+  worktreeBranch,
+  worktreeStatus,
+  worktreeParentBranch,
+  worktreeReason
 }: {
   taskId: string;
   description: string;
@@ -217,9 +221,7 @@ export function enqueueAgentNotification({
     durationMs: number;
   };
   toolUseId?: string;
-  worktreePath?: string;
-  worktreeBranch?: string;
-}): void {
+} & AgentWorktreeResult): void {
   // Atomically check and set notified flag to prevent duplicate notifications.
   // If the task was already marked as notified (e.g., by TaskStopTool), skip
   // enqueueing to avoid sending redundant messages to the model.
@@ -243,7 +245,18 @@ export function enqueueAgentNotification({
   const toolUseIdLine = toolUseId ? `\n<${TOOL_USE_ID_TAG}>${toolUseId}</${TOOL_USE_ID_TAG}>` : '';
   const resultSection = finalMessage ? `\n<result>${finalMessage}</result>` : '';
   const usageSection = usage ? `\n<usage><total_tokens>${usage.totalTokens}</total_tokens><tool_uses>${usage.toolUses}</tool_uses><duration_ms>${usage.durationMs}</duration_ms></usage>` : '';
-  const worktreeSection = worktreePath ? `\n<${WORKTREE_TAG}><${WORKTREE_PATH_TAG}>${worktreePath}</${WORKTREE_PATH_TAG}>${worktreeBranch ? `<${WORKTREE_BRANCH_TAG}>${worktreeBranch}</${WORKTREE_BRANCH_TAG}>` : ''}</${WORKTREE_TAG}>` : '';
+  let worktreeSection = '';
+  const worktreeDetails = formatAgentWorktreeResult({ worktreePath, worktreeBranch, worktreeStatus, worktreeParentBranch, worktreeReason });
+  if (worktreeDetails) {
+    worktreeSection = `\n<${WORKTREE_TAG}>`;
+    if (worktreePath) {
+      worktreeSection += `<${WORKTREE_PATH_TAG}>${worktreePath}</${WORKTREE_PATH_TAG}>`;
+    }
+    if (worktreeBranch) {
+      worktreeSection += `<${WORKTREE_BRANCH_TAG}>${worktreeBranch}</${WORKTREE_BRANCH_TAG}>`;
+    }
+    worktreeSection += `\n${worktreeDetails}\n</${WORKTREE_TAG}>`;
+  }
   const message = `<${TASK_NOTIFICATION_TAG}>
 <${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>${toolUseIdLine}
 <${OUTPUT_FILE_TAG}>${outputPath}</${OUTPUT_FILE_TAG}>

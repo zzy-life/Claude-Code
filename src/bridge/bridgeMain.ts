@@ -17,7 +17,7 @@ import { errorMessage } from '../utils/errors.js'
 import { truncateToWidth } from '../utils/format.js'
 import { logError } from '../utils/log.js'
 import { sleep } from '../utils/sleep.js'
-import { createAgentWorktree, removeAgentWorktree } from '../utils/worktree.js'
+import { createAgentWorktree, releaseAgentWorktree, removeAgentWorktree } from '../utils/worktree.js'
 import {
   BridgeFatalError,
   createBridgeApiClient,
@@ -548,7 +548,7 @@ export async function runBridgeLoop(
             logger.logVerbose(
               `Failed to remove worktree ${wt.worktreePath}: ${errorMessage(err)}`,
             ),
-          ),
+          ).finally(() => releaseAgentWorktree(wt.worktreePath)),
         )
       }
 
@@ -1083,7 +1083,7 @@ export async function runBridgeLoop(
                   logger.logVerbose(
                     `Failed to remove worktree ${wt.worktreePath}: ${errorMessage(err)}`,
                   ),
-                ),
+                ).finally(() => releaseAgentWorktree(wt.worktreePath)),
               )
             }
             completedWorkIds.add(work.id)
@@ -1494,7 +1494,7 @@ export async function runBridgeLoop(
             wt.hookBased,
             wt.headCommit,
             wt.parentBranch,
-          ),
+          ).finally(() => releaseAgentWorktree(wt.worktreePath)),
         ),
       )
     }
