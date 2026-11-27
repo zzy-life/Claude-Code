@@ -1,6 +1,5 @@
 import { feature } from 'bun:bundle'
 import { prependBullets } from '../../constants/prompts.js'
-import { hasEmbeddedSearchTools } from '../../utils/embeddedTools.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
 import { shouldIncludeGitInstructions } from '../../utils/gitSettings.js'
 import { getClaudeTempDir } from '../../utils/permissions/filesystem.js'
@@ -232,26 +231,17 @@ function getSimpleSandboxSection(): string {
 }
 
 export function getSimplePrompt(): string {
-  // Ant-native builds alias find/grep to embedded bfs/ugrep in Claude's shell,
-  // so we don't steer away from them (and Glob/Grep tools are removed).
-  const embedded = hasEmbeddedSearchTools()
-
   const toolPreferenceItems = [
-    ...(embedded
-      ? []
-      : [
-          `File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)`,
-          `Content search: Use ${GREP_TOOL_NAME} (NOT grep or rg)`,
-        ]),
+    `File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)`,
+    `Content search: Use ${GREP_TOOL_NAME} (NOT grep or rg)`,
     `Read files: Use ${FILE_READ_TOOL_NAME} (NOT cat/head/tail)`,
     `Edit files: Use ${FILE_EDIT_TOOL_NAME} (NOT sed/awk)`,
     `Write files: Use ${FILE_WRITE_TOOL_NAME} (NOT echo >/cat <<EOF)`,
     'Communication: Output text directly (NOT echo/printf)',
   ]
 
-  const avoidCommands = embedded
-    ? '`cat`, `head`, `tail`, `sed`, `awk`, or `echo`'
-    : '`find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo`'
+  const avoidCommands =
+    '`find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo`'
 
   const multipleCommandsSubitems = [
     `If the commands are independent and can run in parallel, make multiple ${BASH_TOOL_NAME} tool calls in a single message. Example: if you need to run "git status" and "git diff", send a single message with two ${BASH_TOOL_NAME} tool calls in parallel.`,
@@ -299,15 +289,6 @@ export function getSimplePrompt(): string {
     gitSubitems,
     'Avoid unnecessary `sleep` commands:',
     sleepSubitems,
-    ...(embedded
-      ? [
-          // bfs (which backs `find`) uses Oniguruma for -regex, which picks the
-          // FIRST matching alternative (leftmost-first), unlike GNU find's
-          // POSIX leftmost-longest. This silently drops matches when a shorter
-          // alternative is a prefix of a longer one.
-          "When using `find -regex` with alternation, put the longest alternative first. Example: use `'.*\\.\\(tsx\\|ts\\)'` not `'.*\\.\\(ts\\|tsx\\)'` — the second form silently skips `.tsx` files.",
-        ]
-      : []),
   ]
 
   return [

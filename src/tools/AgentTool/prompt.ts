@@ -1,6 +1,5 @@
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import { getSubscriptionType } from '../../utils/auth.js'
-import { hasEmbeddedSearchTools } from '../../utils/embeddedTools.js'
 import { isEnvDefinedFalsy, isEnvTruthy } from '../../utils/envUtils.js'
 import { isTeammate } from '../../utils/teammate.js'
 import { isInProcessTeammate } from '../../utils/teammateContext.js'
@@ -161,26 +160,14 @@ ${
     return shared
   }
 
-  // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
-  // dedicated Glob/Grep tools, so point at find via Bash instead.
-  const embedded = hasEmbeddedSearchTools()
-  const fileSearchHint = embedded
-    ? '`find` via the Bash tool'
-    : `the ${GLOB_TOOL_NAME} tool`
-  // The "class Foo" example is about content search. Non-embedded stays Glob
-  // (original intent: find-the-file-containing). Embedded gets grep because
-  // find -name doesn't look at file contents.
-  const contentSearchHint = embedded
-    ? '`grep` via the Bash tool'
-    : `the ${GLOB_TOOL_NAME} tool`
   const whenNotToUseSection = forkEnabled
     ? ''
     : `
 Prefer the ${AGENT_TOOL_NAME} tool for open-ended, read-only investigations that require searching across many files or multiple rounds of exploration, especially when only the final conclusion is useful in your context.
 
 When NOT to use the ${AGENT_TOOL_NAME} tool:
-- If you want to read a specific file path, use the ${FILE_READ_TOOL_NAME} tool or ${fileSearchHint} instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
-- If you are searching for a specific class definition like "class Foo", use ${contentSearchHint} instead, to find the match more quickly
+- If you want to read a specific file path, use the ${FILE_READ_TOOL_NAME} tool or the ${GLOB_TOOL_NAME} tool instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- If you are searching for a specific class definition like "class Foo", use the ${GLOB_TOOL_NAME} tool instead, to find the match more quickly
 - If you are searching for code within a specific file or set of 2-3 files, use the ${FILE_READ_TOOL_NAME} tool instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
 - If the raw code is decision-critical context you must understand before editing it, read it directly instead of delegating that understanding
 - Other tasks that are not related to the agent descriptions above

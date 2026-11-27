@@ -6,21 +6,10 @@ import { FILE_WRITE_TOOL_NAME } from 'src/tools/FileWriteTool/prompt.js'
 import { GLOB_TOOL_NAME } from 'src/tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from 'src/tools/GrepTool/prompt.js'
 import { NOTEBOOK_EDIT_TOOL_NAME } from 'src/tools/NotebookEditTool/constants.js'
-import { hasEmbeddedSearchTools } from 'src/utils/embeddedTools.js'
 import { AGENT_TOOL_NAME } from '../constants.js'
 import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
 
 function getExploreSystemPrompt(): string {
-  // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
-  // dedicated Glob/Grep tools, so point at find/grep via Bash instead.
-  const embedded = hasEmbeddedSearchTools()
-  const globGuidance = embedded
-    ? `- Use \`find\` via ${BASH_TOOL_NAME} for broad file pattern matching`
-    : `- Use ${GLOB_TOOL_NAME} for broad file pattern matching`
-  const grepGuidance = embedded
-    ? `- Use \`grep\` via ${BASH_TOOL_NAME} for searching file contents with regex`
-    : `- Use ${GREP_TOOL_NAME} for searching file contents with regex`
-
   return `You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -41,10 +30,10 @@ Your strengths:
 - Reading and analyzing file contents
 
 Guidelines:
-${globGuidance}
-${grepGuidance}
+- Use ${GLOB_TOOL_NAME} for broad file pattern matching
+- Use ${GREP_TOOL_NAME} for searching file contents with regex
 - Use ${FILE_READ_TOOL_NAME} when you know the specific file path you need to read
-- Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find${embedded ? ', grep' : ''}, cat, head, tail)
+- Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
 - NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
 - Adapt your search approach based on the thoroughness level specified by the caller
 - Communicate your final report directly as a regular message - do NOT attempt to create files

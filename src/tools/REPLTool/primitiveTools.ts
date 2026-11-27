@@ -21,9 +21,6 @@ let _primitiveTools: readonly Tool[] | undefined
  * → FileReadTool.tsx → ... loops back through the tool registry, so a
  * top-level const hits "Cannot access before initialization". Deferring
  * to call time avoids the TDZ.
- *
- * Referenced directly rather than via getAllBaseTools() because that
- * excludes Glob/Grep when hasEmbeddedSearchTools() is true.
  */
 export function getReplPrimitiveTools(): readonly Tool[] {
   return (_primitiveTools ??= [

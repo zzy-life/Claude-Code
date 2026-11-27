@@ -7,10 +7,6 @@ import { logEvent } from 'src/services/analytics/index.js'
 import { registerCleanup } from '../cleanupRegistry.js'
 import { getCwd } from '../cwd.js'
 import { logForDebugging } from '../debug.js'
-import {
-  embeddedSearchToolsBinaryPath,
-  hasEmbeddedSearchTools,
-} from '../embeddedTools.js'
 import { getClaudeConfigHomeDir } from '../envUtils.js'
 import { pathExists } from '../file.js'
 import { getFsImplementation } from '../fsOperations.js'
@@ -25,34 +21,26 @@ const SNAPSHOT_CREATION_TIMEOUT = 10000 // 10 seconds
 
 /**
  * Creates a shell function that invokes `binaryPath` with a specific argv[0].
- * This uses the bun-internal ARGV0 dispatch trick: the bun binary checks its
- * argv[0] and runs the embedded tool (rg, bfs, ugrep) that matches.
- *
- * @param prependArgs - Arguments to inject before the user's args (e.g.,
- *   default flags). Injected literally; each element must be a valid shell
- *   word (no spaces/special chars).
+ * The bun binary uses argv[0] to dispatch to embedded ripgrep.
  */
 function createArgv0ShellFunction(
   funcName: string,
   argv0: string,
   binaryPath: string,
-  prependArgs: string[] = [],
 ): string {
   const quotedPath = quote([binaryPath])
-  const argSuffix =
-    prependArgs.length > 0 ? `${prependArgs.join(' ')} "$@"` : '"$@"'
   return [
     `function ${funcName} {`,
     '  if [[ -n $ZSH_VERSION ]]; then',
-    `    ARGV0=${argv0} ${quotedPath} ${argSuffix}`,
+    `    ARGV0=${argv0} ${quotedPath} "$@"`,
     '  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then',
     // On Windows (git bash), exec -a does not work, so use ARGV0 env var instead
     // The bun binary reads from ARGV0 natively to set argv[0]
-    `    ARGV0=${argv0} ${quotedPath} ${argSuffix}`,
+    `    ARGV0=${argv0} ${quotedPath} "$@"`,
     '  elif [[ $BASHPID != $$ ]]; then',
-    `    exec -a ${argv0} ${quotedPath} ${argSuffix}`,
+    `    exec -a ${argv0} ${quotedPath} "$@"`,
     '  else',
-    `    (exec -a ${argv0} ${quotedPath} ${argSuffix})`,
+    `    (exec -a ${argv0} ${quotedPath} "$@")`,
     '  fi',
     '}',
   ].join('\n')
@@ -72,11 +60,7 @@ export function createRipgrepShellIntegration(): {
   if (rgCommand.argv0) {
     return {
       type: 'function',
-      snippet: createArgv0ShellFunction(
-        'rg',
-        rgCommand.argv0,
-        rgCommand.rgPath,
-      ),
+      snippet: createArgv0ShellFunction('rg', rgCommand.argv0, rgCommand.rgPath),
     }
   }
 
@@ -89,93 +73,6 @@ export function createRipgrepShellIntegration(): {
       : quotedPath
 
   return { type: 'alias', snippet: aliasTarget }
-}
-
-/**
- * VCS directories to exclude from grep searches. Matches the list in
- * GrepTool (see GrepTool.ts: VCS_DIRECTORIES_TO_EXCLUDE).
- */
-const VCS_DIRECTORIES_TO_EXCLUDE = [
-  '.git',
-  '.svn',
-  '.hg',
-  '.bzr',
-  '.jj',
-  '.sl',
-] as const
-
-/**
- * Creates shell integration for `find` and `grep`, backed by bfs and ugrep
- * embedded in the bun binary (ant-native only). Unlike the rg integration,
- * this always shadows the system find/grep since bfs/ugrep are drop-in
- * replacements and we want consistent fast behavior.
- *
- * These wrappers replace the GlobTool/GrepTool dedicated tools (which are
- * removed from the tool registry when embedded search tools are available),
- * so they're tuned to match those tools' semantics, not GNU find/grep.
- *
- * `find` ↔ GlobTool:
- * - Inject `-regextype findutils-default`: bfs defaults to POSIX BRE for
- *   -regex, but GNU find defaults to emacs-flavor (which supports `\|`
- *   alternation). Without this, `find . -regex '.*\.\(js\|ts\)'` silently
- *   returns zero results. A later user-supplied -regextype still overrides.
- * - No gitignore filtering: GlobTool passes `--no-ignore` to rg. bfs has no
- *   gitignore support anyway, so this matches by default.
- * - Hidden files included: both GlobTool (`--hidden`) and bfs's default.
- *
- * Caveat: even with findutils-default, Oniguruma (bfs's regex engine) uses
- * leftmost-first alternation, not POSIX leftmost-longest. Patterns where
- * one alternative is a prefix of another (e.g., `\(ts\|tsx\)`) may miss
- * matches that GNU find catches. Workaround: put the longer alternative first.
- *
- * `grep` ↔ GrepTool (file filtering) + GNU grep (regex syntax):
- * - `-G` (basic regex / BRE): GNU grep defaults to BRE where `\|` is
- *   alternation. ugrep defaults to ERE where `|` is alternation and `\|` is a
- *   literal pipe. Without -G, `grep "foo\|bar"` silently returns zero results.
- *   User-supplied `-E`, `-F`, or `-P` later in argv overrides this.
- * - `--ignore-files`: respect .gitignore (GrepTool uses rg's default, which
- *   respects gitignore). Override with `grep --no-ignore-files`.
- * - `--hidden`: include hidden files (GrepTool passes `--hidden` to rg).
- *   Override with `grep --no-hidden`.
- * - `--exclude-dir` for VCS dirs: GrepTool passes `--glob '!.git'` etc. to rg.
- * - `-I`: skip binary files. rg's recursion silently skips binary matches
- *   by default (different from direct-file-arg behavior); ugrep doesn't, so
- *   we inject -I to match. Override with `grep -a`.
- *
- * Not replicated from GrepTool:
- * - `--max-columns 500`: ugrep's `--width` hard-truncates output which could
- *   break pipelines; rg's version replaces the line with a placeholder.
- * - Read deny rules / plugin cache exclusions: require toolPermissionContext
- *   which isn't available at shell-snapshot creation time.
- *
- * Returns null if embedded search tools are not available in this build.
- */
-export function createFindGrepShellIntegration(): string | null {
-  if (!hasEmbeddedSearchTools()) {
-    return null
-  }
-  const binaryPath = embeddedSearchToolsBinaryPath()
-  return [
-    // User shell configs may define aliases like `alias find=gfind` or
-    // `alias grep=ggrep` (common on macOS with Homebrew GNU tools). The
-    // snapshot sources user aliases before these function definitions, and
-    // bash expands aliases before function lookup — so a renaming alias
-    // would silently bypass the embedded bfs/ugrep dispatch. Clear them first
-    // (same fix the rg integration uses).
-    'unalias find 2>/dev/null || true',
-    'unalias grep 2>/dev/null || true',
-    createArgv0ShellFunction('find', 'bfs', binaryPath, [
-      '-regextype',
-      'findutils-default',
-    ]),
-    createArgv0ShellFunction('grep', 'ugrep', binaryPath, [
-      '-G',
-      '--ignore-files',
-      '--hidden',
-      '-I',
-      ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
-    ]),
-  ].join('\n')
 }
 
 function getConfigFile(shellPath: string): string {
@@ -313,21 +210,6 @@ RIPGREP_FUNC_END
   content += `
       echo "fi" >> "$SNAPSHOT_FILE"
   `
-
-  // For ant-native builds, shadow find/grep with bfs/ugrep embedded in the bun
-  // binary. Unlike rg (which only activates if system rg is absent), we always
-  // shadow find/grep since bfs/ugrep are drop-in replacements and we want
-  // consistent fast behavior in Claude's shell.
-  const findGrepIntegration = createFindGrepShellIntegration()
-  if (findGrepIntegration !== null) {
-    content += `
-      # Shadow find/grep with embedded bfs/ugrep (ant-native only)
-      echo "# Shadow find/grep with embedded bfs/ugrep" >> "$SNAPSHOT_FILE"
-      cat >> "$SNAPSHOT_FILE" << 'FIND_GREP_FUNC_END'
-${findGrepIntegration}
-FIND_GREP_FUNC_END
-    `
-  }
 
   // Add PATH to the file
   content += `

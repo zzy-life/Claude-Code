@@ -128,7 +128,6 @@ const WorkflowTool = feature('WORKFLOW_SCRIPTS')
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import type { ToolPermissionContext } from './Tool.js'
 import { getDenyRuleForTool } from './utils/permissions/permissions.js'
-import { hasEmbeddedSearchTools } from './utils/embeddedTools.js'
 import { isEnvTruthy } from './utils/envUtils.js'
 import { isPowerShellToolEnabled } from './utils/shell/shellToolUtils.js'
 import { isAgentSwarmsEnabled } from './utils/agentSwarmsEnabled.js'
@@ -188,10 +187,8 @@ export function getAllBaseTools(): Tools {
     AgentTool,
     TaskOutputTool,
     BashTool,
-    // Ant-native builds have bfs/ugrep embedded in the bun binary (same ARGV0
-    // trick as ripgrep). When available, find/grep in Claude's shell are aliased
-    // to these fast tools, so the dedicated Glob/Grep tools are unnecessary.
-    ...(hasEmbeddedSearchTools() ? [] : [GlobTool, GrepTool]),
+    GlobTool,
+    GrepTool,
     ExitPlanModeV2Tool,
     FileReadTool,
     FileEditTool,

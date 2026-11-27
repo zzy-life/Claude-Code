@@ -32,7 +32,6 @@ import type {
 } from '../services/mcp/types.js'
 import { GLOB_TOOL_NAME } from 'src/tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from 'src/tools/GrepTool/prompt.js'
-import { hasEmbeddedSearchTools } from 'src/utils/embeddedTools.js'
 import { ASK_USER_QUESTION_TOOL_NAME } from '../tools/AskUserQuestionTool/prompt.js'
 import {
   isScratchpadEnabled,
@@ -267,20 +266,12 @@ function getUsingYourToolsSection(enabledTools: Set<string>): string {
     return [`# Using your tools`, ...prependBullets(items)].join(`\n`)
   }
 
-  // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
-  // dedicated Glob/Grep tools, so skip guidance pointing at them.
-  const embedded = hasEmbeddedSearchTools()
-
   const providedToolSubitems = [
     `To read files use ${FILE_READ_TOOL_NAME} instead of cat, head, tail, or sed`,
     `To edit files use ${FILE_EDIT_TOOL_NAME} instead of sed or awk`,
     `To create files use ${FILE_WRITE_TOOL_NAME} instead of cat with heredoc or echo redirection`,
-    ...(embedded
-      ? []
-      : [
-          `To search for files use ${GLOB_TOOL_NAME} instead of find or ls`,
-          `To search the content of files, use ${GREP_TOOL_NAME} instead of grep or rg`,
-        ]),
+    `To search for files use ${GLOB_TOOL_NAME} instead of find or ls`,
+    `To search the content of files, use ${GREP_TOOL_NAME} instead of grep or rg`,
     `Reserve using the ${BASH_TOOL_NAME} exclusively for system commands and terminal operations that require shell execution. If you are unsure and there is a relevant dedicated tool, default to using the dedicated tool and only fallback on using the ${BASH_TOOL_NAME} tool for these if it is absolutely necessary.`,
   ]
 

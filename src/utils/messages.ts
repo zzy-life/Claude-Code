@@ -143,7 +143,6 @@ import { normalizeToolInput, normalizeToolInputForAPI } from './api.js'
 import { getCurrentProjectConfig } from './config.js'
 import { logAntError, logForDebugging } from './debug.js'
 import { stripIdeContextTags } from './displayTags.js'
-import { hasEmbeddedSearchTools } from './embeddedTools.js'
 import { formatFileSize } from './format.js'
 import { validateImagesForAPI } from './imageValidation.js'
 import { safeParseJSON } from './json.js'
@@ -3263,17 +3262,10 @@ function getPlanModeExploreInstructions(planningAgentTypes?: string[]): string {
 }
 
 function getReadOnlyToolNames(): string {
-  // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
-  // dedicated Glob/Grep tools from the registry, so point at find/grep via
-  // Bash instead.
-  const tools = hasEmbeddedSearchTools()
-    ? [FILE_READ_TOOL_NAME, '`find`', '`grep`']
-    : [FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME]
+  const tools = [FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME]
   const { allowedTools } = getCurrentProjectConfig()
-  // allowedTools is a tool-name allowlist. find/grep are shell commands, not
-  // tool names, so the filter is only meaningful for the non-embedded branch.
   const filtered =
-    allowedTools && allowedTools.length > 0 && !hasEmbeddedSearchTools()
+    allowedTools && allowedTools.length > 0
       ? tools.filter(t => allowedTools.includes(t))
       : tools
   return filtered.join(', ')

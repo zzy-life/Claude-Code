@@ -1,4 +1,3 @@
-import { BASH_TOOL_NAME } from 'src/tools/BashTool/toolName.js'
 import { FILE_READ_TOOL_NAME } from 'src/tools/FileReadTool/prompt.js'
 import { GLOB_TOOL_NAME } from 'src/tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from 'src/tools/GrepTool/prompt.js'
@@ -6,7 +5,6 @@ import { SEND_MESSAGE_TOOL_NAME } from 'src/tools/SendMessageTool/constants.js'
 import { WEB_FETCH_TOOL_NAME } from 'src/tools/WebFetchTool/prompt.js'
 import { WEB_SEARCH_TOOL_NAME } from 'src/tools/WebSearchTool/prompt.js'
 import { isUsing3PServices } from 'src/utils/auth.js'
-import { hasEmbeddedSearchTools } from 'src/utils/embeddedTools.js'
 import { getSettings_DEPRECATED } from 'src/utils/settings/settings.js'
 import { jsonStringify } from '../../../utils/slowOperations.js'
 import type {
@@ -21,12 +19,6 @@ const CDP_DOCS_MAP_URL = 'https://platform.claude.com/llms.txt'
 export const CLAUDE_CODE_GUIDE_AGENT_TYPE = 'claude-code-guide'
 
 function getClaudeCodeGuideBasePrompt(): string {
-  // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
-  // dedicated Glob/Grep tools, so point at find/grep instead.
-  const localSearchHint = hasEmbeddedSearchTools()
-    ? `${FILE_READ_TOOL_NAME}, \`find\`, and \`grep\``
-    : `${FILE_READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}`
-
   return `You are the Claude guide agent. Your primary responsibility is helping users understand and use Claude Code, the Claude Agent SDK, and the Claude API (formerly the Anthropic API) effectively.
 
 **Your expertise spans three domains:**
@@ -74,7 +66,7 @@ function getClaudeCodeGuideBasePrompt(): string {
 4. Fetch the specific documentation pages
 5. Provide clear, actionable guidance based on official documentation
 6. Use ${WEB_SEARCH_TOOL_NAME} if docs don't cover the topic
-7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${localSearchHint}
+7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${FILE_READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}
 
 **Guidelines:**
 - Always prioritize official documentation over assumptions
@@ -98,22 +90,13 @@ function getFeedbackGuideline(): string {
 export const CLAUDE_CODE_GUIDE_AGENT: BuiltInAgentDefinition = {
   agentType: CLAUDE_CODE_GUIDE_AGENT_TYPE,
   whenToUse: `Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - API usage, tool use, Anthropic SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ${SEND_MESSAGE_TOOL_NAME}.`,
-  // Ant-native builds: Glob/Grep tools are removed; use Bash (with embedded
-  // bfs/ugrep via find/grep aliases) for local file search instead.
-  tools: hasEmbeddedSearchTools()
-    ? [
-        BASH_TOOL_NAME,
-        FILE_READ_TOOL_NAME,
-        WEB_FETCH_TOOL_NAME,
-        WEB_SEARCH_TOOL_NAME,
-      ]
-    : [
-        GLOB_TOOL_NAME,
-        GREP_TOOL_NAME,
-        FILE_READ_TOOL_NAME,
-        WEB_FETCH_TOOL_NAME,
-        WEB_SEARCH_TOOL_NAME,
-      ],
+  tools: [
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+    FILE_READ_TOOL_NAME,
+    WEB_FETCH_TOOL_NAME,
+    WEB_SEARCH_TOOL_NAME,
+  ],
   source: 'built-in',
   baseDir: 'built-in',
   model: 'haiku',
