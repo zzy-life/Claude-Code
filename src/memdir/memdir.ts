@@ -16,7 +16,6 @@ import {
   logEvent,
 } from '../services/analytics/index.js'
 import { GREP_TOOL_NAME } from '../tools/GrepTool/prompt.js'
-import { isReplModeEnabled } from '../tools/REPLTool/constants.js'
 import { logForDebugging } from '../utils/debug.js'
 import { isEnvTruthy } from '../utils/envUtils.js'
 import { formatFileSize } from '../utils/format.js'
@@ -376,16 +375,8 @@ export function buildSearchingPastContextSection(autoMemDir: string): string[] {
     return []
   }
   const projectDir = getProjectDir(getOriginalCwd())
-  // In REPL mode, both Grep and Bash are hidden from direct use — the model
-  // calls them from inside REPL scripts, so the grep shell form is what it
-  // will write in the script anyway.
-  const replMode = isReplModeEnabled()
-  const memSearch = replMode
-    ? `grep -rn "<search term>" ${autoMemDir} --include="*.md"`
-    : `${GREP_TOOL_NAME} with pattern="<search term>" path="${autoMemDir}" glob="*.md"`
-  const transcriptSearch = replMode
-    ? `grep -rn "<search term>" ${projectDir}/ --include="*.jsonl"`
-    : `${GREP_TOOL_NAME} with pattern="<search term>" path="${projectDir}/" glob="*.jsonl"`
+  const memSearch = `${GREP_TOOL_NAME} with pattern="<search term>" path="${autoMemDir}" glob="*.md"`
+  const transcriptSearch = `${GREP_TOOL_NAME} with pattern="<search term>" path="${projectDir}/" glob="*.jsonl"`
   return [
     '## Searching past context',
     '',

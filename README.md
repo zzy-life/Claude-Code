@@ -266,6 +266,8 @@ default → plan → acceptEdits → auto → bypassPermissions → default
 | `/cost`、`/version`、`/bridge-kick`、`/web-setup`、内部 lorem-ipsum 入口及已禁用的内部桩命令 | 会话成本统计、退出摘要、Bridge 底层实现和共享远程会话代码保留；Bridge 入口的可用性仍受固定默认值限制，桩命令清单见隐藏命令文档。 |
 | 云端深度规划 ultraplan、旧云端启动消息专用排版、buddy 电子宠物、Overflow／Tungsten 内部测试工具 | 普通计划模式、本地命令输出、远程任务及 Bash 的 tmux 隔离机制保留。 |
 | 内置 `Plan` 子代理、专用开关及残留的上下文和结果处理 | `/plan` 和方案审批流程保留。`Explore` 默认注册，仍受会话权限限制；主会话负责设计方案，`Explore` 不可用时由主会话直接调查。 |
+| 内嵌 bfs／ugrep 搜索替代模式及 `EMBEDDED_SEARCH_TOOLS` 开关 | 常规 `Glob`／`Grep` 固定加入基础工具池，仍受运行模式、权限和 Agent 类型过滤；不再为此模式注入 `find`／`grep` Shell 包装。独立 ripgrep 集成与普通交互界面的搜索链路保留，不清理历史 Shell 快照或用户配置。 |
+| 缺失实现的 `REPL` VM 工具、`SuggestBackgroundPR` 工具入口及其专用模式／显示／日志转换残留 | 普通 CLI 交互 REPL、直接文件／搜索／Shell 工具、通用后台远程任务／PR 恢复、权限 Hook 和启动器缺失导入检查保留。`CLAUDE_CODE_REPL`、`CLAUDE_REPL_MODE` 不再生效；不迁移或清理旧会话、用户配置，也不再专门去包装旧 REPL 工具日志。 |
 | DevBar／员工 API 性能面板、限流模拟和内部自动 issue 链路 | 真实 429 重试、总耗时与成本、慢操作日志以及 `/feedback`、`/bug` 保留。 |
 | 会话／记忆／压缩／技能改进问卷及 `feedbackSurveyRate` 设置 | 普通技能与 Hook 执行保留；不再后台生成技能改进问卷。 |
 | 旧 auto 远程实验资格、二态转录审批、旧批准通知及 plan 内隐式分类器启用 | `auto` 模式保留，改由本地 `autoApproval` 的 allow / deny 与 needs_user 人工出口实现；旧 opt-in/critique 入口不再提供。AI 专属全轮停止、级联取消、拒绝分档与累计拒绝上限已被当前规范取代；共享 Bash 分类、PermissionRequest hooks、原 deny/ask、普通取消及 bypassPermissions 链路保留，不是恢复远程实验系统。 |
@@ -425,7 +427,7 @@ bun run version
 
 ```
 src/                    # 核心源码（1,987 个 TS/TSX）
-├── tools/              # 最多 51 个静态内置工具（实际数量受运行条件影响）
+├── tools/              # 最多 49 个静态内置工具（实际数量受运行条件影响）
 ├── commands/           # 87 个斜杠命令
 ├── services/           # API / MCP / analytics / autoDream
 ├── components/         # 148 个终端 UI 组件（React + Ink）
@@ -611,13 +613,13 @@ vendor/                 # 原生绑定源码
 
 ### 工具清单与注入机制
 
-工具注册以 `src/tools.ts` 的 `getAllBaseTools()` 为准。当前源码最多注册 **51 个静态内置工具**，MCP Server 还可动态提供任意数量的工具；“源码中存在”“进入候选池”“本次请求发送给模型”是三个不同阶段，不能直接用源码目录数量推断模型实际可见的工具数。
+工具注册以 `src/tools.ts` 的 `getAllBaseTools()` 为准。当前源码最多注册 **49 个静态内置工具**，MCP Server 还可动态提供任意数量的工具；“源码中存在”“进入候选池”“本次请求发送给模型”是三个不同阶段，不能直接用源码目录数量推断模型实际可见的工具数。
 
 #### 工具如何进入模型上下文
 
 1. **构建期裁剪**：`feature('...')` 决定某些模块是否被打包；未编入当前构建的工具不可能在运行时启用。
 2. **候选池注册**：`getAllBaseTools()` 根据构建特性、`USER_TYPE` 和环境变量组成静态候选池。
-3. **会话级过滤**：`getTools()` 再应用 Simple/REPL 等运行模式、权限中的整工具 deny 规则，以及每个工具的 `isEnabled()`。
+3. **会话级过滤**：`getTools()` 再应用 Simple 模式、权限中的整工具 deny 规则，以及每个工具的 `isEnabled()`。
 4. **动态合并**：`assembleToolPool()` 合并已连接 MCP Server 的工具；同名时内置工具优先。REPL 通过 `useMergedTools()` 使用该结果，Coordinator 还会再次缩减工具集。
 5. **请求级注入**：`toolToAPISchema()` 调用工具的 `prompt()`，生成 `name`、完整操作说明和 `input_schema`，随后 `queryModel()` 把它们放入 Anthropic Messages API 的 `tools` 参数。严格来说，工具定义不是拼接进 `system` 字符串，而是作为与系统提示词并列的 API 工具定义发送。
 6. **请求级延迟加载**：本次请求实际启用 `ToolSearch` 时，MCP 工具以及声明了 `shouldDefer: true` 的内置工具，初始通常只通过 `<system-reminder>` 中的 deferred-tools delta（旧路径为 `<available-deferred-tools>`）告知名称、轻量用途和关键边界；模型调用 `ToolSearch` 后得到 `tool_reference`，后续请求才纳入已发现工具的 API 定义，并继续以 `defer_loading: true` 标记。若本次请求未启用工具搜索，这些工具会直接内联，成为本次请求的基础工具。
@@ -630,8 +632,7 @@ vendor/                 # 原生绑定源码
 | 限制 | 实际行为 |
 |---|---|
 | 整工具 deny 规则 | 若权限配置对某工具名或某个 MCP Server 前缀设置无参数的 deny，该工具会在请求前移除，而不只是调用时拒绝。 |
-| `CLAUDE_CODE_SIMPLE` | 普通情况下仅留下 `Bash`、`Read`、`Edit`；若同时处于 Coordinator 模式，还加入 `Agent`、`TaskStop`、`SendMessage`。Simple + REPL 模式则用 `REPL` 替代底层原语。 |
-| REPL 模式 | `REPL` 启用后，`REPL_ONLY_TOOLS` 中的底层工具不再直接暴露，而由 VM 内的 REPL 包装调用。 |
+| `CLAUDE_CODE_SIMPLE` | 仅留下 `Bash`、`Read`、`Edit`；若同时处于 Coordinator 模式，还加入 `Agent`、`TaskStop`、`SendMessage`。不再有 REPL VM 工具替代分支。 |
 | Coordinator 模式 | 主协调器只保留 `Agent`、`TaskStop`、`SendMessage`、`StructuredOutput`，以及名称匹配 PR 活动订阅/退订的 MCP 工具。 |
 | 子 Agent | 使用独立的 worker 权限上下文重新组装工具池，再按同步/后台、内置/自定义 Agent 类型过滤；MCP 工具通常可保留。 |
 | 工具搜索 | `ENABLE_TOOL_SEARCH` 控制 ToolSearch 模式。源码中未设置时为 `tst`（默认开启）；`false` 或 `auto:100` 为 `standard`（关闭）；`true` 或 `auto:0` 为 `tst`（强制开启）；`auto`/`auto:1..99` 为 `tst-auto`，按延迟工具完整定义的总量决定。 |
@@ -672,7 +673,7 @@ vendor/                 # 原生绑定源码
 | `Skill` | 加载并执行已安装 Skill。 | 直接注入；可用 Skill 清单另由会话提醒注入。 |
 | `SendMessage` | 向队友、团队广播或受支持的本地/远程收件箱发送消息，并处理旧版 shutdown/plan-approval 协议。 | 明确不延迟，保证控制消息可随时发送和响应。 |
 
-`Glob` 和 `Grep` 也直接注入，但仅在 `hasEmbeddedSearchTools()` 为 false 时注册；含内嵌 `bfs` 搜索能力的构建不注册这两个专用工具。
+`Glob` 和 `Grep` 固定加入基础工具候选池；通过运行模式、权限和 Agent 类型过滤后直接注入。旧内嵌搜索模式不再隐藏它们，`EMBEDDED_SEARCH_TOOLS` 已不生效。
 
 #### 延迟注册工具
 
@@ -714,10 +715,9 @@ vendor/                 # 原生绑定源码
 | 工具 | 编译或平台注册条件 | 注入说明 |
 |---|---|---|
 | `Config` | `USER_TYPE === 'ant'`。 | `shouldDefer: true`；ToolSearch 关闭时直接注入。 |
-| `SuggestBackgroundPR` | `USER_TYPE === 'ant'` 且模块可加载。 | 直接注入。 |
 | `WebBrowser`、`terminal_capture`、`ListPeers` | 分别要求 `WEB_BROWSER_TOOL`、`TERMINAL_PANEL`、`UDS_INBOX` 构建功能。 | 直接注入。 |
 | `LSP` | truthy 的 `ENABLE_LSP_TOOL`，并通过自身 `isEnabled()`。 | `shouldDefer: true`；ToolSearch 关闭时直接注入。 |
-| `REPL`、`workflow`、`Sleep` | 分别要求对应 REPL、`WORKFLOW_SCRIPTS`、`PROACTIVE` 或 `KAIROS` 构建功能。 | 直接注入；REPL 生效时替换一组底层原语。 |
+| `workflow`、`Sleep` | 分别要求 `WORKFLOW_SCRIPTS`、`PROACTIVE` 或 `KAIROS` 构建功能。 | 直接注入。 |
 | `CronCreate`、`CronDelete`、`CronList` | `AGENT_TRIGGERS` 构建功能、未开启 `CLAUDE_CODE_DISABLE_CRON` 且 `tengu_kairos_cron` 为 true。 | `shouldDefer: true`；ToolSearch 关闭时直接注入。 |
 | `RemoteTrigger` | `AGENT_TRIGGERS_REMOTE` 构建功能、`tengu_surreal_dali` 为 true 且策略允许远程会话。 | `shouldDefer: true`；实际调用还要求 OAuth 和组织 ID。 |
 | `Monitor`、`send_user_file`、`PushNotification`、`SubscribePR`、`snip` | 分别要求对应构建模块；`MonitorTool` 当前为 `null`，不会注册。 | 除 `send_user_file` 在 Bridge 活跃时强制直接外，其余直接注入。 |
@@ -772,7 +772,7 @@ MCP 工具的“默认按需”仅在**本次请求实际启用 ToolSearch**时�
 | `ReadMcpResourceTool` | 与 `ListMcpResourcesTool` 相同。 | **按需**：已知或刚列出目标 MCP 资源，需要读取其内容时查询。 |
 | `mcp__*` | 对应 MCP Server 已配置、连接成功并通过 `tools/list` 返回该工具，同时未被权限 deny。 | ToolSearch 实际开启时默认按需，模型根据名称或轻量用途提示发现；`alwaysLoad: true` 时直接。关闭时直接注入完整 Schema。晚连接、断线重连或工具列表变化会通过 MCP/deferred-tools delta 附件更新模型可见名称。 |
 
-因此，更准确的数量表达是：**最多 51 个静态注册项，加上 N 个动态 MCP 工具，但每次请求只发送通过全部 gate 且当前需要的子集**。
+因此，更准确的数量表达是：**最多 49 个静态注册项，加上 N 个动态 MCP 工具，但每次请求只发送通过全部 gate 且当前需要的子集**。
 
 #### 主会话与子 Agent 的注入差异
 

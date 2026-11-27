@@ -4,8 +4,7 @@ import { basename } from 'path';
 import React, { useRef } from 'react';
 import { useMinDisplayTime } from '../../hooks/useMinDisplayTime.js';
 import { Ansi, Box, Text, useTheme } from '../../ink.js';
-import { findToolByName, type Tools } from '../../Tool.js';
-import { getReplPrimitiveTools } from '../../tools/REPLTool/primitiveTools.js';
+import type { Tools } from '../../Tool.js';
 import type { CollapsedReadSearchGroup, NormalizedAssistantMessage } from '../../types/message.js';
 import { uniq } from '../../utils/array.js';
 import { getToolUseIdsFromCollapsedGroup } from '../../utils/collapseReadSearch.js';
@@ -14,6 +13,7 @@ import { formatDuration, formatSecondsShort } from '../../utils/format.js';
 import { isFullscreenEnvEnabled } from '../../utils/fullscreen.js';
 import type { buildMessageLookups } from '../../utils/messages.js';
 import type { ThemeName } from '../../utils/theme.js';
+import { findToolForDisplay } from '../../utils/toolDisplay.js';
 import { CtrlOToExpand } from '../CtrlOToExpand.js';
 import { useSelectedMessageBg } from '../messageActions.js';
 import { PrBadge } from '../PrBadge.js';
@@ -55,7 +55,7 @@ function VerboseToolUse(t0) {
   if ($[0] !== bg || $[1] !== content.id || $[2] !== content.input || $[3] !== content.name || $[4] !== inProgressToolUseIDs || $[5] !== lookups || $[6] !== shouldAnimate || $[7] !== theme || $[8] !== tools) {
     t2 = Symbol.for("react.early_return_sentinel");
     bb0: {
-      const tool = findToolByName(tools, content.name) ?? findToolByName(getReplPrimitiveTools(), content.name);
+      const tool = findToolForDisplay(tools, content.name);
       if (!tool) {
         t2 = null;
         break bb0;
@@ -153,7 +153,6 @@ export function CollapsedReadSearchContent({
     searchCount: rawSearchCount,
     readCount: rawReadCount,
     listCount: rawListCount,
-    replCount,
     memorySearchCount,
     memoryReadCount,
     memoryWriteCount,
@@ -187,7 +186,7 @@ export function CollapsedReadSearchContent({
   // needed — it's 0 until results arrive, then only grows).
   const gitOpBashCount = message.gitOpBashCount ?? 0;
   const bashCount = isFullscreenEnvEnabled() ? Math.max(0, maxBashCountRef.current - gitOpBashCount) : 0;
-  const hasNonMemoryOps = searchCount > 0 || readCount > 0 || listCount > 0 || replCount > 0 || mcpCallCount > 0 || bashCount > 0 || gitOpBashCount > 0;
+  const hasNonMemoryOps = searchCount > 0 || readCount > 0 || listCount > 0 || mcpCallCount > 0 || bashCount > 0 || gitOpBashCount > 0;
   const readPaths = message.readFilePaths;
   const searchArgs = message.searchArgs;
   let incomingHint = message.latestDisplayHint;
@@ -198,23 +197,6 @@ export function CollapsedReadSearchContent({
     incomingHint = lastRead !== undefined ? getDisplayPath(lastRead) : lastSearch;
   }
 
-  // Active REPL calls emit repl_tool_call progress with the current inner
-  // tool's name+input. Virtual messages don't arrive until REPL completes,
-  // so this is the only source of a live hint during execution.
-  if (isActiveGroup) {
-    for (const id_0 of toolUseIds) {
-      if (!inProgressToolUseIDs.has(id_0)) continue;
-      const latest = lookups.progressMessagesByToolUseID.get(id_0)?.at(-1)?.data;
-      if (latest?.type === 'repl_tool_call' && latest.phase === 'start') {
-        const input = latest.toolInput as {
-          command?: string;
-          pattern?: string;
-          file_path?: string;
-        };
-        incomingHint = input.file_path ?? (input.pattern ? `"${input.pattern}"` : undefined) ?? input.command ?? latest.toolName;
-      }
-    }
-  }
   const displayedHint = useMinDisplayTime(incomingHint, MIN_HINT_DISPLAY_MS);
 
   // In verbose mode, render each tool use with its 1-line result summary
@@ -291,7 +273,7 @@ export function CollapsedReadSearchContent({
     }
   }
 
-  // Build non-memory parts first (search, read, repl, mcp, bash) — these render
+  // Build non-memory parts first (search, read, mcp, bash) — these render
   // before memory so the line reads "Ran 3 bash commands, recalled 1 memory".
   const nonMemParts: React.ReactNode[] = [];
 
@@ -373,16 +355,6 @@ export function CollapsedReadSearchContent({
     nonMemParts.push(<Text key="list">
         {listVerb} <Text bold>{listCount}</Text>{' '}
         {listCount === 1 ? 'directory' : 'directories'}
-      </Text>);
-  }
-  if (replCount > 0) {
-    const replVerb = isActiveGroup ? "REPL'ing" : "REPL'd";
-    if (nonMemParts.length > 0) {
-      nonMemParts.push(<Text key="comma-repl">, </Text>);
-    }
-    nonMemParts.push(<Text key="repl">
-        {replVerb} <Text bold>{replCount}</Text>{' '}
-        {replCount === 1 ? 'time' : 'times'}
       </Text>);
   }
   if (mcpCallCount > 0) {

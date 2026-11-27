@@ -51,7 +51,6 @@ import type {
   AgentToolProgress,
   BashProgress,
   MCPProgress,
-  REPLToolProgress,
   SkillToolProgress,
   TaskOutputProgress,
   ToolProgressData,
@@ -67,7 +66,6 @@ export type {
   AgentToolProgress,
   BashProgress,
   MCPProgress,
-  REPLToolProgress,
   SkillToolProgress,
   TaskOutputProgress,
   WebSearchProgress,
@@ -527,12 +525,6 @@ export type Tool<
   userFacingNameBackgroundColor?(
     input: Partial<z.infer<Input>> | undefined,
   ): keyof Theme | undefined
-  /**
-   * Transparent wrappers (e.g. REPL) delegate all rendering to their progress
-   * handler, which emits native-looking blocks for each inner tool call.
-   * The wrapper itself shows nothing.
-   */
-  isTransparentWrapper?(): boolean
   /**
    * Returns a short string summary of this tool use for display in compact views.
    * @param input The tool input

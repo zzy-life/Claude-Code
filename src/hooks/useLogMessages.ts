@@ -75,7 +75,6 @@ export function useLogMessages(messages: Message[], ignore: boolean = false) {
           }
         : {},
       parentHint,
-      messages,
     ).then(lastRecordedUuid => {
       // For compaction/full array case (!isIncremental): use the async return
       // value. After compaction, messagesToKeep in the array are skipped
@@ -100,16 +99,8 @@ export function useLogMessages(messages: Message[], ignore: boolean = false) {
     // compaction case (first uuid changed) remains unsafe — tail may be
     // messagesToKeep whose last-actually-recorded uuid differs.
     if (isIncremental || wasFirstRender || isSameHeadShrink) {
-      // Match EXACTLY what recordTranscript persists: cleanMessagesForLogging
-      // applies both the isLoggableMessage filter and (for external users) the
-      // REPL-strip + isVirtual-promote transform. Using the raw predicate here
-      // would pick a UUID that the transform drops, leaving the parent hint
-      // pointing at a message that never reached disk. Pass full messages as
-      // replId context — REPL tool_use and its tool_result land in separate
-      // render cycles, so the slice alone can't pair them.
-      const last = cleanMessagesForLogging(slice, messages).findLast(
-        isChainParticipant,
-      )
+      // Use the persistence filter so the hint only points to a recorded message.
+      const last = cleanMessagesForLogging(slice).findLast(isChainParticipant)
       if (last) lastParentUuidRef.current = last.uuid as UUID
     }
 

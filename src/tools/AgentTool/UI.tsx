@@ -46,8 +46,8 @@ function hasProgressMessage(data: Progress): data is AgentToolProgress {
 }
 
 /**
- * Check if a progress message is a search/read/REPL operation (tool use or result).
- * Returns { isSearch, isRead, isREPL } if it's a collapsible operation, null otherwise.
+ * Check if a progress message is a search/read operation (tool use or result).
+ * Returns { isSearch, isRead } if it's a collapsible operation, null otherwise.
  *
  * For tool_result messages, uses the provided `toolUseByID` map to find the
  * corresponding tool_use block instead of relying on `normalizedMessages`.
@@ -55,7 +55,6 @@ function hasProgressMessage(data: Progress): data is AgentToolProgress {
 function getSearchOrReadInfo(progressMessage: ProgressMessage<Progress>, tools: Tools, toolUseByID: Map<string, ToolUseBlockParam>): {
   isSearch: boolean;
   isRead: boolean;
-  isREPL: boolean;
 } | null {
   if (!hasProgressMessage(progressMessage.data)) {
     return null;
@@ -83,7 +82,6 @@ type SummaryMessage = {
   type: 'summary';
   searchCount: number;
   readCount: number;
-  replCount: number;
   uuid: string;
   isActive: boolean; // true if still in progress (last message was tool_use, not tool_result)
 };
@@ -109,16 +107,14 @@ function processProgressMessages(messages: ProgressMessage<Progress>[], tools: T
   let currentGroup: {
     searchCount: number;
     readCount: number;
-    replCount: number;
     startUuid: string;
   } | null = null;
   function flushGroup(isActive: boolean): void {
-    if (currentGroup && (currentGroup.searchCount > 0 || currentGroup.readCount > 0 || currentGroup.replCount > 0)) {
+    if (currentGroup && (currentGroup.searchCount > 0 || currentGroup.readCount > 0)) {
       result.push({
         type: 'summary',
         searchCount: currentGroup.searchCount,
         readCount: currentGroup.readCount,
-        replCount: currentGroup.replCount,
         uuid: `summary-${currentGroup.startUuid}`,
         isActive
       });
@@ -139,13 +135,12 @@ function processProgressMessages(messages: ProgressMessage<Progress>[], tools: T
       }
     }
     const info = getSearchOrReadInfo(msg, tools, toolUseByID);
-    if (info && (info.isSearch || info.isRead || info.isREPL)) {
-      // This is a search/read/REPL operation - add to current group
+    if (info && (info.isSearch || info.isRead)) {
+      // This is a search/read operation - add to current group
       if (!currentGroup) {
         currentGroup = {
           searchCount: 0,
           readCount: 0,
-          replCount: 0,
           startUuid: msg.uuid
         };
       }
@@ -153,14 +148,12 @@ function processProgressMessages(messages: ProgressMessage<Progress>[], tools: T
       if (msg.data.message.type === 'user') {
         if (info.isSearch) {
           currentGroup.searchCount++;
-        } else if (info.isREPL) {
-          currentGroup.replCount++;
         } else if (info.isRead) {
           currentGroup.readCount++;
         }
       }
     } else {
-      // Non-search/read/REPL message - flush current group (completed) and add this message
+      // Non-search/read message - flush current group (completed) and add this message
       flushGroup(false);
       // Skip user tool_result messages — subagent progress messages lack
       // toolUseResult, so UserToolSuccessMessage returns null and the
@@ -516,7 +509,7 @@ export function renderToolUseProgressMessage(progressMessages: ProgressMessage<P
   const hiddenMessages = isTranscriptMode ? [] : processedMessages.slice(0, Math.max(0, processedMessages.length - MAX_PROGRESS_MESSAGES_TO_SHOW));
   const hiddenToolUseCount = count(hiddenMessages, m => {
     if (m.type === 'summary') {
-      return m.searchCount + m.readCount + m.replCount > 0;
+      return m.searchCount + m.readCount > 0;
     }
     const data = m.message.data;
     if (!hasProgressMessage(data)) {
@@ -548,8 +541,8 @@ export function renderToolUseProgressMessage(progressMessages: ProgressMessage<P
             </Box>}
           {displayedMessages.map(processed => {
           if (processed.type === 'summary') {
-            // Render summary for grouped search/read/REPL operations using shared formatting
-            const summaryText = getSearchReadSummaryText(processed.searchCount, processed.readCount, processed.isActive, processed.replCount);
+            // Render summary for grouped search/read operations using shared formatting
+            const summaryText = getSearchReadSummaryText(processed.searchCount, processed.readCount, processed.isActive);
             return <Box key={processed.uuid} height={1} overflow="hidden">
                   <Text dimColor>{summaryText}</Text>
                 </Box>;

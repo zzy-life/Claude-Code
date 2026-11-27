@@ -75,8 +75,7 @@ export function AssistantToolUseMessage(t0) {
         tool,
         input,
         userFacingToolName: tool.userFacingName(data),
-        userFacingToolNameBackgroundColor: tool.userFacingNameBackgroundColor?.(data),
-        isTransparentWrapper: tool.isTransparentWrapper?.() ?? false
+        userFacingToolNameBackgroundColor: tool.userFacingNameBackgroundColor?.(data)
       };
     }
     $[0] = param.input;
@@ -95,8 +94,7 @@ export function AssistantToolUseMessage(t0) {
     tool: tool_0,
     input: input_0,
     userFacingToolName,
-    userFacingToolNameBackgroundColor,
-    isTransparentWrapper
+    userFacingToolNameBackgroundColor
   } = parsed;
   let t2;
   if ($[4] !== lookups.resolvedToolUseIDs || $[5] !== param.id) {
@@ -120,41 +118,6 @@ export function AssistantToolUseMessage(t0) {
   }
   const isQueued = t3;
   const isWaitingForPermission = pendingWorkerRequest?.toolUseId === param.id;
-  if (isTransparentWrapper) {
-    if (isQueued || isResolved) {
-      return null;
-    }
-    let t4;
-    if ($[11] !== inProgressToolCallCount || $[12] !== isTranscriptMode || $[13] !== lookups || $[14] !== param.id || $[15] !== progressMessagesForMessage || $[16] !== terminalSize || $[17] !== tool_0 || $[18] !== tools || $[19] !== verbose) {
-      t4 = renderToolUseProgressMessage(tool_0, tools, lookups, param.id, progressMessagesForMessage, {
-        verbose,
-        inProgressToolCallCount,
-        isTranscriptMode
-      }, terminalSize);
-      $[11] = inProgressToolCallCount;
-      $[12] = isTranscriptMode;
-      $[13] = lookups;
-      $[14] = param.id;
-      $[15] = progressMessagesForMessage;
-      $[16] = terminalSize;
-      $[17] = tool_0;
-      $[18] = tools;
-      $[19] = verbose;
-      $[20] = t4;
-    } else {
-      t4 = $[20];
-    }
-    let t5;
-    if ($[21] !== bg || $[22] !== t4) {
-      t5 = <Box flexDirection="column" width="100%" backgroundColor={bg}>{t4}</Box>;
-      $[21] = bg;
-      $[22] = t4;
-      $[23] = t5;
-    } else {
-      t5 = $[23];
-    }
-    return t5;
-  }
   if (userFacingToolName === "") {
     return null;
   }
